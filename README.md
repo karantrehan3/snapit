@@ -28,7 +28,8 @@ Esc dismisses it.
 
 ## Status
 
-**Milestone 1b** — freeze-frame capture + drag-to-select. The hotkey captures the
-display under the cursor at native resolution, dims it, and lets you drag a selection
-(Lightshot-style); on release the crop is copied to the clipboard. Esc cancels.
-Annotation tools (1c) and save-to-disk + settings (1d) are next.
+**Milestone 1c** — annotation. After drag-select, a Konva editor opens with a floating
+toolbar: rect / arrow / line / pen / text, selectable color and thickness, Undo (⌘Z).
+Copy exports the crop + annotations to the clipboard at native resolution; Esc/✕ cancels.
+Two capture modes behind separate hotkeys: screenshot (⌘⇧9) and record (⌘⇧8, Phase 2 stub).
+Next: save-to-disk + settings (1d).
