@@ -18,11 +18,11 @@ export type TextShape = {
 export type Shape = RectShape | LineShape | PenShape | TextShape
 
 export const COLORS = ['#ff3b30', '#ffcc00', '#34c759', '#0a84ff', '#ffffff', '#1c1c1e']
-export const SIZES = [2, 4, 8]
 
-/** Thickness bounds for Cmd+Scroll adjustment. */
+/** Thickness bounds for Cmd+Scroll adjustment, and the starting thickness. */
 export const MIN_STROKE = 1
 export const MAX_STROKE = 48
+export const DEFAULT_STROKE = 4
 
 export const TOOLS: ReadonlyArray<{ tool: Tool; label: string; title: string }> = [
   { tool: 'move', label: '↖', title: 'Move / Select' },

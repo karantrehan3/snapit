@@ -1,13 +1,11 @@
 import type { CSSProperties, ReactElement } from 'react'
-import { COLORS, SIZES, TOOLS, type Tool } from './types'
+import { COLORS, TOOLS, type Tool } from './types'
 
 type Props = {
   tool: Tool
   setTool: (t: Tool) => void
   color: string
   setColor: (c: string) => void
-  strokeWidth: number
-  setStrokeWidth: (n: number) => void
   canUndo: boolean
   onUndo: () => void
   canRedo: boolean
@@ -22,8 +20,6 @@ export function Toolbar({
   setTool,
   color,
   setColor,
-  strokeWidth,
-  setStrokeWidth,
   canUndo,
   onUndo,
   canRedo,
@@ -32,6 +28,8 @@ export function Toolbar({
   onCancel,
   style
 }: Props): ReactElement {
+  const isPreset = COLORS.includes(color)
+
   return (
     <div style={{ ...barStyle, ...style }}>
       {TOOLS.map((t) => (
@@ -43,25 +41,14 @@ export function Toolbar({
       {COLORS.map((c) => (
         <button key={c} title={c} onClick={() => setColor(c)} style={swatch(c, color === c)} />
       ))}
-      <span style={sep} />
-      {SIZES.map((s, i) => (
-        <button
-          key={s}
-          title={`Thickness ${s}`}
-          onClick={() => setStrokeWidth(s)}
-          style={btn(strokeWidth === s)}
-        >
-          <span
-            style={{
-              display: 'inline-block',
-              width: 4 + i * 4,
-              height: 4 + i * 4,
-              borderRadius: '50%',
-              background: tool === 'text' ? '#fff' : color
-            }}
-          />
-        </button>
-      ))}
+      <label title="Custom color" style={customSwatch(!isPreset, color)}>
+        <input
+          type="color"
+          value={color}
+          onChange={(e) => setColor(e.target.value)}
+          style={{ opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }}
+        />
+      </label>
       <span style={sep} />
       <button title="Undo (⌘Z)" onClick={onUndo} disabled={!canUndo} style={btn(false, !canUndo)}>
         ↶
@@ -142,6 +129,21 @@ function swatch(color: string, active: boolean): CSSProperties {
     cursor: 'pointer',
     background: color,
     border: active ? '2px solid #fff' : '2px solid rgba(255, 255, 255, 0.25)'
+  }
+}
+
+/** Custom-color swatch: a rainbow ring with the picked color in the center. */
+function customSwatch(active: boolean, color: string): CSSProperties {
+  return {
+    position: 'relative',
+    display: 'inline-block',
+    width: 22,
+    height: 22,
+    borderRadius: '50%',
+    overflow: 'hidden',
+    cursor: 'pointer',
+    background: `conic-gradient(red, yellow, lime, aqua, blue, magenta, red)`,
+    boxShadow: active ? `inset 0 0 0 4px ${color}, 0 0 0 2px #fff` : 'inset 0 0 0 4px rgba(0,0,0,0.25)'
   }
 }
 

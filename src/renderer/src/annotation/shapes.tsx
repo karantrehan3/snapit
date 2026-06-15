@@ -1,23 +1,45 @@
 import type { ReactElement } from 'react'
+import type Konva from 'konva'
 import { Rect, Line, Arrow, Text } from 'react-konva'
 import type { Shape } from './types'
 
 const SELECT_SHADOW = '#4aa3ff'
 
-/** Render a shape as a Konva node, with a glow when selected. */
-export function renderShape(shape: Shape, selectedId: string | null, editingId?: string): ReactElement {
+export type ShapeHandlers = {
+  draggable: boolean
+  onSelect: (id: string, e: Konva.KonvaEventObject<MouseEvent>) => void
+  onDragStart: () => void
+  onDragEnd: (id: string, e: Konva.KonvaEventObject<DragEvent>) => void
+}
+
+/** Render a shape as an interactive Konva node, with a glow when selected. */
+export function renderShape(
+  shape: Shape,
+  selectedId: string | null,
+  editingId: string | undefined,
+  h: ShapeHandlers
+): ReactElement {
   const selected = shape.id === selectedId
   const glow = selected
     ? { shadowColor: SELECT_SHADOW, shadowBlur: 10, shadowOpacity: 1 }
     : { shadowOpacity: 0 }
+
+  const common = {
+    id: shape.id,
+    name: 'shape',
+    draggable: h.draggable,
+    onMouseDown: (e: Konva.KonvaEventObject<MouseEvent>) => h.onSelect(shape.id, e),
+    onDragStart: h.onDragStart,
+    onDragEnd: (e: Konva.KonvaEventObject<DragEvent>) => h.onDragEnd(shape.id, e),
+    ...glow
+  }
 
   switch (shape.type) {
     case 'rect':
       return (
         <Rect
           key={shape.id}
-          id={shape.id}
-          name="shape"
+          {...common}
           x={shape.x}
           y={shape.y}
           width={shape.width}
@@ -25,15 +47,15 @@ export function renderShape(shape: Shape, selectedId: string | null, editingId?:
           stroke={shape.stroke}
           strokeWidth={shape.strokeWidth}
           hitStrokeWidth={Math.max(shape.strokeWidth, 12)}
-          {...glow}
         />
       )
     case 'arrow':
       return (
         <Arrow
           key={shape.id}
-          id={shape.id}
-          name="shape"
+          {...common}
+          x={0}
+          y={0}
           points={shape.points}
           stroke={shape.stroke}
           fill={shape.stroke}
@@ -42,29 +64,29 @@ export function renderShape(shape: Shape, selectedId: string | null, editingId?:
           pointerWidth={10}
           lineCap="round"
           hitStrokeWidth={Math.max(shape.strokeWidth, 12)}
-          {...glow}
         />
       )
     case 'line':
       return (
         <Line
           key={shape.id}
-          id={shape.id}
-          name="shape"
+          {...common}
+          x={0}
+          y={0}
           points={shape.points}
           stroke={shape.stroke}
           strokeWidth={shape.strokeWidth}
           lineCap="round"
           hitStrokeWidth={Math.max(shape.strokeWidth, 12)}
-          {...glow}
         />
       )
     case 'pen':
       return (
         <Line
           key={shape.id}
-          id={shape.id}
-          name="shape"
+          {...common}
+          x={0}
+          y={0}
           points={shape.points}
           stroke={shape.stroke}
           strokeWidth={shape.strokeWidth}
@@ -72,22 +94,19 @@ export function renderShape(shape: Shape, selectedId: string | null, editingId?:
           lineJoin="round"
           tension={0.4}
           hitStrokeWidth={Math.max(shape.strokeWidth, 12)}
-          {...glow}
         />
       )
     case 'text':
       return (
         <Text
           key={shape.id}
-          id={shape.id}
-          name="shape"
+          {...common}
           x={shape.x}
           y={shape.y}
           text={shape.text}
           fill={shape.fill}
           fontSize={shape.fontSize}
           visible={editingId !== shape.id}
-          {...glow}
         />
       )
   }
@@ -108,10 +127,4 @@ export function normalizeRect(s: Shape): Shape {
   const x = s.width < 0 ? s.x + s.width : s.x
   const y = s.height < 0 ? s.y + s.height : s.y
   return { ...s, x, y, width: Math.abs(s.width), height: Math.abs(s.height) }
-}
-
-/** Translate a shape by (dx, dy) in its local coordinate space. */
-export function moveShape(s: Shape, dx: number, dy: number): Shape {
-  if (s.type === 'rect' || s.type === 'text') return { ...s, x: s.x + dx, y: s.y + dy }
-  return { ...s, points: s.points.map((v, i) => (i % 2 === 0 ? v + dx : v + dy)) }
 }

@@ -1,25 +1,40 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactElement } from 'react'
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
+  type ReactElement
+} from 'react'
 import Konva from 'konva'
-import { Stage, Layer, Image as KonvaImage, Group, Rect } from 'react-konva'
+import { Stage, Layer, Image as KonvaImage, Group, Transformer } from 'react-konva'
 import type { Frame } from '../../preload/index'
 import { loadImage, type Box } from './lib/image'
 import { Toolbar } from './annotation/Toolbar'
-import { isMeaningful, moveShape, normalizeRect, renderShape } from './annotation/shapes'
-import { COLORS, MAX_STROKE, MIN_STROKE, SIZES, fontSizeFor, type Shape, type Tool } from './annotation/types'
+import { isMeaningful, normalizeRect, renderShape, type ShapeHandlers } from './annotation/shapes'
+import {
+  COLORS,
+  DEFAULT_STROKE,
+  MAX_STROKE,
+  MIN_STROKE,
+  fontSizeFor,
+  type Shape,
+  type Tool
+} from './annotation/types'
 
 const MIN_BOX = 6
 const TOOLBAR_HEIGHT = 44
 const GAP = 8
-const DIM = 'rgba(0, 0, 0, 0.5)'
+const DIM = 'rgba(165, 165, 170, 0.42)'
 const SIZE_PREVIEW_MS = 700
 
 type Pt = { x: number; y: number }
+type Corner = 'nw' | 'ne' | 'sw' | 'se'
 type Editing = { id: string; x: number; y: number; value: string; fontSize: number; fill: string }
 type SizePreview = { x: number; y: number; size: number }
 type Drag =
   | { kind: 'create'; start: Pt; prevBox: Box | null }
   | { kind: 'moveBox'; last: Pt }
-  | { kind: 'moveShape'; id: string; last: Pt; origin: Shape[]; moved: boolean }
   | { kind: 'draw' }
 
 const clamp = (v: number, min: number, max: number): number => Math.max(min, Math.min(max, v))
@@ -28,28 +43,29 @@ const inBox = (p: Pt, b: Box): boolean => p.x >= b.x && p.x <= b.x + b.w && p.y 
 /**
  * Screenshot capture + annotation editor.
  *
- * Full-screen Konva stage over the frozen frame. The selection box is a window
- * into the frozen screen — moving it reveals a different area and drawn shapes
- * follow it. Default Move tool moves the box / selects shapes; draw tools draw
- * inside the box; Cmd+Scroll adjusts thickness (with a size preview). Full
- * undo/redo history. Copy exports the box region at native resolution.
+ * Full-screen Konva stage shows the frozen frame; a DOM overlay greys everything
+ * except the selection box (a window into the frozen screen). Default Move tool
+ * moves the box, selects/drags shapes (native Konva drag), and resizes rects via a
+ * Transformer (corner handles). Draw tools draw inside the box; Cmd+Scroll adjusts
+ * thickness with a size preview. Full undo/redo. Copy exports the box at native res.
  */
 export function ScreenshotOverlay({ frame }: { frame: Frame }): ReactElement {
   const [box, setBox] = useState<Box | null>(null)
   const [tool, setTool] = useState<Tool>('move')
   const [color, setColor] = useState<string>(COLORS[0])
-  const [strokeWidth, setStrokeWidth] = useState<number>(SIZES[1])
+  const [strokeWidth, setStrokeWidth] = useState<number>(DEFAULT_STROKE)
   const [shapes, setShapes] = useState<Shape[]>([])
   const [draft, setDraft] = useState<Shape | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [editing, setEditing] = useState<Editing | null>(null)
   const [bg, setBg] = useState<HTMLImageElement | null>(null)
-  const [exporting, setExporting] = useState(false)
   const [undoStack, setUndoStack] = useState<Shape[][]>([])
   const [redoStack, setRedoStack] = useState<Shape[][]>([])
   const [sizePreview, setSizePreview] = useState<SizePreview | null>(null)
+  const [dragging, setDragging] = useState(false)
 
   const stageRef = useRef<Konva.Stage>(null)
+  const trRef = useRef<Konva.Transformer>(null)
   const drag = useRef<Drag | null>(null)
   const previewTimer = useRef<number | undefined>(undefined)
 
@@ -68,7 +84,20 @@ export function ScreenshotOverlay({ frame }: { frame: Frame }): ReactElement {
     if (c) c.style.cursor = tool === 'text' ? 'text' : tool === 'move' ? 'default' : 'crosshair'
   }, [tool])
 
-  // History helpers.
+  useEffect(() => () => window.clearTimeout(previewTimer.current), [])
+
+  // Attach the Transformer to the selected rect (corner-resize); detach otherwise.
+  useEffect(() => {
+    const tr = trRef.current
+    const stage = stageRef.current
+    if (!tr || !stage) return
+    const sel = shapes.find((s) => s.id === selectedId)
+    const node = selectedId && sel?.type === 'rect' ? stage.findOne<Konva.Node>(`#${selectedId}`) : null
+    tr.nodes(node ? [node] : [])
+    tr.getLayer()?.batchDraw()
+  }, [selectedId, shapes, box])
+
+  // History.
   const snapshot = (prev: Shape[]): void => {
     setUndoStack((u) => [...u, prev])
     setRedoStack([])
@@ -138,7 +167,7 @@ export function ScreenshotOverlay({ frame }: { frame: Frame }): ReactElement {
         )
       }
       setSizePreview({ x: e.clientX, y: e.clientY, size: next })
-      if (previewTimer.current) window.clearTimeout(previewTimer.current)
+      window.clearTimeout(previewTimer.current)
       previewTimer.current = window.setTimeout(() => setSizePreview(null), SIZE_PREVIEW_MS)
     }
     window.addEventListener('wheel', onWheel, { passive: false })
@@ -149,12 +178,15 @@ export function ScreenshotOverlay({ frame }: { frame: Frame }): ReactElement {
 
   const onMouseDown = (e: Konva.KonvaEventObject<MouseEvent>): void => {
     if (editing) return
+    // Let the Transformer handle its own anchor drags.
+    if (e.target.getParent()?.className === 'Transformer') return
     const p = pointer()
 
     if (!box || !inBox(p, box)) {
       drag.current = { kind: 'create', start: p, prevBox: box }
       setBox({ x: p.x, y: p.y, w: 0, h: 0 })
       setSelectedId(null)
+      setDragging(true)
       return
     }
 
@@ -169,21 +201,19 @@ export function ScreenshotOverlay({ frame }: { frame: Frame }): ReactElement {
       return
     }
 
+    // Move tool: shape clicks are handled by the shape (cancelBubble) → reaching here
+    // means empty space, so move the box.
     if (tool === 'move') {
-      const id = e.target.name() === 'shape' ? e.target.id() : null
-      if (id) {
-        setSelectedId(id)
-        drag.current = { kind: 'moveShape', id, last: p, origin: shapes, moved: false }
-      } else {
-        setSelectedId(null)
-        drag.current = { kind: 'moveBox', last: p }
-      }
+      setSelectedId(null)
+      drag.current = { kind: 'moveBox', last: p }
+      setDragging(true)
       return
     }
 
     // Draw tool.
     const id = crypto.randomUUID()
     drag.current = { kind: 'draw' }
+    setDragging(true)
     if (tool === 'rect') {
       setDraft({ id, type: 'rect', x: local.x, y: local.y, width: 0, height: 0, stroke: color, strokeWidth })
     } else if (tool === 'pen') {
@@ -216,14 +246,6 @@ export function ScreenshotOverlay({ frame }: { frame: Frame }): ReactElement {
       setBox((b) => (b ? clampBox({ ...b, x: b.x + dx, y: b.y + dy }, frame) : b))
       return
     }
-    if (d.kind === 'moveShape') {
-      const dx = p.x - d.last.x
-      const dy = p.y - d.last.y
-      d.last = p
-      d.moved = true
-      setShapes((s) => s.map((sh) => (sh.id === d.id ? moveShape(sh, dx, dy) : sh)))
-      return
-    }
     if (!box) return
     const local: Pt = { x: p.x - box.x, y: p.y - box.y }
     setDraft((prev) => {
@@ -238,6 +260,7 @@ export function ScreenshotOverlay({ frame }: { frame: Frame }): ReactElement {
   const onMouseUp = (): void => {
     const d = drag.current
     drag.current = null
+    setDragging(false)
     if (!d) return
 
     if (d.kind === 'create') {
@@ -255,10 +278,6 @@ export function ScreenshotOverlay({ frame }: { frame: Frame }): ReactElement {
       })
       return
     }
-    if (d.kind === 'moveShape') {
-      if (d.moved) snapshot(d.origin)
-      return
-    }
     if (d.kind === 'draw') {
       if (draft && isMeaningful(draft)) {
         snapshot(shapes)
@@ -268,10 +287,56 @@ export function ScreenshotOverlay({ frame }: { frame: Frame }): ReactElement {
     }
   }
 
+  const shapeHandlers: ShapeHandlers = {
+    draggable: tool === 'move',
+    onSelect: (id, e) => {
+      if (tool === 'move') {
+        e.cancelBubble = true
+        setSelectedId(id)
+      }
+    },
+    onDragStart: () => snapshot(shapes),
+    onDragEnd: (id, e) => {
+      const node = e.target
+      setShapes((s) =>
+        s.map((sh) => {
+          if (sh.id !== id) return sh
+          if (sh.type === 'rect' || sh.type === 'text') return { ...sh, x: node.x(), y: node.y() }
+          const dx = node.x()
+          const dy = node.y()
+          node.position({ x: 0, y: 0 })
+          return { ...sh, points: sh.points.map((v, i) => (i % 2 === 0 ? v + dx : v + dy)) }
+        })
+      )
+    }
+  }
+
+  const onRectTransformEnd = (): void => {
+    const node = trRef.current?.nodes()[0]
+    if (!node) return
+    const sx = node.scaleX()
+    const sy = node.scaleY()
+    node.scaleX(1)
+    node.scaleY(1)
+    const id = node.id()
+    setShapes((s) =>
+      s.map((sh) =>
+        sh.id === id && sh.type === 'rect'
+          ? {
+              ...sh,
+              x: node.x(),
+              y: node.y(),
+              width: Math.max(5, node.width() * sx),
+              height: Math.max(5, node.height() * sy)
+            }
+          : sh
+      )
+    )
+  }
+
   const commitEditing = (): void => {
     if (!editing) return
     if (editing.value.trim() === '') {
-      // Empty text: drop it and the undo step we created when it was added.
       setShapes((s) => s.filter((sh) => sh.id !== editing.id))
       setUndoStack((u) => u.slice(0, -1))
     }
@@ -281,13 +346,10 @@ export function ScreenshotOverlay({ frame }: { frame: Frame }): ReactElement {
   const onCopy = (): void => {
     commitEditing()
     setSelectedId(null)
-    setExporting(true)
+    trRef.current?.nodes([])
     requestAnimationFrame(() => {
       const stage = stageRef.current
-      if (!stage || !box) {
-        setExporting(false)
-        return
-      }
+      if (!stage || !box) return
       const url = stage.toDataURL({
         x: box.x,
         y: box.y,
@@ -297,6 +359,27 @@ export function ScreenshotOverlay({ frame }: { frame: Frame }): ReactElement {
       })
       window.snapit.copyImage(url)
     })
+  }
+
+  // Resize the capture box by dragging a corner handle (DOM, window-tracked).
+  const startBoxResize = (corner: Corner, e: ReactMouseEvent): void => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!box) return
+    const start = { x: e.clientX, y: e.clientY }
+    const startBox = box
+    setSelectedId(null)
+    setDragging(true)
+    const onMove = (ev: MouseEvent): void => {
+      setBox(resizeBox(startBox, corner, ev.clientX - start.x, ev.clientY - start.y, frame))
+    }
+    const onUp = (): void => {
+      setDragging(false)
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
   }
 
   const all = box ? (draft ? [...shapes, draft] : shapes) : []
@@ -315,30 +398,68 @@ export function ScreenshotOverlay({ frame }: { frame: Frame }): ReactElement {
           <KonvaImage image={bg ?? undefined} width={frame.width} height={frame.height} name="bg" />
         </Layer>
 
-        <Layer listening={false}>{dimRects(box, frame)}</Layer>
-
         {box && (
           <Layer>
             <Group x={box.x} y={box.y} clipX={0} clipY={0} clipWidth={box.w} clipHeight={box.h}>
-              {all.map((shape) => renderShape(shape, selectedId, editing?.id))}
+              {all.map((shape) => renderShape(shape, selectedId, editing?.id, shapeHandlers))}
             </Group>
-          </Layer>
-        )}
-
-        {box && !exporting && (
-          <Layer listening={false}>
-            <Rect
-              x={box.x}
-              y={box.y}
-              width={box.w}
-              height={box.h}
-              stroke="#ffffff"
-              strokeWidth={2}
-              dash={[7, 5]}
+            <Transformer
+              ref={trRef}
+              rotateEnabled={false}
+              keepRatio={false}
+              enabledAnchors={['top-left', 'top-right', 'bottom-left', 'bottom-right']}
+              onTransformStart={() => snapshot(shapes)}
+              onTransformEnd={onRectTransformEnd}
             />
           </Layer>
         )}
       </Stage>
+
+      {/* Grey overtone: everything dimmed except the bright selection window. */}
+      {box ? (
+        <div
+          style={{
+            position: 'fixed',
+            left: box.x,
+            top: box.y,
+            width: box.w,
+            height: box.h,
+            boxShadow: `0 0 0 1px rgba(0, 0, 0, 0.35), 0 0 0 9999px ${DIM}`,
+            outline: '3px dashed #ffffff',
+            pointerEvents: 'none'
+          }}
+        />
+      ) : (
+        <div style={{ position: 'fixed', inset: 0, background: DIM, pointerEvents: 'none' }} />
+      )}
+
+      {/* Corner handles to resize the capture box — hidden while dragging. */}
+      {box &&
+        !dragging &&
+        (['nw', 'ne', 'sw', 'se'] as const).map((corner) => {
+          const left = corner === 'nw' || corner === 'sw' ? box.x : box.x + box.w
+          const top = corner === 'nw' || corner === 'ne' ? box.y : box.y + box.h
+          const cursor = corner === 'nw' || corner === 'se' ? 'nwse-resize' : 'nesw-resize'
+          return (
+            <div
+              key={corner}
+              onMouseDown={(e) => startBoxResize(corner, e)}
+              style={{
+                position: 'fixed',
+                left,
+                top,
+                width: 12,
+                height: 12,
+                transform: 'translate(-50%, -50%)',
+                background: '#fff',
+                border: '1.5px solid #4aa3ff',
+                borderRadius: 2,
+                cursor,
+                pointerEvents: 'auto'
+              }}
+            />
+          )
+        })}
 
       {editing && (
         <textarea
@@ -411,8 +532,6 @@ export function ScreenshotOverlay({ frame }: { frame: Frame }): ReactElement {
           setTool={setTool}
           color={color}
           setColor={setColor}
-          strokeWidth={strokeWidth}
-          setStrokeWidth={setStrokeWidth}
           canUndo={undoStack.length > 0}
           onUndo={undo}
           canRedo={redoStack.length > 0}
@@ -434,19 +553,26 @@ function clampBox(b: Box, frame: Frame): Box {
   }
 }
 
-function dimRects(box: Box | null, frame: Frame): ReactElement {
-  const { width: W, height: H } = frame
-  if (!box) return <Rect x={0} y={0} width={W} height={H} fill={DIM} />
-  const right = box.x + box.w
-  const bottom = box.y + box.h
-  return (
-    <>
-      <Rect x={0} y={0} width={W} height={box.y} fill={DIM} />
-      <Rect x={0} y={bottom} width={W} height={H - bottom} fill={DIM} />
-      <Rect x={0} y={box.y} width={box.x} height={box.h} fill={DIM} />
-      <Rect x={right} y={box.y} width={W - right} height={box.h} fill={DIM} />
-    </>
-  )
+/** Resize a box by dragging one corner, clamped to a min size and the screen. */
+function resizeBox(b: Box, corner: Corner, dx: number, dy: number, frame: Frame): Box {
+  const right = b.x + b.w
+  const bottom = b.y + b.h
+  let { x, y, w, h } = b
+  if (corner === 'nw' || corner === 'sw') {
+    const left = clamp(b.x + dx, 0, right - MIN_BOX)
+    x = left
+    w = right - left
+  } else {
+    w = clamp(right + dx, b.x + MIN_BOX, frame.width) - b.x
+  }
+  if (corner === 'nw' || corner === 'ne') {
+    const topEdge = clamp(b.y + dy, 0, bottom - MIN_BOX)
+    y = topEdge
+    h = bottom - topEdge
+  } else {
+    h = clamp(bottom + dy, b.y + MIN_BOX, frame.height) - b.y
+  }
+  return { x, y, w, h }
 }
 
 function toolbarPosition(sel: Box): CSSProperties {
