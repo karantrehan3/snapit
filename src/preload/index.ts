@@ -8,9 +8,7 @@ export type Frame = {
 }
 
 /** What the overlay renderer needs to know about the current capture session. */
-export type CaptureSession =
-  | { mode: 'screenshot'; frame: Frame }
-  | { mode: 'record' }
+export type CaptureSession = { mode: 'screenshot'; frame: Frame } | { mode: 'record' }
 
 const api = {
   /** Fetch the current capture session (mode + frozen frame for screenshots). */

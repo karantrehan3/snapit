@@ -45,7 +45,12 @@ export function Toolbar({
       ))}
       <span style={sep} />
       {SIZES.map((s, i) => (
-        <button key={s} title={`Thickness ${s}`} onClick={() => setStrokeWidth(s)} style={btn(strokeWidth === s)}>
+        <button
+          key={s}
+          title={`Thickness ${s}`}
+          onClick={() => setStrokeWidth(s)}
+          style={btn(strokeWidth === s)}
+        >
           <span
             style={{
               display: 'inline-block',

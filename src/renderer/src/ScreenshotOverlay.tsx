@@ -128,7 +128,10 @@ export function ScreenshotOverlay({ frame }: { frame: Frame }): ReactElement {
           s.map((sh) => {
             if (sh.id !== selectedId) return sh
             if (sh.type === 'text') {
-              return { ...sh, fontSize: clamp(sh.fontSize + delta * 4, fontSizeFor(MIN_STROKE), fontSizeFor(MAX_STROKE)) }
+              return {
+                ...sh,
+                fontSize: clamp(sh.fontSize + delta * 4, fontSizeFor(MIN_STROKE), fontSizeFor(MAX_STROKE))
+              }
             }
             return { ...sh, strokeWidth: clamp(sh.strokeWidth + delta, MIN_STROKE, MAX_STROKE) }
           })
@@ -186,7 +189,13 @@ export function ScreenshotOverlay({ frame }: { frame: Frame }): ReactElement {
     } else if (tool === 'pen') {
       setDraft({ id, type: 'pen', points: [local.x, local.y], stroke: color, strokeWidth })
     } else {
-      setDraft({ id, type: tool as 'line' | 'arrow', points: [local.x, local.y, local.x, local.y], stroke: color, strokeWidth })
+      setDraft({
+        id,
+        type: tool as 'line' | 'arrow',
+        points: [local.x, local.y, local.x, local.y],
+        stroke: color,
+        strokeWidth
+      })
     }
   }
 
@@ -279,7 +288,13 @@ export function ScreenshotOverlay({ frame }: { frame: Frame }): ReactElement {
         setExporting(false)
         return
       }
-      const url = stage.toDataURL({ x: box.x, y: box.y, width: box.w, height: box.h, pixelRatio: frame.scaleFactor })
+      const url = stage.toDataURL({
+        x: box.x,
+        y: box.y,
+        width: box.w,
+        height: box.h,
+        pixelRatio: frame.scaleFactor
+      })
       window.snapit.copyImage(url)
     })
   }
@@ -312,7 +327,15 @@ export function ScreenshotOverlay({ frame }: { frame: Frame }): ReactElement {
 
         {box && !exporting && (
           <Layer listening={false}>
-            <Rect x={box.x} y={box.y} width={box.w} height={box.h} stroke="#ffffff" strokeWidth={2} dash={[7, 5]} />
+            <Rect
+              x={box.x}
+              y={box.y}
+              width={box.w}
+              height={box.h}
+              stroke="#ffffff"
+              strokeWidth={2}
+              dash={[7, 5]}
+            />
           </Layer>
         )}
       </Stage>
@@ -324,7 +347,9 @@ export function ScreenshotOverlay({ frame }: { frame: Frame }): ReactElement {
           onChange={(e) => {
             const v = e.target.value
             setEditing({ ...editing, value: v })
-            setShapes((s) => s.map((sh) => (sh.id === editing.id && sh.type === 'text' ? { ...sh, text: v } : sh)))
+            setShapes((s) =>
+              s.map((sh) => (sh.id === editing.id && sh.type === 'text' ? { ...sh, text: v } : sh))
+            )
           }}
           onKeyDown={(e) => {
             e.stopPropagation()
@@ -341,7 +366,15 @@ export function ScreenshotOverlay({ frame }: { frame: Frame }): ReactElement {
       {!box && <div style={hintStyle}>Drag to select · Esc to cancel</div>}
 
       {sizePreview && (
-        <div style={{ position: 'fixed', left: sizePreview.x, top: sizePreview.y, transform: 'translate(-50%, -50%)', pointerEvents: 'none' }}>
+        <div
+          style={{
+            position: 'fixed',
+            left: sizePreview.x,
+            top: sizePreview.y,
+            transform: 'translate(-50%, -50%)',
+            pointerEvents: 'none'
+          }}
+        >
           <div
             style={{
               width: sizePreview.size,
@@ -418,7 +451,8 @@ function dimRects(box: Box | null, frame: Frame): ReactElement {
 
 function toolbarPosition(sel: Box): CSSProperties {
   const below = sel.y + sel.h + GAP
-  const top = below + TOOLBAR_HEIGHT <= window.innerHeight ? below : Math.max(GAP, sel.y - TOOLBAR_HEIGHT - GAP)
+  const top =
+    below + TOOLBAR_HEIGHT <= window.innerHeight ? below : Math.max(GAP, sel.y - TOOLBAR_HEIGHT - GAP)
   const left = Math.min(Math.max(GAP, sel.x), Math.max(GAP, window.innerWidth - 420))
   return { top, left }
 }

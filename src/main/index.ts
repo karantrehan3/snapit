@@ -43,9 +43,7 @@ type Frame = {
 }
 
 /** What the overlay renderer needs to know about the current capture session. */
-type CaptureSession =
-  | { mode: 'screenshot'; frame: Frame }
-  | { mode: 'record' }
+type CaptureSession = { mode: 'screenshot'; frame: Frame } | { mode: 'record' }
 
 let tray: Tray | null = null
 let overlayWindow: BrowserWindow | null = null
@@ -113,9 +111,7 @@ function ensureScreenPermission(): void {
       '[snapit] Screen Recording not granted. NOTE: when launched from a terminal, ' +
         'the permission belongs to the TERMINAL app — grant it there, then relaunch.'
     )
-    void shell.openExternal(
-      'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'
-    )
+    void shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture')
   }
 }
 

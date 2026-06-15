@@ -22,8 +22,7 @@ export async function captureDisplay(display: Display): Promise<string> {
   }
 
   // Match the source to the captured display; fall back to the first screen.
-  const source =
-    sources.find((s) => s.display_id === String(display.id)) ?? sources[0]
+  const source = sources.find((s) => s.display_id === String(display.id)) ?? sources[0]
 
   return source.thumbnail.toDataURL()
 }
