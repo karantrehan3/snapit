@@ -51,6 +51,12 @@ permission belongs to the parent process). macOS quirk notes are in "Known issue
     parented to the overlay), all at native resolution.
 - **Settings** (`src/renderer/src/settings/`): window from the tray to edit hotkeys + save folder,
   persisted to `settings.json` in userData (`src/main/settings.ts`).
+- **Recording** (`src/renderer/src/RecordOverlay.tsx`, Phase 2): record hotkey → setup panel
+  (full-screen / dragged region toggle, mic on/off) → `desktopCapturer` stream → `MediaRecorder`
+  → `.webm` saved to the folder. Region pipes the stream through a cropped canvas. During recording
+  the overlay goes click-through (screen stays usable) with a top-center Stop pill; the record
+  hotkey pressed again also stops & saves. Mic mixes in via a second `getUserMedia`; if denied it
+  records silently. (Stop pill is visible in the recording — accepted tradeoff.)
 
 ### Commits on `main`
 
@@ -88,8 +94,9 @@ stick, no immediate BLUR), then test typing.
 3. **Rework the Settings hotkey recorder** — current click-to-record `HotkeyInput`
    (`src/renderer/src/settings/HotkeyInput.tsx`) is clunky; the user wants it nicer.
 4. **Commit 1d** as "Phase 1 complete" (only after user verifies — present changes first).
-5. **Phase 2:** real screen recording wired into the record-mode stub (`RecordOverlay.tsx`) —
-   `desktopCapturer` stream → `MediaRecorder` → `.webm`/`.mp4`.
+5. ~~**Phase 2:** screen recording~~ — **done** (full-screen + region, mic, Stop pill). Verify the
+   `getUserMedia` desktop path on Electron 42; if it errors, switch to `getDisplayMedia` +
+   `setDisplayMediaRequestHandler`.
 6. Later phases: Chrome extension + Playwright test-gen (Phase 3), assisted form-fill (Phase 4),
    cloud share. See `DESIGN.md`.
 

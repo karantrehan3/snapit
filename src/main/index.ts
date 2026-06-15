@@ -16,7 +16,7 @@ import {
   systemPreferences,
   type Display
 } from 'electron'
-import { captureDisplay } from './capture'
+import { captureDisplay, getDisplaySource, type DisplaySource } from './capture'
 import { getSettings, setSettings, type Settings } from './settings'
 
 /**
@@ -24,7 +24,7 @@ import { getSettings, setSettings, type Settings } from './settings'
  *
  * Background tray app with two capture modes behind configurable global hotkeys:
  *   - screenshot: freeze the display, drag-select, annotate → copy / save.
- *   - record: live overlay; video recording lands in Phase 2.
+ *   - record: full-screen or region screen recording (optional mic) → .webm.
  *
  * Captures can be copied to the clipboard, saved to a default folder, or saved-as
  * via a dialog. Hotkeys and the save folder are editable in the settings window.
@@ -39,7 +39,7 @@ type Frame = {
   scaleFactor: number
 }
 
-type CaptureSession = { mode: 'screenshot'; frame: Frame } | { mode: 'record' }
+type CaptureSession = { mode: 'screenshot'; frame: Frame } | { mode: 'record'; source: DisplaySource }
 
 let tray: Tray | null = null
 let overlayWindow: BrowserWindow | null = null
@@ -153,7 +153,9 @@ function ensureScreenPermission(): void {
 
 async function startCapture(mode: CaptureMode): Promise<void> {
   if (overlayWindow) {
-    closeOverlayWindow()
+    // A second record hotkey press stops & saves; otherwise just dismiss.
+    if (session?.mode === 'record') overlayWindow.webContents.send('record:stop')
+    else closeOverlayWindow()
     return
   }
 
@@ -179,7 +181,13 @@ async function startCapture(mode: CaptureMode): Promise<void> {
       return
     }
   } else {
-    session = { mode: 'record' }
+    try {
+      session = { mode: 'record', source: await getDisplaySource(display) }
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err)
+      console.error(`[snapit] record source failed: ${detail}`)
+      return
+    }
   }
 
   createOverlayWindow(display)
@@ -273,6 +281,22 @@ app.whenReady().then(() => {
   })
 
   ipcMain.on('overlay:close', closeOverlayWindow)
+
+  ipcMain.handle('record:save', async (_event, data: ArrayBuffer) => {
+    const { saveDir } = getSettings()
+    await mkdir(saveDir, { recursive: true })
+    const filePath = join(saveDir, `snapit-${timestamp()}.webm`)
+    await writeFile(filePath, Buffer.from(data))
+    shell.showItemInFolder(filePath)
+    closeOverlayWindow()
+    return filePath
+  })
+
+  // Make the overlay click-through while recording so the screen stays usable;
+  // the renderer flips it back on when the pointer is over the Stop pill.
+  ipcMain.on('record:set-ignore-mouse', (_event, ignore: boolean) => {
+    overlayWindow?.setIgnoreMouseEvents(ignore, { forward: true })
+  })
 
   ipcMain.handle('settings:get', () => getSettings())
   ipcMain.handle('settings:set', (_event, partial: Partial<Settings>) => {

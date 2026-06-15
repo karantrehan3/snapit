@@ -7,8 +7,11 @@ export type Frame = {
   scaleFactor: number
 }
 
+/** A live-screen source for recording: desktopCapturer id + native pixel size. */
+export type DisplaySource = { id: string; width: number; height: number }
+
 /** What the overlay renderer needs to know about the current capture session. */
-export type CaptureSession = { mode: 'screenshot'; frame: Frame } | { mode: 'record' }
+export type CaptureSession = { mode: 'screenshot'; frame: Frame } | { mode: 'record'; source: DisplaySource }
 
 export type Settings = {
   screenshotHotkey: string
@@ -27,6 +30,16 @@ const api = {
   saveImageAs: (dataUrl: string): Promise<string | null> => ipcRenderer.invoke('capture:save-as', dataUrl),
   /** Dismiss the capture overlay (e.g. on Esc / cancel). */
   closeOverlay: (): void => ipcRenderer.send('overlay:close'),
+  /** Persist a finished recording (webm bytes); closes the overlay. Returns the path. */
+  saveRecording: (data: ArrayBuffer): Promise<string> => ipcRenderer.invoke('record:save', data),
+  /** Toggle overlay click-through while recording (the Stop pill stays interactive). */
+  setMouseIgnore: (ignore: boolean): void => ipcRenderer.send('record:set-ignore-mouse', ignore),
+  /** Subscribe to stop-recording requests (record hotkey pressed again). Returns an unsubscribe. */
+  onStopRecording: (cb: () => void): (() => void) => {
+    const handler = (): void => cb()
+    ipcRenderer.on('record:stop', handler)
+    return () => ipcRenderer.removeListener('record:stop', handler)
+  },
   /** Settings. */
   getSettings: (): Promise<Settings> => ipcRenderer.invoke('settings:get'),
   setSettings: (partial: Partial<Settings>): Promise<Settings> => ipcRenderer.invoke('settings:set', partial),

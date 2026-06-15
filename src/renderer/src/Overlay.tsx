@@ -17,14 +17,16 @@ export function Overlay(): ReactElement | null {
   }, [])
 
   useEffect(() => {
+    // Record mode manages its own Esc (Esc must not discard an active recording).
+    if (session?.mode !== 'screenshot') return
     const onKeyDown = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') window.snapit.closeOverlay()
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [])
+  }, [session])
 
   if (!session) return null
   if (session.mode === 'screenshot') return <ScreenshotOverlay frame={session.frame} />
-  return <RecordOverlay />
+  return <RecordOverlay source={session.source} />
 }
