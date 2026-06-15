@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type R
 import type { Phase, Pt, Rect, RecordParams } from './types'
 
 const MIN_REGION = 8
+const COUNTDOWN_SECONDS = 3
 const MP4_CANDIDATES = [
   'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
   'video/mp4;codecs=avc1,mp4a.40.2',
@@ -21,13 +22,14 @@ function pickRecording(): { mimeType: string; ext: 'mp4' | 'webm' } {
 
 export type Recorder = {
   phase: Phase
+  countdown: number
   elapsed: number
   saving: boolean
   error: string | null
   pillPos: Pt | null
   pillRef: RefObject<HTMLDivElement | null>
   onPillMouseDown: (e: ReactMouseEvent) => void
-  start: (params: RecordParams) => Promise<void>
+  start: (params: RecordParams) => void
   stop: () => void
 }
 
@@ -39,12 +41,14 @@ export type Recorder = {
  */
 export function useRecorder(): Recorder {
   const [phase, setPhase] = useState<Phase>('setup')
+  const [countdown, setCountdown] = useState(0)
   const [elapsed, setElapsed] = useState(0)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pillPos, setPillPos] = useState<Pt | null>(null)
 
   const phaseRef = useRef<Phase>('setup')
+  const countdownTimerRef = useRef<number | undefined>(undefined)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const streamsRef = useRef<MediaStream[]>([])
@@ -62,6 +66,7 @@ export function useRecorder(): Recorder {
 
   const cleanupStreams = (): void => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current)
+    window.clearInterval(countdownTimerRef.current)
     streamsRef.current.forEach((s) => s.getTracks().forEach((t) => t.stop()))
     streamsRef.current = []
     void audioCtxRef.current?.close().catch(() => {})
@@ -197,13 +202,31 @@ export function useRecorder(): Recorder {
     return dest.stream.getAudioTracks()[0]
   }
 
-  const start = async (params: RecordParams): Promise<void> => {
+  // Click Start → validate → 3-2-1 countdown → begin recording. The countdown
+  // finishes (and its UI clears) before MediaRecorder starts, so it never lands
+  // in the recorded file.
+  const start = (params: RecordParams): void => {
     setError(null)
-    const { selectedId, systemAudio, mic, fps, regionMode, box, fallbackWidth } = params
-    if (regionMode && (!box || box.w < MIN_REGION || box.h < MIN_REGION)) {
+    if (params.regionMode && (!params.box || params.box.w < MIN_REGION || params.box.h < MIN_REGION)) {
       setError('Drag to select a region first.')
       return
     }
+    setCountdown(COUNTDOWN_SECONDS)
+    setPhase('countdown')
+    countdownTimerRef.current = window.setInterval(() => {
+      setCountdown((n) => {
+        if (n <= 1) {
+          window.clearInterval(countdownTimerRef.current)
+          void beginRecording(params)
+          return 0
+        }
+        return n - 1
+      })
+    }, 1000)
+  }
+
+  const beginRecording = async (params: RecordParams): Promise<void> => {
+    const { selectedId, systemAudio, mic, fps, regionMode, box, fallbackWidth } = params
     setPhase('recording')
     try {
       const display = await getDisplayStream(systemAudio, fps, selectedId)
@@ -250,5 +273,5 @@ export function useRecorder(): Recorder {
     }
   }
 
-  return { phase, elapsed, saving, error, pillPos, pillRef, onPillMouseDown, start, stop }
+  return { phase, countdown, elapsed, saving, error, pillPos, pillRef, onPillMouseDown, start, stop }
 }

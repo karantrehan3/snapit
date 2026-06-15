@@ -106,6 +106,29 @@ export const hint: CSSProperties = { fontSize: 12, color: 'rgba(255, 255, 255, 0
 
 export const picker: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 10 }
 
+export const countdownRoot: CSSProperties = {
+  position: 'fixed',
+  inset: 0,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  pointerEvents: 'none'
+}
+
+export const countdownNumber: CSSProperties = {
+  width: 160,
+  height: 160,
+  borderRadius: '50%',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  background: 'rgba(28, 28, 30, 0.72)',
+  color: '#fff',
+  font: '700 84px -apple-system, system-ui, sans-serif',
+  boxShadow: '0 8px 40px rgba(0, 0, 0, 0.5)',
+  animation: 'snapitPop 0.35s ease-out'
+}
+
 export const spinnerWrap: CSSProperties = {
   display: 'flex',
   alignItems: 'center',

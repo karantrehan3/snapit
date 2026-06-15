@@ -10,8 +10,8 @@ export type Settings = {
 
 function defaults(): Settings {
   return {
-    screenshotHotkey: 'CommandOrControl+Shift+9',
-    recordHotkey: 'CommandOrControl+Shift+8',
+    screenshotHotkey: 'Cmd or Ctrl+Shift+9',
+    recordHotkey: 'Cmd or Ctrl+Shift+8',
     saveDir: join(app.getPath('pictures'), 'snapit')
   }
 }

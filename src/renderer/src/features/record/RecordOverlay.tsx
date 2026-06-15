@@ -5,6 +5,7 @@ import { useRecorder } from './useRecorder'
 import { useSourcePicker } from './useSourcePicker'
 import { SourcePicker } from './SourcePicker'
 import { RecordingPill } from './RecordingPill'
+import { Countdown } from './Countdown'
 import { btn, checkboxRow, errorText, hint, panel, regionBox, segment, segmented, veil } from './styles'
 
 const normalize = (a: Pt, b: Pt): Rect => ({
@@ -48,6 +49,10 @@ export function RecordOverlay({ source }: { source: DisplaySource }): ReactEleme
   }
   const onVeilMouseUp = (): void => {
     dragStart.current = null
+  }
+
+  if (recorder.phase === 'countdown') {
+    return <Countdown value={recorder.countdown} />
   }
 
   if (recorder.phase === 'recording') {
@@ -127,7 +132,7 @@ export function RecordOverlay({ source }: { source: DisplaySource }): ReactEleme
           <button
             type="button"
             onClick={() =>
-              void recorder.start({
+              recorder.start({
                 selectedId,
                 systemAudio,
                 mic,
