@@ -423,6 +423,18 @@ export function useAnnotationEditor(frame: Frame): AnnotationEditor {
   const onSave = (): void => exportPng((url) => void window.snapit.saveImage(url))
   const onSaveAs = (): void => exportPng((url) => void window.snapit.saveImageAs(url))
 
+  // Cmd/Ctrl+C copies the cropped region too — a keyboard alternative to the Copy
+  // button. Skipped while editing text so the textarea's own copy still works.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (editing || !(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'c') return
+      e.preventDefault()
+      onCopy()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [editing, box])
+
   // Resize the capture box by dragging a corner handle (DOM, window-tracked).
   const startBoxResize = (corner: Corner, e: ReactMouseEvent): void => {
     e.preventDefault()
