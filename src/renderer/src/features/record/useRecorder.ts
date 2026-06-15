@@ -176,8 +176,15 @@ export function useRecorder(): Recorder {
     video.srcObject = new MediaStream(display.getVideoTracks())
     video.muted = true
     void video.play()
-    const draw = (): void => {
-      ctx?.drawImage(video, sx, sy, sw, sh, 0, 0, sw, sh)
+    // Throttle the copy to the target fps — rAF can fire at the display's refresh
+    // rate (e.g. 120 Hz), so an unthrottled loop would redraw far more than needed.
+    const minInterval = 1000 / frameRate
+    let lastDraw = 0
+    const draw = (now: number): void => {
+      if (now - lastDraw >= minInterval) {
+        lastDraw = now
+        ctx?.drawImage(video, sx, sy, sw, sh, 0, 0, sw, sh)
+      }
       rafRef.current = requestAnimationFrame(draw)
     }
     rafRef.current = requestAnimationFrame(draw)

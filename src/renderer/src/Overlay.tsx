@@ -1,7 +1,14 @@
-import { useEffect, useState, type ReactElement } from 'react'
+import { lazy, Suspense, useEffect, useState, type ReactElement } from 'react'
 import type { CaptureSession } from '@preload/index'
-import { ScreenshotOverlay } from '@renderer/features/screenshot/ScreenshotOverlay'
-import { RecordOverlay } from '@renderer/features/record/RecordOverlay'
+
+// Lazy per mode so the screenshot path's Konva bundle (~1.4 MB) loads only when a
+// screenshot overlay actually renders — the record overlay never pulls it in.
+const ScreenshotOverlay = lazy(() =>
+  import('@renderer/features/screenshot/ScreenshotOverlay').then((m) => ({ default: m.ScreenshotOverlay }))
+)
+const RecordOverlay = lazy(() =>
+  import('@renderer/features/record/RecordOverlay').then((m) => ({ default: m.RecordOverlay }))
+)
 
 /**
  * Overlay container.
@@ -27,6 +34,13 @@ export function Overlay(): ReactElement | null {
   }, [session])
 
   if (!session) return null
-  if (session.mode === 'screenshot') return <ScreenshotOverlay frame={session.frame} />
-  return <RecordOverlay source={session.source} />
+  return (
+    <Suspense fallback={null}>
+      {session.mode === 'screenshot' ? (
+        <ScreenshotOverlay frame={session.frame} />
+      ) : (
+        <RecordOverlay source={session.source} />
+      )}
+    </Suspense>
+  )
 }
