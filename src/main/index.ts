@@ -328,9 +328,13 @@ app.whenReady().then(() => {
   })
 
   // Set before each recording: system/loopback audio + which source to capture.
+  // Also exclude the overlay (and its Stop pill) from screen capture so it stays
+  // visible to the user but never lands in the recording. macOS sets the window's
+  // NSWindowSharingType to none; a fresh overlay per session defaults back to off.
   ipcMain.handle('record:prepare', (_event, opts: { systemAudio: boolean; sourceId: string }) => {
     recordWantsSystemAudio = opts.systemAudio
     recordSourceId = opts.sourceId
+    overlayWindow?.setContentProtection(true)
   })
 
   // Make the overlay click-through while recording so the screen stays usable;
