@@ -14,7 +14,12 @@ type Pt = { x: number; y: number }
 type Rect = { x: number; y: number; w: number; h: number }
 
 const MIN_REGION = 8
-const MIME_CANDIDATES = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm']
+const MP4_CANDIDATES = [
+  'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+  'video/mp4;codecs=avc1,mp4a.40.2',
+  'video/mp4'
+]
+const WEBM_CANDIDATES = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm']
 
 const normalize = (a: Pt, b: Pt): Rect => ({
   x: Math.min(a.x, b.x),
@@ -27,35 +32,47 @@ const fmt = (s: number): string => `${Math.floor(s / 60)}:${String(s % 60).padSt
 
 const msg = (e: unknown): string => (e instanceof Error ? e.message : String(e))
 
-function pickMime(): string {
-  return MIME_CANDIDATES.find((c) => MediaRecorder.isTypeSupported(c)) ?? ''
+/** Prefer native MP4 (H.264/AAC); fall back to WebM if the runtime lacks it. */
+function pickRecording(): { mimeType: string; ext: 'mp4' | 'webm' } {
+  const mp4 = MP4_CANDIDATES.find((c) => MediaRecorder.isTypeSupported(c))
+  if (mp4) return { mimeType: mp4, ext: 'mp4' }
+  const webm = WEBM_CANDIDATES.find((c) => MediaRecorder.isTypeSupported(c))
+  return { mimeType: webm ?? '', ext: 'webm' }
 }
 
 /**
  * Record overlay — Phase 2.
  *
- * Setup: choose full-screen or a dragged region, toggle the mic, then Start.
- * Recording: the overlay goes click-through (screen stays usable) and only a
- * top-center Stop pill remains interactive. Full-screen records the desktop
- * stream directly; region pipes the stream through a cropped canvas. Output is
- * a .webm saved to the configured folder.
+ * Setup: choose full-screen or a dragged region, toggle system + mic audio, then
+ * Start. Recording: the overlay goes click-through (screen stays usable) and only
+ * a top-center Stop pill remains interactive. Full-screen records the desktop
+ * stream; region pipes it through a cropped canvas. System (loopback) audio comes
+ * from getDisplayMedia; mic from getUserMedia; both are mixed via WebAudio. Output
+ * is a native .mp4 when supported, otherwise .webm.
  */
 export function RecordOverlay({ source }: { source: DisplaySource }): ReactElement {
   const [phase, setPhase] = useState<Phase>('setup')
   const [mode, setMode] = useState<Mode>('full')
-  const [mic, setMic] = useState(true)
+  const [systemAudio, setSystemAudio] = useState(true)
+  const [mic, setMic] = useState(false)
+  const [fps, setFps] = useState(60)
   const [box, setBox] = useState<Rect | null>(null)
   const [elapsed, setElapsed] = useState(0)
+  const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [pillPos, setPillPos] = useState<Pt | null>(null)
 
   const phaseRef = useRef<Phase>('setup')
   const recorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const streamsRef = useRef<MediaStream[]>([])
+  const audioCtxRef = useRef<AudioContext | null>(null)
+  const extRef = useRef<'mp4' | 'webm'>('webm')
   const rafRef = useRef<number | undefined>(undefined)
   const timerRef = useRef<number | undefined>(undefined)
   const dragStart = useRef<Pt | null>(null)
   const pillRef = useRef<HTMLDivElement>(null)
+  const pillDrag = useRef<{ dx: number; dy: number } | null>(null)
   const savingRef = useRef(false)
 
   useEffect(() => {
@@ -66,19 +83,23 @@ export function RecordOverlay({ source }: { source: DisplaySource }): ReactEleme
     if (rafRef.current) cancelAnimationFrame(rafRef.current)
     streamsRef.current.forEach((s) => s.getTracks().forEach((t) => t.stop()))
     streamsRef.current = []
+    void audioCtxRef.current?.close().catch(() => {})
+    audioCtxRef.current = null
   }
 
   const finalize = async (): Promise<void> => {
     if (savingRef.current) return
     savingRef.current = true
+    setSaving(true)
     window.clearInterval(timerRef.current)
     cleanupStreams()
-    const blob = new Blob(chunksRef.current, { type: 'video/webm' })
+    const ext = extRef.current
+    const blob = new Blob(chunksRef.current, { type: ext === 'mp4' ? 'video/mp4' : 'video/webm' })
     if (blob.size === 0) {
       window.snapit.closeOverlay()
       return
     }
-    await window.snapit.saveRecording(await blob.arrayBuffer())
+    await window.snapit.saveRecording(await blob.arrayBuffer(), ext)
   }
 
   const stop = (): void => {
@@ -107,12 +128,17 @@ export function RecordOverlay({ source }: { source: DisplaySource }): ReactEleme
 
   useEffect(() => () => cleanupStreams(), [])
 
-  // While recording, keep the overlay click-through except over the Stop pill.
+  // While recording, keep the overlay click-through except over the (draggable) pill.
   useEffect(() => {
     if (phase !== 'recording') return
     window.snapit.setMouseIgnore(true)
     let over = false
     const onMove = (e: MouseEvent): void => {
+      if (pillDrag.current) {
+        window.snapit.setMouseIgnore(false)
+        setPillPos({ x: e.clientX - pillDrag.current.dx, y: e.clientY - pillDrag.current.dy })
+        return
+      }
       const r = pillRef.current?.getBoundingClientRect()
       const isOver =
         !!r && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom
@@ -121,32 +147,38 @@ export function RecordOverlay({ source }: { source: DisplaySource }): ReactEleme
         window.snapit.setMouseIgnore(!isOver)
       }
     }
+    const onUp = (): void => {
+      pillDrag.current = null
+    }
     window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
     return () => {
       window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
       window.snapit.setMouseIgnore(false)
     }
   }, [phase])
 
-  const getDisplayStream = (): Promise<MediaStream> => {
-    const constraints = {
-      audio: false,
-      video: {
-        mandatory: {
-          chromeMediaSource: 'desktop',
-          chromeMediaSourceId: source.id,
-          maxWidth: source.width,
-          maxHeight: source.height,
-          maxFrameRate: 30
-        }
-      }
-    } as unknown as MediaStreamConstraints
-    return navigator.mediaDevices.getUserMedia(constraints)
+  const onPillMouseDown = (e: ReactMouseEvent): void => {
+    if ((e.target as HTMLElement).closest('button')) return // let the Stop button click through
+    const r = pillRef.current?.getBoundingClientRect()
+    if (!r) return
+    pillDrag.current = { dx: e.clientX - r.left, dy: e.clientY - r.top }
+    e.preventDefault()
   }
 
-  // Pipe the full-screen stream through a canvas cropped to the selected region.
-  const buildRegionStream = (display: MediaStream, region: Rect): MediaStream => {
-    const scale = source.width / window.innerWidth
+  const getDisplayStream = async (wantSystemAudio: boolean, frameRate: number): Promise<MediaStream> => {
+    await window.snapit.prepareRecording(wantSystemAudio)
+    return navigator.mediaDevices.getDisplayMedia({ video: { frameRate }, audio: wantSystemAudio })
+  }
+
+  // Pipe the full-screen video through a canvas cropped to the selected region.
+  const buildRegionVideo = (
+    display: MediaStream,
+    region: Rect,
+    scale: number,
+    frameRate: number
+  ): MediaStream => {
     const sx = Math.round(region.x * scale)
     const sy = Math.round(region.y * scale)
     const sw = Math.round(region.w * scale)
@@ -156,7 +188,7 @@ export function RecordOverlay({ source }: { source: DisplaySource }): ReactEleme
     canvas.height = sh
     const ctx = canvas.getContext('2d')
     const video = document.createElement('video')
-    video.srcObject = display
+    video.srcObject = new MediaStream(display.getVideoTracks())
     video.muted = true
     void video.play()
     const draw = (): void => {
@@ -164,9 +196,20 @@ export function RecordOverlay({ source }: { source: DisplaySource }): ReactEleme
       rafRef.current = requestAnimationFrame(draw)
     }
     rafRef.current = requestAnimationFrame(draw)
-    const stream = canvas.captureStream(30)
+    const stream = canvas.captureStream(frameRate)
     streamsRef.current.push(stream)
     return stream
+  }
+
+  // One audio track: pass through if single source, mix via WebAudio if both.
+  const mixAudio = (tracks: MediaStreamTrack[]): MediaStreamTrack | null => {
+    if (tracks.length === 0) return null
+    if (tracks.length === 1) return tracks[0]
+    const ctx = new AudioContext()
+    audioCtxRef.current = ctx
+    const dest = ctx.createMediaStreamDestination()
+    tracks.forEach((t) => ctx.createMediaStreamSource(new MediaStream([t])).connect(dest))
+    return dest.stream.getAudioTracks()[0]
   }
 
   const start = async (): Promise<void> => {
@@ -177,21 +220,32 @@ export function RecordOverlay({ source }: { source: DisplaySource }): ReactEleme
     }
     setPhase('recording')
     try {
-      const display = await getDisplayStream()
+      const display = await getDisplayStream(systemAudio, fps)
       streamsRef.current.push(display)
-      const recordStream = mode === 'region' && box ? buildRegionStream(display, box) : display
+      const settings = display.getVideoTracks()[0]?.getSettings()
+      const scale = (settings?.width ?? source.width) / window.innerWidth
 
+      const recordStream =
+        mode === 'region' && box
+          ? buildRegionVideo(display, box, scale, fps)
+          : new MediaStream(display.getVideoTracks())
+
+      const audioTracks: MediaStreamTrack[] = []
+      if (systemAudio) audioTracks.push(...display.getAudioTracks())
       if (mic) {
         try {
           const micStream = await navigator.mediaDevices.getUserMedia({ audio: true })
           streamsRef.current.push(micStream)
-          micStream.getAudioTracks().forEach((t) => recordStream.addTrack(t))
+          audioTracks.push(...micStream.getAudioTracks())
         } catch (e) {
-          console.error('[snapit] microphone unavailable, recording without audio:', msg(e))
+          console.error('[snapit] microphone unavailable, recording without it:', msg(e))
         }
       }
+      const audio = mixAudio(audioTracks)
+      if (audio) recordStream.addTrack(audio)
 
-      const mimeType = pickMime()
+      const { mimeType, ext } = pickRecording()
+      extRef.current = ext
       const rec = new MediaRecorder(recordStream, mimeType ? { mimeType } : undefined)
       recorderRef.current = rec
       chunksRef.current = []
@@ -224,14 +278,26 @@ export function RecordOverlay({ source }: { source: DisplaySource }): ReactEleme
   }
 
   if (phase === 'recording') {
+    const placement: CSSProperties = pillPos
+      ? { left: pillPos.x, top: pillPos.y, transform: 'none' }
+      : { left: '50%', top: 16, transform: 'translateX(-50%)' }
     return (
       <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none' }}>
-        <div ref={pillRef} style={pillStyle}>
-          <span style={recDot} />
-          <span style={{ fontVariantNumeric: 'tabular-nums', minWidth: 44 }}>{fmt(elapsed)}</span>
-          <button type="button" onClick={stop} style={stopButton}>
-            ⏹ Stop
-          </button>
+        <div ref={pillRef} style={{ ...pillStyle, ...placement }}>
+          {saving ? (
+            <span>Saving…</span>
+          ) : (
+            <>
+              <span style={gripStyle} onMouseDown={onPillMouseDown} title="Drag to move">
+                ⠿
+              </span>
+              <span style={recDot} />
+              <span style={{ fontVariantNumeric: 'tabular-nums', minWidth: 44 }}>{fmt(elapsed)}</span>
+              <button type="button" onClick={stop} style={stopButton}>
+                ⏹ Stop
+              </button>
+            </>
+          )}
         </div>
       </div>
     )
@@ -262,9 +328,22 @@ export function RecordOverlay({ source }: { source: DisplaySource }): ReactEleme
 
         {mode === 'region' && <div style={hint}>Drag on the screen to select a region.</div>}
 
+        <div style={segmented}>
+          <button type="button" onClick={() => setFps(30)} style={segment(fps === 30)}>
+            30 fps
+          </button>
+          <button type="button" onClick={() => setFps(60)} style={segment(fps === 60)}>
+            60 fps
+          </button>
+        </div>
+
+        <label style={checkboxRow}>
+          <input type="checkbox" checked={systemAudio} onChange={(e) => setSystemAudio(e.target.checked)} />
+          System audio
+        </label>
         <label style={checkboxRow}>
           <input type="checkbox" checked={mic} onChange={(e) => setMic(e.target.checked)} />
-          Record microphone audio
+          Microphone
         </label>
 
         {error && <div style={errorText}>{error}</div>}
@@ -306,7 +385,7 @@ const regionBox: CSSProperties = {
 const panel: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
-  gap: 14,
+  gap: 12,
   padding: 24,
   minWidth: 320,
   borderRadius: 14,
@@ -363,9 +442,6 @@ function btn(bg: string): CSSProperties {
 
 const pillStyle: CSSProperties = {
   position: 'fixed',
-  top: 16,
-  left: '50%',
-  transform: 'translateX(-50%)',
   display: 'inline-flex',
   alignItems: 'center',
   gap: 10,
@@ -376,6 +452,14 @@ const pillStyle: CSSProperties = {
   color: '#fff',
   font: '13px -apple-system, system-ui, sans-serif',
   pointerEvents: 'auto'
+}
+
+const gripStyle: CSSProperties = {
+  cursor: 'grab',
+  color: 'rgba(255, 255, 255, 0.45)',
+  fontSize: 16,
+  lineHeight: 1,
+  userSelect: 'none'
 }
 
 const recDot: CSSProperties = {

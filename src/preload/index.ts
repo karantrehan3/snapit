@@ -30,8 +30,12 @@ const api = {
   saveImageAs: (dataUrl: string): Promise<string | null> => ipcRenderer.invoke('capture:save-as', dataUrl),
   /** Dismiss the capture overlay (e.g. on Esc / cancel). */
   closeOverlay: (): void => ipcRenderer.send('overlay:close'),
-  /** Persist a finished recording (webm bytes); closes the overlay. Returns the path. */
-  saveRecording: (data: ArrayBuffer): Promise<string> => ipcRenderer.invoke('record:save', data),
+  /** Set whether the next recording captures system/loopback audio (before getDisplayMedia). */
+  prepareRecording: (systemAudio: boolean): Promise<void> =>
+    ipcRenderer.invoke('record:prepare', systemAudio),
+  /** Persist a finished recording (bytes + container ext); closes the overlay. Returns the path. */
+  saveRecording: (data: ArrayBuffer, ext: string): Promise<string> =>
+    ipcRenderer.invoke('record:save', data, ext),
   /** Toggle overlay click-through while recording (the Stop pill stays interactive). */
   setMouseIgnore: (ignore: boolean): void => ipcRenderer.send('record:set-ignore-mouse', ignore),
   /** Subscribe to stop-recording requests (record hotkey pressed again). Returns an unsubscribe. */

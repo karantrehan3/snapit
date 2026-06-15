@@ -9,6 +9,7 @@ import {
   screen,
   ipcMain,
   clipboard,
+  desktopCapturer,
   nativeImage,
   shell,
   dialog,
@@ -45,6 +46,7 @@ let tray: Tray | null = null
 let overlayWindow: BrowserWindow | null = null
 let settingsWindow: BrowserWindow | null = null
 let session: CaptureSession | null = null
+let recordWantsSystemAudio = false
 
 function createOverlayWindow(display: Display): void {
   const { x, y, width, height } = display.bounds
@@ -243,6 +245,23 @@ app.whenReady().then(() => {
   // Kill the macOS spell-checker (NSSpellServer log spam, and we don't need it).
   electronSession.defaultSession.setSpellCheckerEnabled(false)
 
+  // Supply the recording source (and optional system/loopback audio) to
+  // getDisplayMedia without the OS picker. recordWantsSystemAudio is set per
+  // recording via 'record:prepare'; loopback audio uses ScreenCaptureKit (macOS 13+).
+  electronSession.defaultSession.setDisplayMediaRequestHandler(
+    (_request, callback) => {
+      desktopCapturer
+        .getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } })
+        .then((sources) => {
+          const wanted = session?.mode === 'record' ? session.source.id : null
+          const source = sources.find((s) => s.id === wanted) ?? sources[0]
+          callback(source ? { video: source, audio: recordWantsSystemAudio ? 'loopback' : undefined } : {})
+        })
+        .catch(() => callback({}))
+    },
+    { useSystemPicker: false }
+  )
+
   createTray()
   registerHotkeys()
 
@@ -282,14 +301,20 @@ app.whenReady().then(() => {
 
   ipcMain.on('overlay:close', closeOverlayWindow)
 
-  ipcMain.handle('record:save', async (_event, data: ArrayBuffer) => {
+  ipcMain.handle('record:save', async (_event, data: ArrayBuffer, ext: string) => {
+    const safeExt = ext === 'mp4' ? 'mp4' : 'webm'
     const { saveDir } = getSettings()
     await mkdir(saveDir, { recursive: true })
-    const filePath = join(saveDir, `snapit-${timestamp()}.webm`)
+    const filePath = join(saveDir, `snapit-${timestamp()}.${safeExt}`)
     await writeFile(filePath, Buffer.from(data))
     shell.showItemInFolder(filePath)
     closeOverlayWindow()
     return filePath
+  })
+
+  // Set before each recording: whether to capture system/loopback audio.
+  ipcMain.handle('record:prepare', (_event, systemAudio: boolean) => {
+    recordWantsSystemAudio = systemAudio
   })
 
   // Make the overlay click-through while recording so the screen stays usable;
