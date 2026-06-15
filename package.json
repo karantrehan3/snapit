@@ -1,0 +1,36 @@
+{
+  "name": "snapit",
+  "version": "0.1.0",
+  "description": "Local QA tool — Lightshot-style screenshots, recording, and live session analysis",
+  "main": "./out/main/index.js",
+  "author": "JRNI QA",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
+    "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
+    "typecheck": "npm run typecheck:node && npm run typecheck:web"
+  },
+  "dependencies": {
+    "konva": "^10.3.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "react-konva": "^19.2.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.21",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.2.0",
+    "electron": "^42.4.0",
+    "electron-vite": "^5.0.0",
+    "typescript": "^6.0.3",
+    "vite": "^7.3.5"
+  },
+  "volta": {
+    "node": "22.22.3"
+  }
+}
