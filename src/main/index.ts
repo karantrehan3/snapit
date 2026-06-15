@@ -1,4 +1,5 @@
 import { join } from 'path'
+import { mkdir, writeFile } from 'fs/promises'
 import {
   app,
   BrowserWindow,
@@ -10,43 +11,39 @@ import {
   clipboard,
   nativeImage,
   shell,
+  dialog,
+  session as electronSession,
   systemPreferences,
   type Display
 } from 'electron'
 import { captureDisplay } from './capture'
+import { getSettings, setSettings, type Settings } from './settings'
 
 /**
  * snapit shell.
  *
- * Runs in the background (menubar/tray). Two distinct capture modes, each with
- * its own global hotkey:
- *   - screenshot (Cmd/Ctrl+Shift+9): freeze the display, drag-select, crop → clipboard.
- *   - record     (Cmd/Ctrl+Shift+8): live overlay; video recording lands in Phase 2.
+ * Background tray app with two capture modes behind configurable global hotkeys:
+ *   - screenshot: freeze the display, drag-select, annotate → copy / save.
+ *   - record: live overlay; video recording lands in Phase 2.
  *
- * Both modes require macOS Screen Recording permission (they read screen pixels).
+ * Captures can be copied to the clipboard, saved to a default folder, or saved-as
+ * via a dialog. Hotkeys and the save folder are editable in the settings window.
  */
-
-// TODO(1d): make hotkeys configurable via settings.
-const SCREENSHOT_HOTKEY = 'CommandOrControl+Shift+9'
-const RECORD_HOTKEY = 'CommandOrControl+Shift+8'
 
 type CaptureMode = 'screenshot' | 'record'
 
 type Frame = {
   dataUrl: string
-  /** Display width in DIP (CSS pixels). */
   width: number
-  /** Display height in DIP (CSS pixels). */
   height: number
-  /** Device pixel ratio of the captured display. */
   scaleFactor: number
 }
 
-/** What the overlay renderer needs to know about the current capture session. */
 type CaptureSession = { mode: 'screenshot'; frame: Frame } | { mode: 'record' }
 
 let tray: Tray | null = null
 let overlayWindow: BrowserWindow | null = null
+let settingsWindow: BrowserWindow | null = null
 let session: CaptureSession | null = null
 
 function createOverlayWindow(display: Display): void {
@@ -72,33 +69,72 @@ function createOverlayWindow(display: Display): void {
     enableLargerThanScreen: true,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
+      sandbox: false,
+      spellcheck: false
     }
   })
 
-  overlayWindow.setAlwaysOnTop(true, 'screen-saver')
+  // NOTE: do NOT use the 'screen-saver' level — windows at that level cannot become
+  // the macOS key window, which blocks keyboard focus (text annotation can't be typed).
+  // The default floating always-on-top still sits above normal windows AND can be key.
   overlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
 
   overlayWindow.once('ready-to-show', () => {
     overlayWindow?.show()
+    // The Dock is hidden (accessory app), so explicitly activate the app — otherwise
+    // the window never becomes "key" and HTML inputs (text annotation) can't be typed.
+    if (process.platform === 'darwin') app.focus({ steal: true })
     overlayWindow?.focus()
+    overlayWindow?.webContents.focus()
   })
   overlayWindow.on('closed', () => {
     overlayWindow = null
     session = null
   })
 
-  if (process.env['ELECTRON_RENDERER_URL']) {
-    overlayWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
-  } else {
-    overlayWindow.loadFile(join(__dirname, '../renderer/index.html'))
-  }
+  loadRenderer(overlayWindow)
 }
 
 function closeOverlayWindow(): void {
   overlayWindow?.close()
   overlayWindow = null
   session = null
+}
+
+function openSettingsWindow(): void {
+  if (settingsWindow) {
+    settingsWindow.focus()
+    return
+  }
+  settingsWindow = new BrowserWindow({
+    width: 480,
+    height: 360,
+    resizable: false,
+    title: 'snapit Settings',
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: false,
+      spellcheck: false
+    }
+  })
+  settingsWindow.on('closed', () => {
+    settingsWindow = null
+  })
+  settingsWindow.once('ready-to-show', () => {
+    if (process.platform === 'darwin') app.focus({ steal: true })
+    settingsWindow?.focus()
+  })
+  loadRenderer(settingsWindow, 'settings')
+}
+
+/** Load the shared renderer, optionally at a hash route (e.g. "settings"). */
+function loadRenderer(win: BrowserWindow, hash = ''): void {
+  const suffix = hash ? `#${hash}` : ''
+  if (process.env['ELECTRON_RENDERER_URL']) {
+    void win.loadURL(`${process.env['ELECTRON_RENDERER_URL']}${suffix}`)
+  } else {
+    void win.loadFile(join(__dirname, '../renderer/index.html'), hash ? { hash } : undefined)
+  }
 }
 
 /** Log screen-recording status and, if not granted, open the Settings pane. */
@@ -116,7 +152,6 @@ function ensureScreenPermission(): void {
 }
 
 async function startCapture(mode: CaptureMode): Promise<void> {
-  // A hotkey while the overlay is open acts as cancel.
   if (overlayWindow) {
     closeOverlayWindow()
     return
@@ -128,7 +163,6 @@ async function startCapture(mode: CaptureMode): Promise<void> {
   if (mode === 'screenshot') {
     ensureScreenPermission()
     try {
-      // Capture BEFORE the overlay is shown so the overlay isn't in the frame.
       const dataUrl = await captureDisplay(display)
       session = {
         mode,
@@ -145,26 +179,52 @@ async function startCapture(mode: CaptureMode): Promise<void> {
       return
     }
   } else {
-    // Phase 2: capture video here (also requires Screen Recording permission).
     session = { mode: 'record' }
   }
 
   createOverlayWindow(display)
 }
 
-function createTray(): void {
-  // Phase 1 uses a text title in the menubar; a proper template icon comes later.
-  tray = new Tray(nativeImage.createEmpty())
-  tray.setTitle('snapit')
-  tray.setToolTip('snapit — QA capture')
+function registerHotkeys(): void {
+  globalShortcut.unregisterAll()
+  const { screenshotHotkey, recordHotkey } = getSettings()
+  if (!globalShortcut.register(screenshotHotkey, () => void startCapture('screenshot'))) {
+    console.error(`[snapit] Failed to register screenshot hotkey: ${screenshotHotkey}`)
+  }
+  if (!globalShortcut.register(recordHotkey, () => void startCapture('record'))) {
+    console.error(`[snapit] Failed to register record hotkey: ${recordHotkey}`)
+  }
+}
 
+function buildTray(): void {
+  const { screenshotHotkey, recordHotkey } = getSettings()
   const menu = Menu.buildFromTemplate([
-    { label: `Screenshot  (${SCREENSHOT_HOTKEY})`, click: () => void startCapture('screenshot') },
-    { label: `Record  (${RECORD_HOTKEY})`, click: () => void startCapture('record') },
+    { label: `Screenshot  (${screenshotHotkey})`, click: () => void startCapture('screenshot') },
+    { label: `Record  (${recordHotkey})`, click: () => void startCapture('record') },
+    { type: 'separator' },
+    { label: 'Settings…', click: openSettingsWindow },
+    { label: 'Open save folder', click: () => void shell.openPath(getSettings().saveDir) },
     { type: 'separator' },
     { label: 'Quit snapit', click: () => app.quit() }
   ])
-  tray.setContextMenu(menu)
+  tray?.setContextMenu(menu)
+}
+
+function createTray(): void {
+  tray = new Tray(nativeImage.createEmpty())
+  tray.setTitle('snapit')
+  tray.setToolTip('snapit — QA capture')
+  buildTray()
+}
+
+function timestamp(): string {
+  const d = new Date()
+  const p = (n: number): string => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}-${p(d.getMinutes())}-${p(d.getSeconds())}`
+}
+
+function pngBuffer(dataUrl: string): Buffer {
+  return nativeImage.createFromDataURL(dataUrl).toPNG()
 }
 
 app.whenReady().then(() => {
@@ -172,12 +232,11 @@ app.whenReady().then(() => {
     app.dock?.hide()
   }
 
-  createTray()
+  // Kill the macOS spell-checker (NSSpellServer log spam, and we don't need it).
+  electronSession.defaultSession.setSpellCheckerEnabled(false)
 
-  const ok1 = globalShortcut.register(SCREENSHOT_HOTKEY, () => void startCapture('screenshot'))
-  const ok2 = globalShortcut.register(RECORD_HOTKEY, () => void startCapture('record'))
-  if (!ok1) console.error(`[snapit] Failed to register hotkey: ${SCREENSHOT_HOTKEY}`)
-  if (!ok2) console.error(`[snapit] Failed to register hotkey: ${RECORD_HOTKEY}`)
+  createTray()
+  registerHotkeys()
 
   ipcMain.handle('capture:get-session', () => session)
 
@@ -186,10 +245,51 @@ app.whenReady().then(() => {
     closeOverlayWindow()
   })
 
+  ipcMain.handle('capture:save', async (_event, dataUrl: string) => {
+    const { saveDir } = getSettings()
+    await mkdir(saveDir, { recursive: true })
+    const filePath = join(saveDir, `snapit-${timestamp()}.png`)
+    await writeFile(filePath, pngBuffer(dataUrl))
+    shell.showItemInFolder(filePath)
+    closeOverlayWindow()
+    return filePath
+  })
+
+  ipcMain.handle('capture:save-as', async (_event, dataUrl: string) => {
+    const { saveDir } = getSettings()
+    const options = {
+      defaultPath: join(saveDir, `snapit-${timestamp()}.png`),
+      filters: [{ name: 'PNG Image', extensions: ['png'] }]
+    }
+    // Parent the dialog to the overlay so it appears above the always-on-top window.
+    const result = overlayWindow
+      ? await dialog.showSaveDialog(overlayWindow, options)
+      : await dialog.showSaveDialog(options)
+    if (result.canceled || !result.filePath) return null
+    await writeFile(result.filePath, pngBuffer(dataUrl))
+    shell.showItemInFolder(result.filePath)
+    closeOverlayWindow()
+    return result.filePath
+  })
+
   ipcMain.on('overlay:close', closeOverlayWindow)
+
+  ipcMain.handle('settings:get', () => getSettings())
+  ipcMain.handle('settings:set', (_event, partial: Partial<Settings>) => {
+    const next = setSettings(partial)
+    registerHotkeys()
+    buildTray()
+    return next
+  })
+  ipcMain.handle('settings:browse-dir', async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog({
+      properties: ['openDirectory', 'createDirectory']
+    })
+    return canceled ? null : filePaths[0]
+  })
 })
 
-// Tray app: stay alive when the overlay window closes.
+// Tray app: stay alive when windows close.
 app.on('window-all-closed', () => {
   // Intentionally do nothing — quitting happens only via the tray menu.
 })

@@ -28,8 +28,11 @@ Esc dismisses it.
 
 ## Status
 
-**Milestone 1c** — annotation. After drag-select, a Konva editor opens with a floating
-toolbar: rect / arrow / line / pen / text, selectable color and thickness, Undo (⌘Z).
-Copy exports the crop + annotations to the clipboard at native resolution; Esc/✕ cancels.
-Two capture modes behind separate hotkeys: screenshot (⌘⇧9) and record (⌘⇧8, Phase 2 stub).
-Next: save-to-disk + settings (1d).
+**Phase 1 complete (1a–1d).** Background tray app, two capture modes behind
+configurable hotkeys (screenshot ⌘⇧9, record ⌘⇧8 — Phase 2 stub). Screenshot flow:
+freeze → drag-select (resizable box) → annotate (rect/arrow/line/pen/text, color +
+Cmd+Scroll thickness, undo/redo) → **Copy**, **Save** (default folder), or **Save As…**
+(dialog). Settings window (from the tray) edits hotkeys + save folder, persisted to
+`settings.json` in userData.
+
+Next: **Phase 2** — wire real screen recording into the record-mode stub.

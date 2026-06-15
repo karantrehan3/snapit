@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react'
 import type Konva from 'konva'
-import { Rect, Line, Arrow, Text } from 'react-konva'
+import { Rect, Ellipse, Line, Arrow, Text } from 'react-konva'
 import type { Shape } from './types'
 
 const SELECT_SHADOW = '#4aa3ff'
@@ -44,6 +44,20 @@ export function renderShape(
           y={shape.y}
           width={shape.width}
           height={shape.height}
+          stroke={shape.stroke}
+          strokeWidth={shape.strokeWidth}
+          hitStrokeWidth={Math.max(shape.strokeWidth, 12)}
+        />
+      )
+    case 'circle':
+      return (
+        <Ellipse
+          key={shape.id}
+          {...common}
+          x={shape.x + shape.width / 2}
+          y={shape.y + shape.height / 2}
+          radiusX={Math.abs(shape.width) / 2}
+          radiusY={Math.abs(shape.height) / 2}
           stroke={shape.stroke}
           strokeWidth={shape.strokeWidth}
           hitStrokeWidth={Math.max(shape.strokeWidth, 12)}
@@ -114,16 +128,16 @@ export function renderShape(
 
 /** Discard accidental tiny shapes; text is always kept. */
 export function isMeaningful(s: Shape): boolean {
-  if (s.type === 'rect') return Math.abs(s.width) > 3 && Math.abs(s.height) > 3
+  if (s.type === 'rect' || s.type === 'circle') return Math.abs(s.width) > 3 && Math.abs(s.height) > 3
   if (s.type === 'text') return true
   if (s.type === 'pen') return s.points.length >= 6
   const [x1, y1, x2, y2] = s.points
   return Math.hypot(x2 - x1, y2 - y1) > 4
 }
 
-/** Normalize a rect drawn with negative width/height to a top-left origin. */
+/** Normalize a rect/ellipse drawn with negative width/height to a top-left origin. */
 export function normalizeRect(s: Shape): Shape {
-  if (s.type !== 'rect') return s
+  if (s.type !== 'rect' && s.type !== 'circle') return s
   const x = s.width < 0 ? s.x + s.width : s.x
   const y = s.height < 0 ? s.y + s.height : s.y
   return { ...s, x, y, width: Math.abs(s.width), height: Math.abs(s.height) }

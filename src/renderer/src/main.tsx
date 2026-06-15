@@ -1,12 +1,11 @@
 import React from 'react'
 import { createRoot } from 'react-dom/client'
 import { Overlay } from './Overlay'
+import { Settings } from './settings/Settings'
 
 const container = document.getElementById('root')
 if (!container) throw new Error('Root element #root not found')
 
-createRoot(container).render(
-  <React.StrictMode>
-    <Overlay />
-  </React.StrictMode>
-)
+const isSettings = window.location.hash.replace('#', '') === 'settings'
+
+createRoot(container).render(<React.StrictMode>{isSettings ? <Settings /> : <Overlay />}</React.StrictMode>)

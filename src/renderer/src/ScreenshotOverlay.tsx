@@ -68,6 +68,7 @@ export function ScreenshotOverlay({ frame }: { frame: Frame }): ReactElement {
   const trRef = useRef<Konva.Transformer>(null)
   const drag = useRef<Drag | null>(null)
   const previewTimer = useRef<number | undefined>(undefined)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     let alive = true
@@ -85,6 +86,14 @@ export function ScreenshotOverlay({ frame }: { frame: Frame }): ReactElement {
   }, [tool])
 
   useEffect(() => () => window.clearTimeout(previewTimer.current), [])
+
+  // Focus the text box reliably once it mounts (autoFocus can miss after the
+  // canvas mousedown / on a freshly activated window).
+  useEffect(() => {
+    if (!editing) return
+    const t = window.setTimeout(() => textareaRef.current?.focus(), 0)
+    return () => window.clearTimeout(t)
+  }, [editing?.id])
 
   // Attach the Transformer to the selected rect (corner-resize); detach otherwise.
   useEffect(() => {
@@ -216,6 +225,17 @@ export function ScreenshotOverlay({ frame }: { frame: Frame }): ReactElement {
     setDragging(true)
     if (tool === 'rect') {
       setDraft({ id, type: 'rect', x: local.x, y: local.y, width: 0, height: 0, stroke: color, strokeWidth })
+    } else if (tool === 'circle') {
+      setDraft({
+        id,
+        type: 'circle',
+        x: local.x,
+        y: local.y,
+        width: 0,
+        height: 0,
+        stroke: color,
+        strokeWidth
+      })
     } else if (tool === 'pen') {
       setDraft({ id, type: 'pen', points: [local.x, local.y], stroke: color, strokeWidth })
     } else {
@@ -250,7 +270,8 @@ export function ScreenshotOverlay({ frame }: { frame: Frame }): ReactElement {
     const local: Pt = { x: p.x - box.x, y: p.y - box.y }
     setDraft((prev) => {
       if (!prev) return prev
-      if (prev.type === 'rect') return { ...prev, width: local.x - prev.x, height: local.y - prev.y }
+      if (prev.type === 'rect' || prev.type === 'circle')
+        return { ...prev, width: local.x - prev.x, height: local.y - prev.y }
       if (prev.type === 'pen') return { ...prev, points: [...prev.points, local.x, local.y] }
       if (prev.type === 'text') return prev
       return { ...prev, points: [prev.points[0], prev.points[1], local.x, local.y] }
@@ -302,6 +323,7 @@ export function ScreenshotOverlay({ frame }: { frame: Frame }): ReactElement {
         s.map((sh) => {
           if (sh.id !== id) return sh
           if (sh.type === 'rect' || sh.type === 'text') return { ...sh, x: node.x(), y: node.y() }
+          if (sh.type === 'circle') return { ...sh, x: node.x() - sh.width / 2, y: node.y() - sh.height / 2 }
           const dx = node.x()
           const dy = node.y()
           node.position({ x: 0, y: 0 })
@@ -343,7 +365,8 @@ export function ScreenshotOverlay({ frame }: { frame: Frame }): ReactElement {
     setEditing(null)
   }
 
-  const onCopy = (): void => {
+  // Flatten the box region to a native-res PNG (UI chrome excluded) and hand it off.
+  const exportPng = (use: (dataUrl: string) => void): void => {
     commitEditing()
     setSelectedId(null)
     trRef.current?.nodes([])
@@ -357,9 +380,12 @@ export function ScreenshotOverlay({ frame }: { frame: Frame }): ReactElement {
         height: box.h,
         pixelRatio: frame.scaleFactor
       })
-      window.snapit.copyImage(url)
+      use(url)
     })
   }
+  const onCopy = (): void => exportPng((url) => window.snapit.copyImage(url))
+  const onSave = (): void => exportPng((url) => void window.snapit.saveImage(url))
+  const onSaveAs = (): void => exportPng((url) => void window.snapit.saveImageAs(url))
 
   // Resize the capture box by dragging a corner handle (DOM, window-tracked).
   const startBoxResize = (corner: Corner, e: ReactMouseEvent): void => {
@@ -463,7 +489,9 @@ export function ScreenshotOverlay({ frame }: { frame: Frame }): ReactElement {
 
       {editing && (
         <textarea
+          ref={textareaRef}
           autoFocus
+          spellCheck={false}
           value={editing.value}
           onChange={(e) => {
             const v = e.target.value
@@ -537,6 +565,8 @@ export function ScreenshotOverlay({ frame }: { frame: Frame }): ReactElement {
           canRedo={redoStack.length > 0}
           onRedo={redo}
           onCopy={onCopy}
+          onSave={onSave}
+          onSaveAs={onSaveAs}
           onCancel={() => window.snapit.closeOverlay()}
           style={toolbarPosition(box)}
         />
@@ -589,18 +619,22 @@ function textareaStyle(box: Box | null, editing: Editing): CSSProperties {
     left: (box?.x ?? 0) + editing.x,
     top: (box?.y ?? 0) + editing.y,
     margin: 0,
-    padding: 0,
-    border: 'none',
+    padding: '2px 4px',
+    // Visible boundary so it's clear the text box is active and where to type.
+    border: '1px dashed #0a84ff',
+    borderRadius: 3,
     outline: 'none',
-    background: 'transparent',
+    background: 'rgba(255, 255, 255, 0.85)',
     color: editing.fill,
+    caretColor: editing.fill,
     fontSize: editing.fontSize,
     fontFamily: '-apple-system, system-ui, sans-serif',
-    lineHeight: 1,
+    lineHeight: 1.2,
     resize: 'none',
     overflow: 'hidden',
     whiteSpace: 'pre',
-    minWidth: 40
+    minWidth: 60,
+    minHeight: editing.fontSize + 8
   }
 }
 

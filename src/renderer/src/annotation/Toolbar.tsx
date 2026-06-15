@@ -1,5 +1,5 @@
-import type { CSSProperties, ReactElement } from 'react'
-import { COLORS, TOOLS, type Tool } from './types'
+import { useState, type CSSProperties, type ReactElement } from 'react'
+import { COLORS, PALETTE, TOOLS, type Tool } from './types'
 
 type Props = {
   tool: Tool
@@ -11,6 +11,8 @@ type Props = {
   canRedo: boolean
   onRedo: () => void
   onCopy: () => void
+  onSave: () => void
+  onSaveAs: () => void
   onCancel: () => void
   style: CSSProperties
 }
@@ -25,9 +27,13 @@ export function Toolbar({
   canRedo,
   onRedo,
   onCopy,
+  onSave,
+  onSaveAs,
   onCancel,
   style
 }: Props): ReactElement {
+  const [saveMenu, setSaveMenu] = useState(false)
+  const [colorMenu, setColorMenu] = useState(false)
   const isPreset = COLORS.includes(color)
 
   return (
@@ -41,14 +47,28 @@ export function Toolbar({
       {COLORS.map((c) => (
         <button key={c} title={c} onClick={() => setColor(c)} style={swatch(c, color === c)} />
       ))}
-      <label title="Custom color" style={customSwatch(!isPreset, color)}>
-        <input
-          type="color"
-          value={color}
-          onChange={(e) => setColor(e.target.value)}
-          style={{ opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }}
+      <div style={{ position: 'relative', display: 'inline-flex' }}>
+        <button
+          title="More colors"
+          onClick={() => setColorMenu((m) => !m)}
+          style={customSwatch(!isPreset, color)}
         />
-      </label>
+        {colorMenu && (
+          <div style={palettePopover}>
+            {PALETTE.map((c) => (
+              <button
+                key={c}
+                title={c}
+                onClick={() => {
+                  setColor(c)
+                  setColorMenu(false)
+                }}
+                style={paletteSwatch(c, color === c)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
       <span style={sep} />
       <button title="Undo (⌘Z)" onClick={onUndo} disabled={!canUndo} style={btn(false, !canUndo)}>
         ↶
@@ -59,6 +79,29 @@ export function Toolbar({
       <button title="Copy to clipboard" onClick={onCopy} style={action('#0a84ff')}>
         Copy
       </button>
+
+      <div style={{ position: 'relative', display: 'inline-flex' }}>
+        <button title="Save to folder" onClick={onSave} style={splitMain('#34c759')}>
+          Save
+        </button>
+        <button title="Save as…" onClick={() => setSaveMenu((m) => !m)} style={splitChevron('#2da14e')}>
+          ▾
+        </button>
+        {saveMenu && (
+          <div style={menuStyle}>
+            <button
+              onClick={() => {
+                setSaveMenu(false)
+                onSaveAs()
+              }}
+              style={menuItemStyle}
+            >
+              Save As…
+            </button>
+          </div>
+        )}
+      </div>
+
       <button title="Cancel (Esc)" onClick={onCancel} style={action('#48484a')}>
         ✕
       </button>
@@ -147,6 +190,32 @@ function customSwatch(active: boolean, color: string): CSSProperties {
   }
 }
 
+const palettePopover: CSSProperties = {
+  position: 'absolute',
+  bottom: '100%',
+  left: 0,
+  marginBottom: 8,
+  display: 'grid',
+  gridTemplateColumns: 'repeat(7, 20px)',
+  gap: 5,
+  padding: 8,
+  background: 'rgba(40, 40, 42, 0.98)',
+  borderRadius: 8,
+  boxShadow: '0 4px 16px rgba(0, 0, 0, 0.5)',
+  zIndex: 10
+}
+
+function paletteSwatch(color: string, active: boolean): CSSProperties {
+  return {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    cursor: 'pointer',
+    background: color,
+    border: active ? '2px solid #0a84ff' : '1px solid rgba(255, 255, 255, 0.25)'
+  }
+}
+
 function action(bg: string): CSSProperties {
   return {
     height: 28,
@@ -159,4 +228,37 @@ function action(bg: string): CSSProperties {
     fontWeight: 600,
     background: bg
   }
+}
+
+function splitMain(bg: string): CSSProperties {
+  return { ...action(bg), borderRadius: '6px 0 0 6px', paddingRight: 10 }
+}
+
+function splitChevron(bg: string): CSSProperties {
+  return { ...action(bg), borderRadius: '0 6px 6px 0', padding: '0 8px', fontSize: 11 }
+}
+
+const menuStyle: CSSProperties = {
+  position: 'absolute',
+  top: '100%',
+  left: 0,
+  marginTop: 4,
+  background: 'rgba(40, 40, 42, 0.98)',
+  borderRadius: 6,
+  boxShadow: '0 4px 16px rgba(0, 0, 0, 0.5)',
+  overflow: 'hidden',
+  zIndex: 10
+}
+
+const menuItemStyle: CSSProperties = {
+  display: 'block',
+  width: '100%',
+  padding: '8px 14px',
+  border: 'none',
+  background: 'transparent',
+  color: '#fff',
+  fontSize: 13,
+  textAlign: 'left',
+  whiteSpace: 'nowrap',
+  cursor: 'pointer'
 }
