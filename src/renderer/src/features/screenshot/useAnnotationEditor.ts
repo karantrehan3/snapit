@@ -2,54 +2,73 @@ import {
   useEffect,
   useRef,
   useState,
-  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
-  type ReactElement
+  type RefObject
 } from 'react'
 import Konva from 'konva'
-import { Stage, Layer, Image as KonvaImage, Group, Transformer } from 'react-konva'
-import type { Frame } from '../../preload/index'
-import { loadImage, type Box } from './lib/image'
-import { Toolbar } from './annotation/Toolbar'
-import { isMeaningful, normalizeRect, renderShape, type ShapeHandlers } from './annotation/shapes'
+import type { Frame } from '@preload/index'
+import { loadImage, type Box } from '@renderer/lib/image'
+import { isMeaningful, normalizeRect, type ShapeHandlers } from './shapes'
 import {
   COLORS,
   DEFAULT_STROKE,
   MAX_STROKE,
   MIN_STROKE,
   fontSizeFor,
+  type Corner,
+  type Drag,
+  type Editing,
+  type Pt,
   type Shape,
+  type SizePreview,
   type Tool
-} from './annotation/types'
+} from './types'
+import { MIN_BOX, clamp, clampBox, inBox, resizeBox } from './geometry'
 
-const MIN_BOX = 6
-const TOOLBAR_HEIGHT = 44
-const GAP = 8
-const DIM = 'rgba(165, 165, 170, 0.42)'
 const SIZE_PREVIEW_MS = 700
 
-type Pt = { x: number; y: number }
-type Corner = 'nw' | 'ne' | 'sw' | 'se'
-type Editing = { id: string; x: number; y: number; value: string; fontSize: number; fill: string }
-type SizePreview = { x: number; y: number; size: number }
-type Drag =
-  | { kind: 'create'; start: Pt; prevBox: Box | null }
-  | { kind: 'moveBox'; last: Pt }
-  | { kind: 'draw' }
-
-const clamp = (v: number, min: number, max: number): number => Math.max(min, Math.min(max, v))
-const inBox = (p: Pt, b: Box): boolean => p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h
+export type AnnotationEditor = {
+  box: Box | null
+  bg: HTMLImageElement | null
+  tool: Tool
+  setTool: (t: Tool) => void
+  color: string
+  setColor: (c: string) => void
+  selectedId: string | null
+  editing: Editing | null
+  sizePreview: SizePreview | null
+  dragging: boolean
+  shapes: Shape[]
+  all: Shape[]
+  canUndo: boolean
+  canRedo: boolean
+  undo: () => void
+  redo: () => void
+  stageRef: RefObject<Konva.Stage | null>
+  trRef: RefObject<Konva.Transformer | null>
+  textareaRef: RefObject<HTMLTextAreaElement | null>
+  onStageMouseDown: (e: Konva.KonvaEventObject<MouseEvent>) => void
+  onStageMouseMove: () => void
+  onStageMouseUp: () => void
+  shapeHandlers: ShapeHandlers
+  onTransformStart: () => void
+  onTransformEnd: () => void
+  onEditingChange: (value: string) => void
+  onEditingKeyDown: (e: ReactKeyboardEvent) => void
+  commitEditing: () => void
+  startBoxResize: (corner: Corner, e: ReactMouseEvent) => void
+  onCopy: () => void
+  onSave: () => void
+  onSaveAs: () => void
+}
 
 /**
- * Screenshot capture + annotation editor.
- *
- * Full-screen Konva stage shows the frozen frame; a DOM overlay greys everything
- * except the selection box (a window into the frozen screen). Default Move tool
- * moves the box, selects/drags shapes (native Konva drag), and resizes rects via a
- * Transformer (corner handles). Draw tools draw inside the box; Cmd+Scroll adjusts
- * thickness with a size preview. Full undo/redo. Copy exports the box at native res.
+ * Annotation editor engine: owns the selection box, shapes, draft, selection,
+ * text editing, undo/redo, and all pointer/keyboard/wheel interaction for the
+ * screenshot overlay. The component stays purely presentational.
  */
-export function ScreenshotOverlay({ frame }: { frame: Frame }): ReactElement {
+export function useAnnotationEditor(frame: Frame): AnnotationEditor {
   const [box, setBox] = useState<Box | null>(null)
   const [tool, setTool] = useState<Tool>('move')
   const [color, setColor] = useState<string>(COLORS[0])
@@ -106,7 +125,6 @@ export function ScreenshotOverlay({ frame }: { frame: Frame }): ReactElement {
     tr.getLayer()?.batchDraw()
   }, [selectedId, shapes, box])
 
-  // History.
   const snapshot = (prev: Shape[]): void => {
     setUndoStack((u) => [...u, prev])
     setRedoStack([])
@@ -185,7 +203,7 @@ export function ScreenshotOverlay({ frame }: { frame: Frame }): ReactElement {
 
   const pointer = (): Pt => stageRef.current?.getPointerPosition() ?? { x: 0, y: 0 }
 
-  const onMouseDown = (e: Konva.KonvaEventObject<MouseEvent>): void => {
+  const onStageMouseDown = (e: Konva.KonvaEventObject<MouseEvent>): void => {
     if (editing) return
     // Let the Transformer handle its own anchor drags.
     if (e.target.getParent()?.className === 'Transformer') return
@@ -249,7 +267,7 @@ export function ScreenshotOverlay({ frame }: { frame: Frame }): ReactElement {
     }
   }
 
-  const onMouseMove = (): void => {
+  const onStageMouseMove = (): void => {
     const d = drag.current
     if (!d) return
     const p = pointer()
@@ -278,7 +296,7 @@ export function ScreenshotOverlay({ frame }: { frame: Frame }): ReactElement {
     })
   }
 
-  const onMouseUp = (): void => {
+  const onStageMouseUp = (): void => {
     const d = drag.current
     drag.current = null
     setDragging(false)
@@ -333,7 +351,9 @@ export function ScreenshotOverlay({ frame }: { frame: Frame }): ReactElement {
     }
   }
 
-  const onRectTransformEnd = (): void => {
+  const onTransformStart = (): void => snapshot(shapes)
+
+  const onTransformEnd = (): void => {
     const node = trRef.current?.nodes()[0]
     if (!node) return
     const sx = node.scaleX()
@@ -363,6 +383,22 @@ export function ScreenshotOverlay({ frame }: { frame: Frame }): ReactElement {
       setUndoStack((u) => u.slice(0, -1))
     }
     setEditing(null)
+  }
+
+  const onEditingChange = (value: string): void => {
+    if (!editing) return
+    setEditing({ ...editing, value })
+    setShapes((s) =>
+      s.map((sh) => (sh.id === editing.id && sh.type === 'text' ? { ...sh, text: value } : sh))
+    )
+  }
+
+  const onEditingKeyDown = (e: ReactKeyboardEvent): void => {
+    e.stopPropagation()
+    if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Escape') {
+      e.preventDefault()
+      commitEditing()
+    }
   }
 
   // Flatten the box region to a native-res PNG (UI chrome excluded) and hand it off.
@@ -410,241 +446,38 @@ export function ScreenshotOverlay({ frame }: { frame: Frame }): ReactElement {
 
   const all = box ? (draft ? [...shapes, draft] : shapes) : []
 
-  return (
-    <div style={{ position: 'fixed', inset: 0, userSelect: 'none' }}>
-      <Stage
-        ref={stageRef}
-        width={frame.width}
-        height={frame.height}
-        onMouseDown={onMouseDown}
-        onMouseMove={onMouseMove}
-        onMouseUp={onMouseUp}
-      >
-        <Layer>
-          <KonvaImage image={bg ?? undefined} width={frame.width} height={frame.height} name="bg" />
-        </Layer>
-
-        {box && (
-          <Layer>
-            <Group x={box.x} y={box.y} clipX={0} clipY={0} clipWidth={box.w} clipHeight={box.h}>
-              {all.map((shape) => renderShape(shape, selectedId, editing?.id, shapeHandlers))}
-            </Group>
-            <Transformer
-              ref={trRef}
-              rotateEnabled={false}
-              keepRatio={false}
-              enabledAnchors={['top-left', 'top-right', 'bottom-left', 'bottom-right']}
-              onTransformStart={() => snapshot(shapes)}
-              onTransformEnd={onRectTransformEnd}
-            />
-          </Layer>
-        )}
-      </Stage>
-
-      {/* Grey overtone: everything dimmed except the bright selection window. */}
-      {box ? (
-        <div
-          style={{
-            position: 'fixed',
-            left: box.x,
-            top: box.y,
-            width: box.w,
-            height: box.h,
-            boxShadow: `0 0 0 1px rgba(0, 0, 0, 0.35), 0 0 0 9999px ${DIM}`,
-            outline: '3px dashed #ffffff',
-            pointerEvents: 'none'
-          }}
-        />
-      ) : (
-        <div style={{ position: 'fixed', inset: 0, background: DIM, pointerEvents: 'none' }} />
-      )}
-
-      {/* Corner handles to resize the capture box — hidden while dragging. */}
-      {box &&
-        !dragging &&
-        (['nw', 'ne', 'sw', 'se'] as const).map((corner) => {
-          const left = corner === 'nw' || corner === 'sw' ? box.x : box.x + box.w
-          const top = corner === 'nw' || corner === 'ne' ? box.y : box.y + box.h
-          const cursor = corner === 'nw' || corner === 'se' ? 'nwse-resize' : 'nesw-resize'
-          return (
-            <div
-              key={corner}
-              onMouseDown={(e) => startBoxResize(corner, e)}
-              style={{
-                position: 'fixed',
-                left,
-                top,
-                width: 12,
-                height: 12,
-                transform: 'translate(-50%, -50%)',
-                background: '#fff',
-                border: '1.5px solid #4aa3ff',
-                borderRadius: 2,
-                cursor,
-                pointerEvents: 'auto'
-              }}
-            />
-          )
-        })}
-
-      {editing && (
-        <textarea
-          ref={textareaRef}
-          autoFocus
-          spellCheck={false}
-          value={editing.value}
-          onChange={(e) => {
-            const v = e.target.value
-            setEditing({ ...editing, value: v })
-            setShapes((s) =>
-              s.map((sh) => (sh.id === editing.id && sh.type === 'text' ? { ...sh, text: v } : sh))
-            )
-          }}
-          onKeyDown={(e) => {
-            e.stopPropagation()
-            if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Escape') {
-              e.preventDefault()
-              commitEditing()
-            }
-          }}
-          onBlur={commitEditing}
-          style={textareaStyle(box, editing)}
-        />
-      )}
-
-      {!box && <div style={hintStyle}>Drag to select · Esc to cancel</div>}
-
-      {sizePreview && (
-        <div
-          style={{
-            position: 'fixed',
-            left: sizePreview.x,
-            top: sizePreview.y,
-            transform: 'translate(-50%, -50%)',
-            pointerEvents: 'none'
-          }}
-        >
-          <div
-            style={{
-              width: sizePreview.size,
-              height: sizePreview.size,
-              borderRadius: '50%',
-              border: '2px solid #fff',
-              background: 'rgba(255, 255, 255, 0.15)',
-              boxShadow: '0 0 0 1px rgba(0, 0, 0, 0.6)'
-            }}
-          />
-          <div
-            style={{
-              position: 'absolute',
-              top: '100%',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              marginTop: 8,
-              padding: '1px 6px',
-              borderRadius: 3,
-              background: 'rgba(0, 0, 0, 0.7)',
-              color: '#fff',
-              font: '11px -apple-system, system-ui, sans-serif',
-              whiteSpace: 'nowrap'
-            }}
-          >
-            {sizePreview.size}px
-          </div>
-        </div>
-      )}
-
-      {box && (
-        <Toolbar
-          tool={tool}
-          setTool={setTool}
-          color={color}
-          setColor={setColor}
-          canUndo={undoStack.length > 0}
-          onUndo={undo}
-          canRedo={redoStack.length > 0}
-          onRedo={redo}
-          onCopy={onCopy}
-          onSave={onSave}
-          onSaveAs={onSaveAs}
-          onCancel={() => window.snapit.closeOverlay()}
-          style={toolbarPosition(box)}
-        />
-      )}
-    </div>
-  )
-}
-
-function clampBox(b: Box, frame: Frame): Box {
   return {
-    ...b,
-    x: clamp(b.x, 0, Math.max(0, frame.width - b.w)),
-    y: clamp(b.y, 0, Math.max(0, frame.height - b.h))
+    box,
+    bg,
+    tool,
+    setTool,
+    color,
+    setColor,
+    selectedId,
+    editing,
+    sizePreview,
+    dragging,
+    shapes,
+    all,
+    canUndo: undoStack.length > 0,
+    canRedo: redoStack.length > 0,
+    undo,
+    redo,
+    stageRef,
+    trRef,
+    textareaRef,
+    onStageMouseDown,
+    onStageMouseMove,
+    onStageMouseUp,
+    shapeHandlers,
+    onTransformStart,
+    onTransformEnd,
+    onEditingChange,
+    onEditingKeyDown,
+    commitEditing,
+    startBoxResize,
+    onCopy,
+    onSave,
+    onSaveAs
   }
-}
-
-/** Resize a box by dragging one corner, clamped to a min size and the screen. */
-function resizeBox(b: Box, corner: Corner, dx: number, dy: number, frame: Frame): Box {
-  const right = b.x + b.w
-  const bottom = b.y + b.h
-  let { x, y, w, h } = b
-  if (corner === 'nw' || corner === 'sw') {
-    const left = clamp(b.x + dx, 0, right - MIN_BOX)
-    x = left
-    w = right - left
-  } else {
-    w = clamp(right + dx, b.x + MIN_BOX, frame.width) - b.x
-  }
-  if (corner === 'nw' || corner === 'ne') {
-    const topEdge = clamp(b.y + dy, 0, bottom - MIN_BOX)
-    y = topEdge
-    h = bottom - topEdge
-  } else {
-    h = clamp(bottom + dy, b.y + MIN_BOX, frame.height) - b.y
-  }
-  return { x, y, w, h }
-}
-
-function toolbarPosition(sel: Box): CSSProperties {
-  const below = sel.y + sel.h + GAP
-  const top =
-    below + TOOLBAR_HEIGHT <= window.innerHeight ? below : Math.max(GAP, sel.y - TOOLBAR_HEIGHT - GAP)
-  const left = Math.min(Math.max(GAP, sel.x), Math.max(GAP, window.innerWidth - 420))
-  return { top, left }
-}
-
-function textareaStyle(box: Box | null, editing: Editing): CSSProperties {
-  return {
-    position: 'fixed',
-    left: (box?.x ?? 0) + editing.x,
-    top: (box?.y ?? 0) + editing.y,
-    margin: 0,
-    padding: '2px 4px',
-    // Visible boundary so it's clear the text box is active and where to type.
-    border: '1px dashed #0a84ff',
-    borderRadius: 3,
-    outline: 'none',
-    background: 'rgba(255, 255, 255, 0.85)',
-    color: editing.fill,
-    caretColor: editing.fill,
-    fontSize: editing.fontSize,
-    fontFamily: '-apple-system, system-ui, sans-serif',
-    lineHeight: 1.2,
-    resize: 'none',
-    overflow: 'hidden',
-    whiteSpace: 'pre',
-    minWidth: 60,
-    minHeight: editing.fontSize + 8
-  }
-}
-
-const hintStyle: CSSProperties = {
-  position: 'fixed',
-  top: 20,
-  left: '50%',
-  transform: 'translateX(-50%)',
-  color: '#fff',
-  font: '14px -apple-system, system-ui, sans-serif',
-  opacity: 0.85,
-  pointerEvents: 'none'
 }

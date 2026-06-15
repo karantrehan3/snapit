@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactElement } from 'react'
-import type { CaptureSession } from '../../preload/index'
-import { ScreenshotOverlay } from './ScreenshotOverlay'
-import { RecordOverlay } from './RecordOverlay'
+import type { CaptureSession } from '@preload/index'
+import { ScreenshotOverlay } from '@renderer/features/screenshot/ScreenshotOverlay'
+import { RecordOverlay } from '@renderer/features/record/RecordOverlay'
 
 /**
  * Overlay container.

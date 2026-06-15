@@ -1,3 +1,7 @@
+import type { Box } from '@renderer/lib/image'
+
+// --- Annotation tools & shapes ---
+
 export type Tool = 'move' | 'rect' | 'circle' | 'arrow' | 'line' | 'pen' | 'text'
 
 type Base = { id: string; stroke: string; strokeWidth: number }
@@ -69,3 +73,14 @@ export const TOOLS: ReadonlyArray<{ tool: Tool; label: string; title: string }> 
 
 /** Text font size derived from the selected stroke width. */
 export const fontSizeFor = (strokeWidth: number): number => strokeWidth * 4 + 8
+
+// --- Editor interaction state ---
+
+export type Pt = { x: number; y: number }
+export type Corner = 'nw' | 'ne' | 'sw' | 'se'
+export type Editing = { id: string; x: number; y: number; value: string; fontSize: number; fill: string }
+export type SizePreview = { x: number; y: number; size: number }
+export type Drag =
+  | { kind: 'create'; start: Pt; prevBox: Box | null }
+  | { kind: 'moveBox'; last: Pt }
+  | { kind: 'draw' }

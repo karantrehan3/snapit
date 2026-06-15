@@ -1,6 +1,7 @@
-import { useEffect, useState, type CSSProperties, type ReactElement } from 'react'
-import type { Settings as SettingsType } from '../../../preload/index'
+import { useEffect, useState, type ReactElement, type ReactNode } from 'react'
+import type { Settings as SettingsType } from '@preload/index'
 import { HotkeyInput } from './HotkeyInput'
+import { browseStyle, closeStyle, inputStyle, pageStyle, saveStyle } from './styles'
 
 /**
  * Settings window: edit the capture hotkeys and the default save folder.
@@ -63,63 +64,11 @@ export function Settings(): ReactElement {
   )
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }): ReactElement {
+function Field({ label, children }: { label: string; children: ReactNode }): ReactElement {
   return (
     <div style={{ marginBottom: 14 }}>
       <div style={{ fontSize: 12, color: '#6b6b70', marginBottom: 5 }}>{label}</div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>{children}</div>
     </div>
   )
-}
-
-const pageStyle: CSSProperties = {
-  padding: 24,
-  fontFamily: '-apple-system, BlinkMacSystemFont, system-ui, sans-serif',
-  color: '#1c1c1e',
-  background: '#f5f5f7',
-  height: '100vh',
-  boxSizing: 'border-box'
-}
-
-const inputStyle: CSSProperties = {
-  flex: 1,
-  height: 30,
-  padding: '0 10px',
-  borderRadius: 6,
-  border: '1px solid #c7c7cc',
-  background: '#fff',
-  color: '#1c1c1e',
-  font: '13px -apple-system, system-ui, sans-serif'
-}
-
-const browseStyle: CSSProperties = {
-  height: 30,
-  padding: '0 12px',
-  borderRadius: 6,
-  border: '1px solid #c7c7cc',
-  background: '#fff',
-  cursor: 'pointer',
-  font: '13px -apple-system, system-ui, sans-serif'
-}
-
-const saveStyle: CSSProperties = {
-  height: 32,
-  padding: '0 18px',
-  borderRadius: 6,
-  border: 'none',
-  background: '#0a84ff',
-  color: '#fff',
-  fontWeight: 600,
-  cursor: 'pointer',
-  font: '13px -apple-system, system-ui, sans-serif'
-}
-
-const closeStyle: CSSProperties = {
-  height: 32,
-  padding: '0 16px',
-  borderRadius: 6,
-  border: '1px solid #c7c7cc',
-  background: '#fff',
-  cursor: 'pointer',
-  font: '13px -apple-system, system-ui, sans-serif'
 }
