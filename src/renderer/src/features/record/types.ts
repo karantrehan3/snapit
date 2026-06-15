@@ -1,4 +1,4 @@
-export type Phase = 'setup' | 'countdown' | 'recording'
+export type Phase = 'setup' | 'recording'
 export type Mode = 'full' | 'region'
 export type Pt = { x: number; y: number }
 export type Rect = { x: number; y: number; w: number; h: number }
