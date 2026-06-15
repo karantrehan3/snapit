@@ -49,6 +49,26 @@ let session: CaptureSession | null = null
 let recordWantsSystemAudio = false
 let recordSourceId: string | null = null
 
+// Locks the packaged renderer to its own bundle: no remote script, no eval, no
+// plugins, no framing. data:/blob: cover the frozen-frame dataURL, source-picker
+// thumbnails, and canvas streams; 'unsafe-inline' style covers React inline styles
+// and the <style> block in index.html. Applied in production only (see below).
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data:",
+  "media-src 'self' blob:",
+  "font-src 'self'",
+  "connect-src 'self'",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "frame-src 'none'"
+].join('; ')
+
+/** A renderer-supplied value is only accepted as image bytes if it's an image dataURL. */
+const isImageDataUrl = (v: unknown): v is string => typeof v === 'string' && v.startsWith('data:image/')
+
 function createOverlayWindow(display: Display): void {
   const { x, y, width, height } = display.bounds
 
@@ -72,7 +92,7 @@ function createOverlayWindow(display: Display): void {
     enableLargerThanScreen: true,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false,
+      sandbox: true,
       spellcheck: false
     }
   })
@@ -116,7 +136,7 @@ function openSettingsWindow(): void {
     title: 'snapit Settings',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false,
+      sandbox: true,
       spellcheck: false
     }
   })
@@ -246,6 +266,33 @@ app.whenReady().then(() => {
   // Kill the macOS spell-checker (NSSpellServer log spam, and we don't need it).
   electronSession.defaultSession.setSpellCheckerEnabled(false)
 
+  // Content-Security-Policy — production only. The dev server + Vite HMR inject
+  // inline/eval scripts and a websocket that a strict policy would break, so it's
+  // applied only to the packaged file:// renderer.
+  if (!process.env['ELECTRON_RENDERER_URL']) {
+    electronSession.defaultSession.webRequest.onHeadersReceived((details, cb) => {
+      cb({ responseHeaders: { ...details.responseHeaders, 'Content-Security-Policy': [CSP] } })
+    })
+  }
+
+  // Hardening (Electron security checklist): the renderer may never spawn new
+  // windows or navigate away from the app's own content. External links open in
+  // the user's browser instead.
+  app.on('web-contents-created', (_e, contents) => {
+    contents.setWindowOpenHandler(({ url }) => {
+      if (/^https?:\/\//.test(url)) void shell.openExternal(url)
+      return { action: 'deny' }
+    })
+    contents.on('will-navigate', (e, url) => {
+      const dev = process.env['ELECTRON_RENDERER_URL']
+      const allowed = dev ? url.startsWith(dev) : url.startsWith('file://')
+      if (!allowed) {
+        e.preventDefault()
+        if (/^https?:\/\//.test(url)) void shell.openExternal(url)
+      }
+    })
+  })
+
   // Supply the recording source (and optional system/loopback audio) to
   // getDisplayMedia without the OS picker. recordWantsSystemAudio is set per
   // recording via 'record:prepare'; loopback audio uses ScreenCaptureKit (macOS 13+).
@@ -269,11 +316,13 @@ app.whenReady().then(() => {
   ipcMain.handle('capture:get-session', () => session)
 
   ipcMain.on('capture:copy', (_event, dataUrl: string) => {
+    if (!isImageDataUrl(dataUrl)) return
     clipboard.writeImage(nativeImage.createFromDataURL(dataUrl))
     closeOverlayWindow()
   })
 
   ipcMain.handle('capture:save', async (_event, dataUrl: string) => {
+    if (!isImageDataUrl(dataUrl)) return null
     const { saveDir } = getSettings()
     await mkdir(saveDir, { recursive: true })
     const filePath = join(saveDir, `snapit-${timestamp()}.png`)
@@ -284,6 +333,7 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('capture:save-as', async (_event, dataUrl: string) => {
+    if (!isImageDataUrl(dataUrl)) return null
     const { saveDir } = getSettings()
     const options = {
       defaultPath: join(saveDir, `snapit-${timestamp()}.png`),
@@ -303,6 +353,7 @@ app.whenReady().then(() => {
   ipcMain.on('overlay:close', closeOverlayWindow)
 
   ipcMain.handle('record:save', async (_event, data: ArrayBuffer, ext: string) => {
+    if (!(data instanceof ArrayBuffer) || data.byteLength === 0) return null
     const safeExt = ext === 'mp4' ? 'mp4' : 'webm'
     const { saveDir } = getSettings()
     await mkdir(saveDir, { recursive: true })
