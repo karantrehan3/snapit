@@ -30,7 +30,7 @@ export function RecordOverlay({ source }: { source: DisplaySource }): ReactEleme
   const [box, setBox] = useState<Rect | null>(null)
   const dragStart = useRef<Pt | null>(null)
 
-  const { sources, loading, selectedId, setSelectedId, canRegion } = useSourcePicker(source.id)
+  const { sources, loading, tab, setTab, selectedId, setSelectedId, canRegion } = useSourcePicker(source.id)
   const recorder = useRecorder()
 
   useEffect(() => {
@@ -77,7 +77,14 @@ export function RecordOverlay({ source }: { source: DisplaySource }): ReactEleme
       <div style={panel} onMouseDown={(e) => e.stopPropagation()}>
         <div style={{ fontSize: 20, fontWeight: 600 }}>🎥 Screen recording</div>
 
-        <SourcePicker sources={sources} loading={loading} selectedId={selectedId} onSelect={setSelectedId} />
+        <SourcePicker
+          sources={sources}
+          loading={loading}
+          tab={tab}
+          onTab={setTab}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+        />
 
         {canRegion && (
           <>

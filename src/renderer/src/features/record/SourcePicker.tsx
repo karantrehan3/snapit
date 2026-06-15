@@ -1,4 +1,4 @@
-import { useState, type ReactElement } from 'react'
+import type { ReactElement } from 'react'
 import type { RecordSourceInfo } from '@preload/index'
 import {
   hint,
@@ -13,16 +13,19 @@ import {
   spinnerWrap
 } from './styles'
 
+type SourceTab = 'screen' | 'window'
+
 type Props = {
   sources: RecordSourceInfo[]
   loading: boolean
+  tab: SourceTab
+  onTab: (t: SourceTab) => void
   selectedId: string
   onSelect: (id: string) => void
 }
 
 /** Source chooser with Screens / Windows tabs (Chrome-style) and a loading spinner. */
-export function SourcePicker({ sources, loading, selectedId, onSelect }: Props): ReactElement {
-  const [tab, setTab] = useState<'screen' | 'window'>('screen')
+export function SourcePicker({ sources, loading, tab, onTab, selectedId, onSelect }: Props): ReactElement {
   const screens = sources.filter((s) => s.type === 'screen')
   const windows = sources.filter((s) => s.type === 'window')
   const shown = tab === 'screen' ? screens : windows
@@ -30,10 +33,10 @@ export function SourcePicker({ sources, loading, selectedId, onSelect }: Props):
   return (
     <div style={picker}>
       <div style={segmented}>
-        <button type="button" onClick={() => setTab('screen')} style={segment(tab === 'screen')}>
+        <button type="button" onClick={() => onTab('screen')} style={segment(tab === 'screen')}>
           Screens{loading ? '' : ` (${screens.length})`}
         </button>
-        <button type="button" onClick={() => setTab('window')} style={segment(tab === 'window')}>
+        <button type="button" onClick={() => onTab('window')} style={segment(tab === 'window')}>
           Windows{loading ? '' : ` (${windows.length})`}
         </button>
       </div>
