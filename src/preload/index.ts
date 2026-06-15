@@ -10,6 +10,9 @@ export type Frame = {
 /** A live-screen source for recording: desktopCapturer id + native pixel size. */
 export type DisplaySource = { id: string; width: number; height: number }
 
+/** A selectable capture source (a screen or a window) with a preview thumbnail. */
+export type RecordSourceInfo = { id: string; name: string; type: 'screen' | 'window'; thumbnail: string }
+
 /** What the overlay renderer needs to know about the current capture session. */
 export type CaptureSession = { mode: 'screenshot'; frame: Frame } | { mode: 'record'; source: DisplaySource }
 
@@ -30,9 +33,11 @@ const api = {
   saveImageAs: (dataUrl: string): Promise<string | null> => ipcRenderer.invoke('capture:save-as', dataUrl),
   /** Dismiss the capture overlay (e.g. on Esc / cancel). */
   closeOverlay: (): void => ipcRenderer.send('overlay:close'),
-  /** Set whether the next recording captures system/loopback audio (before getDisplayMedia). */
-  prepareRecording: (systemAudio: boolean): Promise<void> =>
-    ipcRenderer.invoke('record:prepare', systemAudio),
+  /** List capturable sources (screens + windows) with preview thumbnails. */
+  listSources: (): Promise<RecordSourceInfo[]> => ipcRenderer.invoke('record:list-sources'),
+  /** Set the next recording's system/loopback audio + source id (before getDisplayMedia). */
+  prepareRecording: (systemAudio: boolean, sourceId: string): Promise<void> =>
+    ipcRenderer.invoke('record:prepare', { systemAudio, sourceId }),
   /** Persist a finished recording (bytes + container ext); closes the overlay. Returns the path. */
   saveRecording: (data: ArrayBuffer, ext: string): Promise<string> =>
     ipcRenderer.invoke('record:save', data, ext),

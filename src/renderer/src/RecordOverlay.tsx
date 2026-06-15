@@ -6,7 +6,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type ReactElement
 } from 'react'
-import type { DisplaySource } from '../../preload/index'
+import type { DisplaySource, RecordSourceInfo } from '../../preload/index'
 
 type Phase = 'setup' | 'recording'
 type Mode = 'full' | 'region'
@@ -53,6 +53,8 @@ function pickRecording(): { mimeType: string; ext: 'mp4' | 'webm' } {
 export function RecordOverlay({ source }: { source: DisplaySource }): ReactElement {
   const [phase, setPhase] = useState<Phase>('setup')
   const [mode, setMode] = useState<Mode>('full')
+  const [sources, setSources] = useState<RecordSourceInfo[]>([])
+  const [selectedId, setSelectedId] = useState<string>(source.id)
   const [systemAudio, setSystemAudio] = useState(true)
   const [mic, setMic] = useState(false)
   const [fps, setFps] = useState(60)
@@ -128,6 +130,16 @@ export function RecordOverlay({ source }: { source: DisplaySource }): ReactEleme
 
   useEffect(() => () => cleanupStreams(), [])
 
+  useEffect(() => {
+    void window.snapit.listSources().then(setSources)
+  }, [])
+
+  // Region only makes sense for the current display (the overlay's own screen).
+  const canRegion = selectedId === source.id
+  useEffect(() => {
+    if (!canRegion && mode === 'region') setMode('full')
+  }, [canRegion, mode])
+
   // While recording, keep the overlay click-through except over the (draggable) pill.
   useEffect(() => {
     if (phase !== 'recording') return
@@ -168,7 +180,7 @@ export function RecordOverlay({ source }: { source: DisplaySource }): ReactEleme
   }
 
   const getDisplayStream = async (wantSystemAudio: boolean, frameRate: number): Promise<MediaStream> => {
-    await window.snapit.prepareRecording(wantSystemAudio)
+    await window.snapit.prepareRecording(wantSystemAudio, selectedId)
     return navigator.mediaDevices.getDisplayMedia({ video: { frameRate }, audio: wantSystemAudio })
   }
 
@@ -214,7 +226,8 @@ export function RecordOverlay({ source }: { source: DisplaySource }): ReactEleme
 
   const start = async (): Promise<void> => {
     setError(null)
-    if (mode === 'region' && (!box || box.w < MIN_REGION || box.h < MIN_REGION)) {
+    const useRegion = mode === 'region' && canRegion
+    if (useRegion && (!box || box.w < MIN_REGION || box.h < MIN_REGION)) {
       setError('Drag to select a region first.')
       return
     }
@@ -226,7 +239,7 @@ export function RecordOverlay({ source }: { source: DisplaySource }): ReactEleme
       const scale = (settings?.width ?? source.width) / window.innerWidth
 
       const recordStream =
-        mode === 'region' && box
+        useRegion && box
           ? buildRegionVideo(display, box, scale, fps)
           : new MediaStream(display.getVideoTracks())
 
@@ -317,16 +330,40 @@ export function RecordOverlay({ source }: { source: DisplaySource }): ReactEleme
       <div style={panel} onMouseDown={(e) => e.stopPropagation()}>
         <div style={{ fontSize: 20, fontWeight: 600 }}>🎥 Screen recording</div>
 
-        <div style={segmented}>
-          <button type="button" onClick={() => setMode('full')} style={segment(mode === 'full')}>
-            Full screen
-          </button>
-          <button type="button" onClick={() => setMode('region')} style={segment(mode === 'region')}>
-            Region
-          </button>
+        <div style={sourceGrid}>
+          {sources.length === 0 && <div style={{ ...hint, gridColumn: '1 / -1' }}>Loading sources…</div>}
+          {[...sources]
+            .sort((a, b) => (a.type === b.type ? 0 : a.type === 'screen' ? -1 : 1))
+            .map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => setSelectedId(s.id)}
+                style={sourceItem(selectedId === s.id)}
+                title={s.name}
+              >
+                <img src={s.thumbnail} style={sourceThumb} alt="" />
+                <span style={sourceName}>
+                  {s.type === 'screen' ? '🖥 ' : '🪟 '}
+                  {s.name}
+                </span>
+              </button>
+            ))}
         </div>
 
-        {mode === 'region' && <div style={hint}>Drag on the screen to select a region.</div>}
+        {canRegion && (
+          <>
+            <div style={segmented}>
+              <button type="button" onClick={() => setMode('full')} style={segment(mode === 'full')}>
+                Full screen
+              </button>
+              <button type="button" onClick={() => setMode('region')} style={segment(mode === 'region')}>
+                Region
+              </button>
+            </div>
+            {mode === 'region' && <div style={hint}>Drag on the screen to select a region.</div>}
+          </>
+        )}
 
         <div style={segmented}>
           <button type="button" onClick={() => setFps(30)} style={segment(fps === 30)}>
@@ -387,7 +424,8 @@ const panel: CSSProperties = {
   flexDirection: 'column',
   gap: 12,
   padding: 24,
-  minWidth: 320,
+  minWidth: 560,
+  maxWidth: 620,
   borderRadius: 14,
   background: 'rgba(28, 28, 30, 0.96)',
   boxShadow: '0 12px 40px rgba(0, 0, 0, 0.55)'
@@ -420,6 +458,48 @@ const checkboxRow: CSSProperties = {
   gap: 8,
   fontSize: 13,
   cursor: 'pointer'
+}
+
+const sourceGrid: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(3, 1fr)',
+  gap: 10,
+  maxHeight: 320,
+  overflowY: 'auto',
+  overflowX: 'hidden',
+  padding: 2
+}
+
+function sourceItem(active: boolean): CSSProperties {
+  return {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+    minWidth: 0,
+    padding: 6,
+    border: active ? '2px solid #0a84ff' : '2px solid transparent',
+    borderRadius: 8,
+    background: 'rgba(255, 255, 255, 0.06)',
+    cursor: 'pointer',
+    color: '#fff',
+    textAlign: 'left'
+  }
+}
+
+const sourceThumb: CSSProperties = {
+  width: '100%',
+  height: 84,
+  objectFit: 'contain',
+  borderRadius: 4,
+  background: '#000'
+}
+
+const sourceName: CSSProperties = {
+  fontSize: 11,
+  color: 'rgba(255, 255, 255, 0.8)',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap'
 }
 
 const hint: CSSProperties = { fontSize: 12, color: 'rgba(255, 255, 255, 0.7)' }

@@ -47,6 +47,7 @@ let overlayWindow: BrowserWindow | null = null
 let settingsWindow: BrowserWindow | null = null
 let session: CaptureSession | null = null
 let recordWantsSystemAudio = false
+let recordSourceId: string | null = null
 
 function createOverlayWindow(display: Display): void {
   const { x, y, width, height } = display.bounds
@@ -251,9 +252,9 @@ app.whenReady().then(() => {
   electronSession.defaultSession.setDisplayMediaRequestHandler(
     (_request, callback) => {
       desktopCapturer
-        .getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } })
+        .getSources({ types: ['screen', 'window'], thumbnailSize: { width: 0, height: 0 } })
         .then((sources) => {
-          const wanted = session?.mode === 'record' ? session.source.id : null
+          const wanted = recordSourceId ?? (session?.mode === 'record' ? session.source.id : null)
           const source = sources.find((s) => s.id === wanted) ?? sources[0]
           callback(source ? { video: source, audio: recordWantsSystemAudio ? 'loopback' : undefined } : {})
         })
@@ -312,9 +313,24 @@ app.whenReady().then(() => {
     return filePath
   })
 
-  // Set before each recording: whether to capture system/loopback audio.
-  ipcMain.handle('record:prepare', (_event, systemAudio: boolean) => {
-    recordWantsSystemAudio = systemAudio
+  // List capturable sources (each screen + each window) with preview thumbnails.
+  ipcMain.handle('record:list-sources', async () => {
+    const sources = await desktopCapturer.getSources({
+      types: ['screen', 'window'],
+      thumbnailSize: { width: 320, height: 200 }
+    })
+    return sources.map((s) => ({
+      id: s.id,
+      name: s.name,
+      type: s.id.startsWith('screen') ? ('screen' as const) : ('window' as const),
+      thumbnail: s.thumbnail.toDataURL()
+    }))
+  })
+
+  // Set before each recording: system/loopback audio + which source to capture.
+  ipcMain.handle('record:prepare', (_event, opts: { systemAudio: boolean; sourceId: string }) => {
+    recordWantsSystemAudio = opts.systemAudio
+    recordSourceId = opts.sourceId
   })
 
   // Make the overlay click-through while recording so the screen stays usable;
