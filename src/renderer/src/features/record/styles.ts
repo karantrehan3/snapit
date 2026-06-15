@@ -104,6 +104,27 @@ export const sourceName: CSSProperties = {
 
 export const hint: CSSProperties = { fontSize: 12, color: 'rgba(255, 255, 255, 0.7)' }
 
+export const picker: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 10 }
+
+export const spinnerWrap: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 10,
+  minHeight: 200,
+  color: 'rgba(255, 255, 255, 0.7)',
+  fontSize: 13
+}
+
+export const spinner: CSSProperties = {
+  width: 22,
+  height: 22,
+  borderRadius: '50%',
+  border: '3px solid rgba(255, 255, 255, 0.2)',
+  borderTopColor: '#0a84ff',
+  animation: 'snapitSpin 0.8s linear infinite'
+}
+
 export const errorText: CSSProperties = { fontSize: 12, color: '#ff453a' }
 
 export function btn(bg: string): CSSProperties {

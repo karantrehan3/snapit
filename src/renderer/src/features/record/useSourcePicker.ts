@@ -3,6 +3,7 @@ import type { RecordSourceInfo } from '@preload/index'
 
 type SourcePicker = {
   sources: RecordSourceInfo[]
+  loading: boolean
   selectedId: string
   setSelectedId: (id: string) => void
   canRegion: boolean
@@ -15,11 +16,15 @@ type SourcePicker = {
  */
 export function useSourcePicker(currentDisplayId: string): SourcePicker {
   const [sources, setSources] = useState<RecordSourceInfo[]>([])
+  const [loading, setLoading] = useState(true)
   const [selectedId, setSelectedId] = useState<string>(currentDisplayId)
 
   useEffect(() => {
-    void window.snapit.listSources().then(setSources)
+    void window.snapit.listSources().then((s) => {
+      setSources(s)
+      setLoading(false)
+    })
   }, [])
 
-  return { sources, selectedId, setSelectedId, canRegion: selectedId === currentDisplayId }
+  return { sources, loading, selectedId, setSelectedId, canRegion: selectedId === currentDisplayId }
 }
