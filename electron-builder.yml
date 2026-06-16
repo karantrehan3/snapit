@@ -13,6 +13,8 @@ asar: true
 compression: maximum
 electronLanguages:
   - en
+# Ad-hoc sign the mac app so Apple Silicon will launch it (see build/afterPack.cjs).
+afterPack: build/afterPack.cjs
 
 mac:
   category: public.app-category.developer-tools
