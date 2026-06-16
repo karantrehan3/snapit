@@ -14,7 +14,8 @@
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "icon": "electron tools/make-icon.cjs"
   },
   "dependencies": {
     "konva": "^10.3.0",

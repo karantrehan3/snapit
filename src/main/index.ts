@@ -19,6 +19,7 @@ import {
 } from 'electron'
 import { captureDisplay, getDisplaySource, type DisplaySource } from './capture'
 import { getSettings, setSettings, type Settings } from './settings'
+import { TRAY_TEMPLATE_DATA_URL, TRAY_COLOUR_DATA_URL } from './trayIcon'
 
 /**
  * snapit shell.
@@ -242,8 +243,12 @@ function buildTray(): void {
 }
 
 function createTray(): void {
-  tray = new Tray(nativeImage.createEmpty())
-  tray.setTitle('snapit')
+  // A real icon is required on Windows/Linux — an empty image leaves no visible tray
+  // entry (and setTitle is macOS-only), so the app would have no entry point there.
+  const isMac = process.platform === 'darwin'
+  const icon = nativeImage.createFromDataURL(isMac ? TRAY_TEMPLATE_DATA_URL : TRAY_COLOUR_DATA_URL)
+  if (isMac) icon.setTemplateImage(true)
+  tray = new Tray(icon)
   tray.setToolTip('snapit — QA capture')
   buildTray()
 }
@@ -303,7 +308,10 @@ app.whenReady().then(() => {
         .then((sources) => {
           const wanted = recordSourceId ?? (session?.mode === 'record' ? session.source.id : null)
           const source = sources.find((s) => s.id === wanted) ?? sources[0]
-          callback(source ? { video: source, audio: recordWantsSystemAudio ? 'loopback' : undefined } : {})
+          // Loopback system audio relies on ScreenCaptureKit (macOS) / WASAPI (Windows);
+          // Linux has no supported loopback, so omit it there rather than fail the stream.
+          const loopback = recordWantsSystemAudio && process.platform !== 'linux'
+          callback(source ? { video: source, audio: loopback ? 'loopback' : undefined } : {})
         })
         .catch(() => callback({}))
     },
@@ -381,7 +389,8 @@ app.whenReady().then(() => {
   // Set before each recording: system/loopback audio + which source to capture.
   // Also exclude the overlay (and its Stop pill) from screen capture so it stays
   // visible to the user but never lands in the recording. macOS sets the window's
-  // NSWindowSharingType to none; a fresh overlay per session defaults back to off.
+  // NSWindowSharingType to none (Windows: SetWindowDisplayAffinity); a fresh overlay
+  // per session defaults back to off. No-op on Linux — the pill stays in recordings there.
   ipcMain.handle('record:prepare', (_event, opts: { systemAudio: boolean; sourceId: string }) => {
     recordWantsSystemAudio = opts.systemAudio
     recordSourceId = opts.sourceId
