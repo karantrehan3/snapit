@@ -40,4 +40,6 @@ linux:
   category: Development
   target:
     - AppImage
-  artifactName: ${productName}-${version}-linux-${arch}.${ext}
+  # Hard-coded x64 (CI builds on x64): ${arch} resolves to "x86_64" for AppImage,
+  # which would break the consistent -mac-/-win-/-linux- naming.
+  artifactName: ${productName}-${version}-linux-x64.${ext}

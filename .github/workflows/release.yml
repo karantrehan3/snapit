@@ -1,7 +1,7 @@
 name: Release
 
 # Push a version tag (e.g. v1.0.0) to build all three installers on their native
-# runners and attach them to the matching GitHub Release.
+# runners, then publish them to the matching GitHub Release with notes from CHANGELOG.md.
 on:
   push:
     tags:
@@ -32,10 +32,34 @@ jobs:
       - run: npm ci
       - name: Build installer
         run: npm run ${{ matrix.script }}
-      - name: Attach to GitHub Release
-        uses: softprops/action-gh-release@v2
+      - uses: actions/upload-artifact@v4
         with:
-          files: |
+          name: installer-${{ matrix.os }}
+          path: |
             dist/*.dmg
             dist/*.exe
             dist/*.AppImage
+          if-no-files-found: ignore
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Extract notes for this tag from CHANGELOG.md
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '
+            $0 ~ "^## \\[?" v "\\]?" {flag=1; next}
+            /^## / {flag=0}
+            flag' CHANGELOG.md > RELEASE_BODY.md
+          echo "----- release body -----"; cat RELEASE_BODY.md
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          body_path: RELEASE_BODY.md
