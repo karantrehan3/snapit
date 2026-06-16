@@ -38,7 +38,8 @@ export function Toolbar({
 
   return (
     <div style={{ ...barStyle, ...style }}>
-      {TOOLS.map((t) => (
+      {/* TODO: re-enable the Text tool once text-annotation focus is fixed (see docs/STATUS.md). */}
+      {TOOLS.filter((t) => t.tool !== 'text').map((t) => (
         <button key={t.tool} title={t.title} onClick={() => setTool(t.tool)} style={btn(tool === t.tool)}>
           {t.tool === 'move' ? <MoveIcon /> : t.label}
         </button>
