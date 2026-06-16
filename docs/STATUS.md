@@ -10,8 +10,7 @@ built to later grow into screen recording, live browser-session analysis (auto-p
 Playwright tests), and assisted form-fill. See [`DESIGN.md`](DESIGN.md) for full vision,
 the four-phase roadmap, and locked decisions.
 
-- **Repo:** `…/JRNI/core/snapit` (sibling of the jrni-workspace). Own git repo, default branch
-  `master`, pushed to `github.com/karantrehan3/snapit` (SSH).
+- **Repo:** own git repo, default branch `master`, pushed to `github.com/karantrehan3/snapit` (SSH).
 - **Stack:** Electron 42 + TypeScript + electron-vite + React 19 + Konva 10. Volta-pinned **node 22**.
 - **Platform:** macOS Sequoia first (cross-OS via Electron later).
 
@@ -98,14 +97,20 @@ sticks with no immediate BLUR before testing typing.
 
 ## Pending
 
-1. **Fix text focus** (above) — the one open blocker; the T tool creates a box you can't type into.
-2. ~~Remove debug instrumentation~~ — **done** (the `window.snapit.log` bridge was removed).
-3. ~~Rework the Settings hotkey recorder~~ — **done** (`useHotkeyRecorder` + live keycap chips).
-4. ~~Commit Phase 1 milestone 1d~~ — **done**.
-5. ~~Phase 2 screen recording~~ — **done** (source picker, region, 30/60 fps, system + mic audio,
+1. **Fix text focus** (above) — the open blocker. The T tool is **hidden from the toolbar** until this
+   is fixed (filter in `Toolbar.tsx`, code path intact); re-enable once it's solved.
+2. **Evaluate Tauri for v2** — the v1.0.0 `.dmg` is ~114 MB, almost entirely Electron's bundled
+   Chromium (our code is ~1.4 MB). Locale-strip + max-compression only trim the margins, and arm64
+   forces an APFS dmg that ignores extra compression. A Tauri port (Rust core + OS webview, reusing
+   the React/Konva renderer) would drop installers to ~3–10 MB. Decided: ship Electron for v1.0.0,
+   port for v2.
+3. ~~Remove debug instrumentation~~ — **done** (the `window.snapit.log` bridge was removed).
+4. ~~Rework the Settings hotkey recorder~~ — **done** (`useHotkeyRecorder` + live keycap chips).
+5. ~~Commit Phase 1 milestone 1d~~ — **done**.
+6. ~~Phase 2 screen recording~~ — **done** (source picker, region, 30/60 fps, system + mic audio,
    native MP4; recording verified working). WebCodecs + `mp4-muxer` fallback is only needed if a
    runtime lacks native MP4 recording.
-6. Later phases: Chrome extension + Playwright test-gen (Phase 3), assisted form-fill (Phase 4),
+7. Later phases: Chrome extension + Playwright test-gen (Phase 3), assisted form-fill (Phase 4),
    cloud share. See `DESIGN.md`.
 
 ## Known issues / macOS notes

@@ -5,7 +5,7 @@
 > integration tests, and assisted form-fill for manual QA.
 
 **Status:** Draft / pre-implementation
-**Owner:** ktrehan@jrni.com
+**Owner:** Karan Trehan (karantrehan3)
 **Last updated:** 2026-06-15
 
 ---
@@ -50,13 +50,13 @@ separate apps.
 
 ## 3. Decisions (locked) and their rationale
 
-| Decision          | Choice                            | Why                                                                                                                                         |
-| ----------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| Product shape     | Shell hosting pluggable modules   | OS-level capture and browser-level observation cannot share one process; modules let one product span both worlds                           |
-| Shell framework   | **Electron + TypeScript**         | Whole product (shell, canvas, extension, test-gen) is one language the team knows; cross-OS for free; mature capture + clipboard APIs       |
-| Browser hook      | **Companion Chrome extension**    | QA keeps their real authenticated Chrome (real JRNI logins/cookies for Studio + Customer Journey); native access to DOM/network/form events |
-| Phase 1 sharing   | **Local only** (disk + clipboard) | Truest to "local QA tool"; avoids PII-in-the-cloud governance; cloud is a clean future add                                                  |
-| Annotation engine | **Konva.js** (on React)           | Best fit for selectable / movable / resizable shapes + text with live-editable color and size                                               |
+| Decision          | Choice                            | Why                                                                                                                                   |
+| ----------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Product shape     | Shell hosting pluggable modules   | OS-level capture and browser-level observation cannot share one process; modules let one product span both worlds                     |
+| Shell framework   | **Electron + TypeScript**         | Whole product (shell, canvas, extension, test-gen) is one language the team knows; cross-OS for free; mature capture + clipboard APIs |
+| Browser hook      | **Companion Chrome extension**    | QA keeps their real authenticated Chrome (real app logins/cookies); native access to DOM/network/form events                          |
+| Phase 1 sharing   | **Local only** (disk + clipboard) | Truest to "local QA tool"; avoids PII-in-the-cloud governance; cloud is a clean future add                                            |
+| Annotation engine | **Konva.js** (on React)           | Best fit for selectable / movable / resizable shapes + text with live-editable color and size                                         |
 
 ### The fault line this resolves
 
@@ -255,5 +255,5 @@ existing `playwright-e2e` skill.
 
 ## Appendix A — Repo
 
-- Location: `../snapit` (i.e. `…/JRNI/core/snapit`), separate GitHub repo.
+- Separate GitHub repo: `github.com/karantrehan3/snapit`.
 - Single TypeScript monorepo: `shell/`, `modules/`, `extension/` (added at Phase 3).
