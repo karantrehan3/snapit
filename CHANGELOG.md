@@ -32,7 +32,16 @@ First public release — a local-only screenshot and screen-recording tool for Q
 
 ### Install
 
-Signed builds are unavailable; macOS shows a Gatekeeper warning on first launch (see the README).
-Grab the installer for your platform below.
+Download the installer for your platform from the assets below.
+
+> **macOS:** the app is signed (ad-hoc) but not notarized, so the first launch is blocked with
+> _"snapit can't be opened"_ / _"Apple could not verify… malware"_. Open it once with:
+>
+> ```bash
+> xattr -dr com.apple.quarantine /Applications/snapit.app
+> ```
+>
+> …then launch normally. (Or **System Settings → Privacy & Security → Open Anyway**.) This is
+> expected for any app not distributed through a paid Apple Developer account — the app is safe.
 
 [1.0.0]: https://github.com/karantrehan3/snapit/releases/tag/v1.0.0

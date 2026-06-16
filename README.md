@@ -91,14 +91,19 @@ Grab the latest build for your OS and run it:
 | Linux   | `snapit-<version>-linux-<arch>.AppImage` | `chmod +x` and run.                               |
 
 <details>
-<summary><strong>macOS first-launch notes</strong> (unsigned app + Screen Recording permission)</summary>
+<summary><strong>macOS first-launch notes</strong> (Gatekeeper + Screen Recording)</summary>
 
-- **Gatekeeper:** the app is unsigned, so the first launch shows a warning. Right-click the app →
-  **Open**, or clear the quarantine flag:
+snapit is signed with an ad-hoc signature but **not notarized** (notarization requires a paid Apple
+Developer account). So macOS blocks the first launch with _"snapit is damaged"_ or _"Apple could not
+verify… malware"_. The app is safe — macOS distrusts anything not notarized through the paid program.
+
+- **Open it (easiest):** clear the download quarantine flag, then launch normally:
   ```bash
   xattr -dr com.apple.quarantine /Applications/snapit.app
   ```
-- **Permission:** grant **Screen Recording** to snapit (System Settings → Privacy & Security →
+- **Or via the UI:** **System Settings → Privacy & Security**, find the "snapit was blocked" notice →
+  **Open Anyway**. (Right-click → **Open** also works on some macOS versions.)
+- **Screen Recording permission:** grant it to snapit (System Settings → Privacy & Security →
   Screen Recording) on first capture, or frames come back black.
 
 </details>
