@@ -231,8 +231,20 @@ function registerHotkeys(): void {
 function buildTray(): void {
   const { screenshotHotkey, recordHotkey } = getSettings()
   const menu = Menu.buildFromTemplate([
-    { label: `Screenshot  (${screenshotHotkey})`, click: () => void startCapture('screenshot') },
-    { label: `Record  (${recordHotkey})`, click: () => void startCapture('record') },
+    // accelerator renders as native key symbols (⌘⇧9 on macOS, Ctrl+Shift+9 elsewhere);
+    // registerAccelerator: false keeps it display-only — globalShortcut already fires it.
+    {
+      label: 'Screenshot',
+      accelerator: screenshotHotkey,
+      registerAccelerator: false,
+      click: () => void startCapture('screenshot')
+    },
+    {
+      label: 'Record',
+      accelerator: recordHotkey,
+      registerAccelerator: false,
+      click: () => void startCapture('record')
+    },
     { type: 'separator' },
     { label: 'Settings…', click: openSettingsWindow },
     { label: 'Open save folder', click: () => void shell.openPath(getSettings().saveDir) },
