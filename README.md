@@ -10,7 +10,8 @@
 </p>
 
 <p align="center">
-  <img alt="platform" src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-555" />
+  <img alt="platform" src="https://img.shields.io/badge/macOS-supported-success" />
+  <img alt="windows-linux" src="https://img.shields.io/badge/Windows%20%7C%20Linux-experimental-orange" />
   <img alt="electron" src="https://img.shields.io/badge/Electron-42-47848F?logo=electron&logoColor=white" />
   <img alt="react" src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white" />
   <img alt="license" src="https://img.shields.io/badge/license-MIT-green" />
@@ -84,11 +85,18 @@ uploaded anywhere.
 
 Grab the latest build for your OS and run it:
 
-| OS      | File                                     | Notes                                             |
-| ------- | ---------------------------------------- | ------------------------------------------------- |
-| macOS   | `snapit-<version>-mac-<arch>.dmg`        | Open the `.dmg`, drag **snapit** to Applications. |
-| Windows | `snapit-<version>-win-<arch>-setup.exe`  | Run the installer (NSIS).                         |
-| Linux   | `snapit-<version>-linux-<arch>.AppImage` | `chmod +x` and run.                               |
+| OS                       | File                                     | Notes                                             |
+| ------------------------ | ---------------------------------------- | ------------------------------------------------- |
+| macOS                    | `snapit-<version>-mac-<arch>.dmg`        | Open the `.dmg`, drag **snapit** to Applications. |
+| Windows _(experimental)_ | `snapit-<version>-win-<arch>-setup.exe`  | Run the installer (NSIS).                         |
+| Linux _(experimental)_   | `snapit-<version>-linux-<arch>.AppImage` | `chmod +x` and run.                               |
+
+> **Platform support:** snapit is developed and tested on **macOS**. The Windows and Linux builds are
+> produced by CI and are **experimental — not yet verified on real hardware**. They should work
+> (standard Electron APIs), but expect rough edges, especially on **Linux/Wayland**, where screen
+> capture goes through the PipeWire portal and the capture overlay can't be hidden from recordings.
+> Unsigned-app warnings also apply (Windows SmartScreen → _More info → Run anyway_; Linux may need
+> `libfuse2`). Bug reports from these platforms are welcome.
 
 <details>
 <summary><strong>macOS first-launch notes</strong> (Gatekeeper + Screen Recording)</summary>
