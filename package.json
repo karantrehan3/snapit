@@ -1,10 +1,10 @@
 {
   "name": "snapit",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Local QA tool — Lightshot-style screenshots, recording, and live session analysis",
   "main": "./out/main/index.js",
-  "author": "JRNI QA",
-  "license": "UNLICENSED",
+  "author": "Karan Trehan",
+  "license": "MIT",
   "private": true,
   "scripts": {
     "dev": "electron-vite dev",
@@ -15,7 +15,10 @@
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "icon": "electron tools/make-icon.cjs"
+    "icon": "electron tools/make-icon.cjs",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:linux": "npm run build && electron-builder --linux"
   },
   "dependencies": {
     "konva": "^10.3.0",
@@ -29,6 +32,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.2.0",
     "electron": "^42.4.0",
+    "electron-builder": "^25.1.8",
     "electron-vite": "^5.0.0",
     "prettier": "^3.8.4",
     "typescript": "^6.0.3",
