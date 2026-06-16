@@ -16,9 +16,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "icon": "electron tools/make-icon.cjs",
-    "dist:mac": "npm run build && electron-builder --mac",
-    "dist:win": "npm run build && electron-builder --win",
-    "dist:linux": "npm run build && electron-builder --linux"
+    "dist:mac": "npm run build && electron-builder --mac --publish never",
+    "dist:win": "npm run build && electron-builder --win --publish never",
+    "dist:linux": "npm run build && electron-builder --linux --publish never"
   },
   "dependencies": {
     "konva": "^10.3.0",
