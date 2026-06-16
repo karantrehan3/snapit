@@ -132,6 +132,16 @@ npm run dist:linux   # → dist/snapit-<version>-linux-<arch>.AppImage
 Packaging is handled by [`electron-builder`](https://www.electron.build/) via
 [`electron-builder.yml`](electron-builder.yml). Each target is best built on its own OS.
 
+### Releases
+
+Pushing a version tag builds all three installers on their native runners and attaches them to the
+matching GitHub Release ([`.github/workflows/release.yml`](.github/workflows/release.yml)):
+
+```bash
+git tag v1.0.0
+git push --tags
+```
+
 ## Tech stack
 
 Electron 42 · TypeScript · electron-vite · React 19 · Konva 10. The renderer is **feature-based**
