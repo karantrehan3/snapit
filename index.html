@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Snap It — local QA screenshots &amp; recording</title>
+    <meta
+      name="description"
+      content="Snap It is a local-only screenshot and screen-recording tool for QA — Lightshot-style capture, on-image annotation, and one-key recording, from the menu bar."
+    />
+    <link rel="icon" href="build/icon.png" />
+    <meta property="og:title" content="Snap It" />
+    <meta
+      property="og:description"
+      content="A local-only screenshot & screen-recording tool for QA, in your menu bar."
+    />
+    <meta property="og:image" content="build/icon.png" />
+    <style>
+      :root {
+        --bg: #0f0f10;
+        --surface: #1a1a1c;
+        --surface-2: #232326;
+        --line: #2c2c30;
+        --text: #f5f5f7;
+        --muted: #9a9aa1;
+        --accent: #ff3b30;
+        --radius: 18px;
+        --space: clamp(4rem, 3rem + 5vw, 8rem);
+        --ease: cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+      }
+      a {
+        color: inherit;
+      }
+      .wrap {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 0 1.5rem;
+      }
+
+      /* Hero */
+      .hero {
+        position: relative;
+        text-align: center;
+        padding: clamp(4rem, 3rem + 6vw, 7rem) 0 var(--space);
+        overflow: hidden;
+      }
+      .hero::before {
+        content: '';
+        position: absolute;
+        inset: -40% 0 auto 0;
+        height: 520px;
+        background: radial-gradient(60% 60% at 50% 0%, rgba(255, 59, 48, 0.18), transparent 70%);
+        pointer-events: none;
+      }
+      .logo {
+        width: 132px;
+        height: 132px;
+        border-radius: 30px;
+        filter: drop-shadow(0 18px 40px rgba(0, 0, 0, 0.55));
+      }
+      h1 {
+        font-size: clamp(2.8rem, 1.5rem + 5vw, 5rem);
+        letter-spacing: -0.03em;
+        margin: 1.4rem 0 0.4rem;
+        font-weight: 800;
+      }
+      .tagline {
+        color: var(--muted);
+        font-size: clamp(1.05rem, 0.95rem + 0.6vw, 1.4rem);
+        max-width: 36ch;
+        margin: 0 auto;
+      }
+      .cta {
+        display: flex;
+        gap: 0.8rem;
+        justify-content: center;
+        flex-wrap: wrap;
+        margin-top: 2.2rem;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.85rem 1.6rem;
+        border-radius: 999px;
+        font-weight: 600;
+        text-decoration: none;
+        transition:
+          transform 0.2s var(--ease),
+          background 0.2s var(--ease),
+          border-color 0.2s var(--ease);
+        border: 1px solid transparent;
+      }
+      .btn:hover {
+        transform: translateY(-2px);
+      }
+      .btn-primary {
+        background: var(--accent);
+        color: #fff;
+      }
+      .btn-primary:hover {
+        background: #ff5247;
+      }
+      .btn-ghost {
+        border-color: var(--line);
+        color: var(--text);
+        background: var(--surface);
+      }
+      .btn-ghost:hover {
+        border-color: #444;
+      }
+      .platforms {
+        margin-top: 1.4rem;
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+      .platforms strong {
+        color: var(--text);
+      }
+      .tag-exp {
+        color: var(--accent);
+        font-weight: 600;
+      }
+
+      /* Sections */
+      section {
+        padding: var(--space) 0;
+        border-top: 1px solid var(--line);
+      }
+      h2 {
+        font-size: clamp(1.6rem, 1.2rem + 1.5vw, 2.4rem);
+        letter-spacing: -0.02em;
+        margin: 0 0 2.2rem;
+      }
+      .grid {
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 1.5rem;
+        transition:
+          transform 0.25s var(--ease),
+          border-color 0.25s var(--ease);
+      }
+      .card:hover {
+        transform: translateY(-4px);
+        border-color: #3a3a40;
+      }
+      .card h3 {
+        margin: 0 0 0.5rem;
+        font-size: 1.15rem;
+      }
+      .card p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.96rem;
+      }
+      .ico {
+        font-size: 1.5rem;
+        margin-bottom: 0.7rem;
+        display: block;
+      }
+
+      /* macOS note */
+      .note {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-left: 3px solid var(--accent);
+        border-radius: var(--radius);
+        padding: 1.4rem 1.6rem;
+      }
+      .note p {
+        margin: 0 0 0.8rem;
+        color: var(--muted);
+      }
+      code,
+      pre {
+        font-family: 'SF Mono', ui-monospace, 'Cascadia Code', Menlo, monospace;
+      }
+      pre {
+        background: var(--surface-2);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 0.9rem 1.1rem;
+        overflow-x: auto;
+        margin: 0;
+        font-size: 0.9rem;
+        color: var(--text);
+      }
+
+      footer {
+        text-align: center;
+        color: var(--muted);
+        padding: 3rem 0;
+        border-top: 1px solid var(--line);
+        font-size: 0.9rem;
+      }
+      footer a {
+        color: var(--text);
+        text-decoration: none;
+        border-bottom: 1px solid var(--line);
+      }
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          transition: none !important;
+          scroll-behavior: auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="hero">
+      <div class="wrap">
+        <img class="logo" src="build/icon.png" alt="Snap It app icon" width="132" height="132" />
+        <h1>Snap It</h1>
+        <p class="tagline">
+          A local-only screenshot &amp; screen-recording tool for QA — capture, annotate, and record straight
+          from your menu bar.
+        </p>
+        <div class="cta">
+          <a class="btn btn-primary" href="https://github.com/karantrehan3/snapit/releases/latest"
+            >Download</a
+          >
+          <a class="btn btn-ghost" href="https://github.com/karantrehan3/snapit">View on GitHub</a>
+        </div>
+        <p class="platforms">
+          <strong>macOS</strong> · Windows &amp; Linux <span class="tag-exp">(experimental)</span>
+        </p>
+      </div>
+    </header>
+
+    <main>
+      <section id="features">
+        <div class="wrap">
+          <h2>What it does</h2>
+          <div class="grid">
+            <div class="card">
+              <span class="ico">✂️</span>
+              <h3>Capture &amp; annotate</h3>
+              <p>
+                Lightshot-style region capture at native resolution, with shapes, arrows, pen, color, and full
+                undo / redo.
+              </p>
+            </div>
+            <div class="card">
+              <span class="ico">⏺️</span>
+              <h3>Record the screen</h3>
+              <p>
+                One-key recording to native MP4 — full screen or a region, 30/60 fps, with system and mic
+                audio.
+              </p>
+            </div>
+            <div class="card">
+              <span class="ico">🔒</span>
+              <h3>Local-only</h3>
+              <p>
+                Everything stays on your machine. No accounts, no uploads, no telemetry — captures go to your
+                clipboard or a folder you pick.
+              </p>
+            </div>
+            <div class="card">
+              <span class="ico">⌨️</span>
+              <h3>Menu-bar &amp; hotkeys</h3>
+              <p>
+                Lives in the menu bar with configurable global hotkeys — screenshot (⌘⇧9) and record (⌘⇧8).
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="install">
+        <div class="wrap">
+          <h2>Installing on macOS</h2>
+          <div class="note">
+            <p>
+              Snap It is signed but not notarized (that needs a paid Apple Developer account), so the first
+              launch is blocked with <em>“could not verify… malware.”</em> The app is safe — open it once
+              with:
+            </p>
+            <pre>xattr -dr com.apple.quarantine /Applications/snapit.app</pre>
+            <p style="margin-top: 0.8rem">
+              …then launch normally. Or:
+              <strong>System Settings → Privacy &amp; Security → Open Anyway</strong>. Windows &amp; Linux
+              builds are experimental and unverified on real hardware.
+            </p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="wrap">
+        <p>
+          Built with Electron, TypeScript, React &amp; Konva ·
+          <a href="https://github.com/karantrehan3/snapit">GitHub</a> ·
+          <a href="https://github.com/karantrehan3/snapit/blob/master/LICENSE">MIT</a>
+        </p>
+        <p>© 2026 Karan Trehan</p>
+      </div>
+    </footer>
+  </body>
+</html>

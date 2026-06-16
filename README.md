@@ -2,7 +2,7 @@
   <img src="build/icon.png" alt="snapit" width="128" height="128" />
 </p>
 
-<h1 align="center">snapit</h1>
+<h1 align="center">Snap It</h1>
 
 <p align="center">
   A fast, local-only screenshot &amp; screen-recording tool for QA — Lightshot-style capture,
