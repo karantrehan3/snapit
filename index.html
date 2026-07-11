@@ -1247,6 +1247,14 @@
 
     <script>
       (function () {
+        /* ── Configurable timing (ms) ── */
+        var DEMO_INITIAL_DELAY = 500;   // pause before first shape appears
+        var SHAPE_INTERVAL     = 900;   // delay between annotation shapes
+        var TOAST_DISPLAY      = 1400;  // how long the "Copied to clipboard" toast shows
+        var TOAST_FADE_PAUSE   = 400;   // pause after toast hides before clearing demo
+        var DEMO_RESTART_DELAY = 600;   // delay before restarting the demo cycle
+        var COPY_FEEDBACK      = 1500;  // "Copied!" button feedback duration
+
         /* ── Theme toggle ── */
         var toggleBtn = document.getElementById('themeToggle');
         var root = document.documentElement;
@@ -1325,9 +1333,9 @@
                 if (toast) toast.classList.remove('visible');
                 setTimeout(function () {
                   clearDemo();
-                  setTimeout(runDemo, 600);
-                }, 400);
-              }, 1400);
+                  setTimeout(runDemo, DEMO_RESTART_DELAY);
+                }, TOAST_FADE_PAUSE);
+              }, TOAST_DISPLAY);
               return;
             }
 
@@ -1344,10 +1352,10 @@
             if (shapeEl) shapeEl.classList.add('visible');
 
             idx++;
-            setTimeout(nextShape, 900);
+            setTimeout(nextShape, SHAPE_INTERVAL);
           }
 
-          setTimeout(nextShape, 500);
+          setTimeout(nextShape, DEMO_INITIAL_DELAY);
         }
 
         if (reduceMotion) {
@@ -1398,7 +1406,7 @@
               setTimeout(function () {
                 btn.textContent = 'Copy';
                 btn.classList.remove('copied');
-              }, 1500);
+              }, COPY_FEEDBACK);
             });
           });
         });
