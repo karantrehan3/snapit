@@ -136,7 +136,7 @@
         display: inline-flex;
         align-items: center;
         gap: 0.35rem;
-        padding: .5rem .6rem;
+        padding: .5rem .9rem;
         border-radius: 999px;
         font-size: 0.85rem;
         font-weight: 600;
@@ -154,6 +154,7 @@
         transform: translateY(-2px);
         border-color: var(--accent);
       }
+      .nav-label { }
       .has-nav .hero { padding-top: clamp(5rem, 3.5rem + 5vw, 7.5rem); }
 
       /* ── Hero ── */
@@ -819,6 +820,8 @@
 
       /* ── Responsive ── */
       @media (max-width: 860px) {
+        .nav-label { display: none; }
+        .nav-btn { padding: .5rem .6rem; }
         .hero-inner {
           grid-template-columns: 1fr;
           text-align: center;
@@ -887,8 +890,8 @@
 
     <!-- Portfolio nav -->
     <nav class="nav-home" id="navHome" hidden aria-label="Back to portfolio">
-      <a class="nav-btn" id="navBack" href="https://karantrehan3.github.io/" rel="noopener" aria-label="Back">&#8592;</a>
-      <a class="nav-btn" href="https://karantrehan3.github.io/" rel="noopener" aria-label="Home">&#8962;</a>
+      <a class="nav-btn" id="navBack" href="https://karantrehan3.github.io/" rel="noopener" aria-label="Back">&#8592; <span class="nav-label">Back</span></a>
+      <a class="nav-btn" href="https://karantrehan3.github.io/" rel="noopener" aria-label="Home">&#8962; <span class="nav-label">Home</span></a>
     </nav>
 
     <!-- Hero -->
