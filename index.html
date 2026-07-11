@@ -3,210 +3,120 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Snap It — local QA screenshots &amp; recording</title>
-    <meta
-      name="description"
-      content="Snap It is a local-only screenshot and screen-recording tool for QA — Lightshot-style capture, on-image annotation, and one-key recording, from the menu bar."
-    />
+    <title>Snap It — local-only screenshot &amp; screen recording</title>
+    <meta name="description" content="A local-only screenshot and screen-recording desktop app. Capture, annotate, and record straight from your menu bar. No uploads, no telemetry." />
     <link rel="icon" href="build/icon.png" />
     <meta property="og:title" content="Snap It" />
-    <meta
-      property="og:description"
-      content="A local-only screenshot & screen-recording tool for QA, in your menu bar."
-    />
+    <meta property="og:description" content="Local-only screenshot & screen recording from your menu bar. Capture, annotate, record — nothing leaves your machine." />
     <meta property="og:image" content="build/icon.png" />
+    <meta property="og:type" content="website" />
     <style>
+      /* ── Tokens (dark default) ── */
       :root {
-        --bg: #0f0f10;
-        --surface: #1a1a1c;
-        --surface-2: #232326;
-        --line: #2c2c30;
+        --bg: #0d0d0f;
+        --surface: #1a1a1e;
+        --surface-raised: #222226;
+        --border: #2c2c32;
+        --border-hover: #3e3e46;
         --text: #f5f5f7;
-        --muted: #9a9aa1;
-        --accent: #ff3b30;
-        --radius: 18px;
-        --space: clamp(4rem, 3rem + 5vw, 8rem);
+        --text-secondary: #8e8e93;
+        --accent: #ff453a;
+        --accent-hover: #ff6961;
+        --accent-subtle: rgba(255, 69, 58, 0.08);
+        --accent-glow: rgba(255, 69, 58, 0.15);
+        --rec-green: #30d158;
+        --rec-green-subtle: rgba(48, 209, 88, 0.1);
+        --terminal-bg: #111113;
+        --radius: 14px;
+        --radius-sm: 8px;
+        --space: clamp(4rem, 3rem + 5vw, 7rem);
         --ease: cubic-bezier(0.16, 1, 0.3, 1);
+        --mono: 'SF Mono', 'Cascadia Code', 'JetBrains Mono', ui-monospace, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
       }
-      * {
+
+      @media (prefers-color-scheme: light) {
+        :root {
+          --bg: #f5f5f7;
+          --surface: #ffffff;
+          --surface-raised: #f0f0f2;
+          --border: #d2d2d7;
+          --border-hover: #a1a1a6;
+          --text: #1d1d1f;
+          --text-secondary: #6e6e73;
+          --accent: #d70015;
+          --accent-hover: #bf0013;
+          --accent-subtle: rgba(215, 0, 21, 0.06);
+          --accent-glow: rgba(215, 0, 21, 0.1);
+          --rec-green: #248a3d;
+          --rec-green-subtle: rgba(36, 138, 61, 0.08);
+          --terminal-bg: #24262a;
+        }
+      }
+      :root[data-theme='dark'] {
+        --bg: #0d0d0f;
+        --surface: #1a1a1e;
+        --surface-raised: #222226;
+        --border: #2c2c32;
+        --border-hover: #3e3e46;
+        --text: #f5f5f7;
+        --text-secondary: #8e8e93;
+        --accent: #ff453a;
+        --accent-hover: #ff6961;
+        --accent-subtle: rgba(255, 69, 58, 0.08);
+        --accent-glow: rgba(255, 69, 58, 0.15);
+        --rec-green: #30d158;
+        --rec-green-subtle: rgba(48, 209, 88, 0.1);
+        --terminal-bg: #111113;
+      }
+      :root[data-theme='light'] {
+        --bg: #f5f5f7;
+        --surface: #ffffff;
+        --surface-raised: #f0f0f2;
+        --border: #d2d2d7;
+        --border-hover: #a1a1a6;
+        --text: #1d1d1f;
+        --text-secondary: #6e6e73;
+        --accent: #d70015;
+        --accent-hover: #bf0013;
+        --accent-subtle: rgba(215, 0, 21, 0.06);
+        --accent-glow: rgba(215, 0, 21, 0.1);
+        --rec-green: #248a3d;
+        --rec-green-subtle: rgba(36, 138, 61, 0.08);
+        --terminal-bg: #24262a;
+      }
+
+      /* ── Reset & base ── */
+      *,
+      *::before,
+      *::after {
         box-sizing: border-box;
       }
       html {
         scroll-behavior: smooth;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
       }
       body {
         margin: 0;
         background: var(--bg);
         color: var(--text);
-        font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+        font-family: var(--sans);
         line-height: 1.6;
-        -webkit-font-smoothing: antialiased;
       }
       a {
         color: inherit;
       }
+      img {
+        max-width: 100%;
+      }
       .wrap {
-        max-width: 1080px;
+        max-width: 1160px;
         margin: 0 auto;
         padding: 0 1.5rem;
       }
 
-      /* Hero */
-      .hero {
-        position: relative;
-        text-align: center;
-        padding: clamp(4rem, 3rem + 6vw, 7rem) 0 var(--space);
-        overflow: hidden;
-      }
-      .hero::before {
-        content: '';
-        position: absolute;
-        inset: -40% 0 auto 0;
-        height: 520px;
-        background: radial-gradient(60% 60% at 50% 0%, rgba(255, 59, 48, 0.18), transparent 70%);
-        pointer-events: none;
-      }
-      .logo {
-        width: 132px;
-        height: 132px;
-        border-radius: 30px;
-        filter: drop-shadow(0 18px 40px rgba(0, 0, 0, 0.55));
-      }
-      h1 {
-        font-size: clamp(2.8rem, 1.5rem + 5vw, 5rem);
-        letter-spacing: -0.03em;
-        margin: 1.4rem 0 0.4rem;
-        font-weight: 800;
-      }
-      .tagline {
-        color: var(--muted);
-        font-size: clamp(1.05rem, 0.95rem + 0.6vw, 1.4rem);
-        max-width: 36ch;
-        margin: 0 auto;
-      }
-      .cta {
-        display: flex;
-        gap: 0.8rem;
-        justify-content: center;
-        flex-wrap: wrap;
-        margin-top: 2.2rem;
-      }
-      .btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-        padding: 0.85rem 1.6rem;
-        border-radius: 999px;
-        font-weight: 600;
-        text-decoration: none;
-        transition:
-          transform 0.2s var(--ease),
-          background 0.2s var(--ease),
-          border-color 0.2s var(--ease);
-        border: 1px solid transparent;
-      }
-      .btn:hover {
-        transform: translateY(-2px);
-      }
-      .btn-primary {
-        background: var(--accent);
-        color: #fff;
-      }
-      .btn-primary:hover {
-        background: #ff5247;
-      }
-      .btn-ghost {
-        border-color: var(--line);
-        color: var(--text);
-        background: var(--surface);
-      }
-      .btn-ghost:hover {
-        border-color: #444;
-      }
-      .platforms {
-        margin-top: 1.4rem;
-        color: var(--muted);
-        font-size: 0.9rem;
-      }
-      .platforms strong {
-        color: var(--text);
-      }
-      .tag-exp {
-        color: var(--accent);
-        font-weight: 600;
-      }
-
-      /* Sections */
-      section {
-        padding: var(--space) 0;
-        border-top: 1px solid var(--line);
-      }
-      h2 {
-        font-size: clamp(1.6rem, 1.2rem + 1.5vw, 2.4rem);
-        letter-spacing: -0.02em;
-        margin: 0 0 2.2rem;
-      }
-      .grid {
-        display: grid;
-        gap: 1rem;
-        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      }
-      .card {
-        background: var(--surface);
-        border: 1px solid var(--line);
-        border-radius: var(--radius);
-        padding: 1.5rem;
-        transition:
-          transform 0.25s var(--ease),
-          border-color 0.25s var(--ease);
-      }
-      .card:hover {
-        transform: translateY(-4px);
-        border-color: #3a3a40;
-      }
-      .card h3 {
-        margin: 0 0 0.5rem;
-        font-size: 1.15rem;
-      }
-      .card p {
-        margin: 0;
-        color: var(--muted);
-        font-size: 0.96rem;
-      }
-      .ico {
-        font-size: 1.5rem;
-        margin-bottom: 0.7rem;
-        display: block;
-      }
-
-      /* macOS note */
-      .note {
-        background: var(--surface);
-        border: 1px solid var(--line);
-        border-left: 3px solid var(--accent);
-        border-radius: var(--radius);
-        padding: 1.4rem 1.6rem;
-      }
-      .note p {
-        margin: 0 0 0.8rem;
-        color: var(--muted);
-      }
-      code,
-      pre {
-        font-family: 'SF Mono', ui-monospace, 'Cascadia Code', Menlo, monospace;
-      }
-      pre {
-        background: var(--surface-2);
-        border: 1px solid var(--line);
-        border-radius: 12px;
-        padding: 0.9rem 1.1rem;
-        overflow-x: auto;
-        margin: 0;
-        font-size: 0.9rem;
-        color: var(--text);
-      }
-
-      /* Portfolio nav */
+      /* ── Portfolio nav ── */
       .nav-home {
         position: fixed;
         top: 1rem;
@@ -223,125 +133,1012 @@
         border-radius: 999px;
         font-size: 0.85rem;
         font-weight: 600;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+        font-family: var(--sans);
         text-decoration: none;
         color: var(--text);
-        background: var(--surface);
         background: color-mix(in srgb, var(--surface) 82%, transparent);
-        border: 1px solid var(--line);
-        -webkit-backdrop-filter: blur(8px);
+        border: 1px solid var(--border);
         backdrop-filter: blur(8px);
-        transition:
-          transform 0.2s var(--ease),
-          border-color 0.2s var(--ease),
-          background 0.2s var(--ease);
+        -webkit-backdrop-filter: blur(8px);
+        transition: transform 0.2s var(--ease), border-color 0.2s var(--ease);
       }
       .nav-btn:hover {
         transform: translateY(-2px);
         border-color: var(--accent);
       }
 
+      /* ── Hero ── */
+      .hero {
+        position: relative;
+        padding: clamp(3.5rem, 2rem + 5vw, 6rem) 0 var(--space);
+        overflow: hidden;
+      }
+      .hero::before {
+        content: '';
+        position: absolute;
+        top: -260px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 900px;
+        height: 520px;
+        background: radial-gradient(50% 50% at 50% 50%, var(--accent-glow), transparent 70%);
+        pointer-events: none;
+      }
+      .hero-inner {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 3rem;
+        align-items: center;
+      }
+      .hero-text {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+      }
+      .hero-logo {
+        width: 80px;
+        height: 80px;
+        border-radius: 18px;
+        filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.4));
+        margin-bottom: 1.2rem;
+      }
+      .hero-text h1 {
+        font-size: clamp(2.4rem, 1rem + 4.5vw, 3.8rem);
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        line-height: 1.08;
+        margin: 0;
+        text-wrap: balance;
+      }
+      .hero-text .tagline {
+        color: var(--text-secondary);
+        font-size: clamp(1rem, 0.9rem + 0.5vw, 1.2rem);
+        margin: 1rem 0 0;
+        max-width: 38ch;
+        text-wrap: pretty;
+      }
+      .hero-actions {
+        display: flex;
+        gap: 0.7rem;
+        flex-wrap: wrap;
+        margin-top: 1.8rem;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        padding: 0.75rem 1.4rem;
+        border-radius: 10px;
+        font-weight: 600;
+        font-size: 0.92rem;
+        text-decoration: none;
+        border: 1px solid transparent;
+        cursor: pointer;
+        transition: transform 0.15s var(--ease), background 0.15s var(--ease), border-color 0.15s var(--ease),
+          box-shadow 0.15s var(--ease);
+      }
+      .btn:hover {
+        transform: translateY(-1px);
+      }
+      .btn:active {
+        transform: scale(0.97);
+      }
+      .btn-primary {
+        background: var(--accent);
+        color: #fff;
+      }
+      .btn-primary:hover {
+        background: var(--accent-hover);
+        box-shadow: 0 4px 20px var(--accent-glow);
+      }
+      .btn-ghost {
+        border-color: var(--border);
+        color: var(--text);
+        background: var(--surface);
+      }
+      .btn-ghost:hover {
+        border-color: var(--border-hover);
+      }
+      .hero-stack {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        margin-top: 1.2rem;
+        color: var(--text-secondary);
+        font-size: 0.82rem;
+      }
+      .hero-stack span {
+        padding: 0.2rem 0.6rem;
+        border-radius: 6px;
+        background: var(--accent-subtle);
+        color: var(--accent);
+        font-weight: 500;
+        font-size: 0.78rem;
+        letter-spacing: 0.01em;
+      }
+      .hero-platforms {
+        margin-top: 0.8rem;
+        font-size: 0.82rem;
+        color: var(--text-secondary);
+      }
+      .hero-platforms strong {
+        color: var(--text);
+      }
+      .tag-exp {
+        color: var(--accent);
+        font-weight: 600;
+      }
+
+      /* ── Capture demo ── */
+      .capture-demo {
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid var(--border);
+        box-shadow: 0 8px 40px rgba(0, 0, 0, 0.3), 0 0 0 1px var(--accent-subtle);
+      }
+      .demo-bar {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0.6rem 0.9rem;
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+      }
+      .demo-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+      }
+      .demo-dot--r {
+        background: #ff5f57;
+      }
+      .demo-dot--y {
+        background: #febc2e;
+      }
+      .demo-dot--g {
+        background: #28c840;
+      }
+      .demo-title {
+        flex: 1;
+        text-align: center;
+        font-size: 0.72rem;
+        font-family: var(--mono);
+        color: var(--text-secondary);
+        letter-spacing: 0.02em;
+      }
+      .demo-canvas {
+        background: var(--terminal-bg);
+        position: relative;
+        padding: 0;
+        min-height: 260px;
+        overflow: hidden;
+      }
+      .demo-canvas-bg {
+        position: absolute;
+        inset: 0;
+        opacity: 0.06;
+        background: repeating-linear-gradient(0deg, transparent, transparent 31px, var(--text) 31px, var(--text) 32px),
+          repeating-linear-gradient(90deg, transparent, transparent 31px, var(--text) 31px, var(--text) 32px);
+      }
+      .demo-svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .demo-shape {
+        opacity: 0;
+        transition: opacity 0.4s var(--ease);
+      }
+      .demo-shape.visible {
+        opacity: 1;
+      }
+      .demo-selection {
+        stroke-dasharray: 6 4;
+        opacity: 0.4;
+      }
+      .demo-toolbar {
+        position: absolute;
+        bottom: 12px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        padding: 4px;
+        background: color-mix(in srgb, var(--surface) 90%, transparent);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+      }
+      .tool-btn {
+        width: 32px;
+        height: 32px;
+        border: none;
+        border-radius: 7px;
+        background: none;
+        color: var(--text-secondary);
+        cursor: default;
+        display: grid;
+        place-items: center;
+        transition: background 0.15s var(--ease), color 0.15s var(--ease);
+        pointer-events: none;
+      }
+      .tool-btn.active {
+        background: var(--accent);
+        color: #fff;
+      }
+      .tool-btn svg {
+        width: 16px;
+        height: 16px;
+      }
+      .tool-sep {
+        width: 1px;
+        height: 20px;
+        background: var(--border);
+        margin: 0 3px;
+      }
+      .tool-colors {
+        display: flex;
+        gap: 4px;
+        margin-left: 2px;
+      }
+      .color-swatch {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        border: 1.5px solid transparent;
+        transition: border-color 0.15s var(--ease);
+      }
+      .color-swatch.active {
+        border-color: var(--text);
+      }
+      .demo-toast {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%) scale(0.9);
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 0.6rem 1.2rem;
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: var(--rec-green);
+        opacity: 0;
+        transition: opacity 0.3s var(--ease), transform 0.3s var(--ease);
+        pointer-events: none;
+        white-space: nowrap;
+      }
+      .demo-toast.visible {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+      }
+
+      /* ── Sections ── */
+      section {
+        padding: var(--space) 0;
+        border-top: 1px solid var(--border);
+      }
+      .section-label {
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--accent);
+        margin: 0 0 0.6rem;
+      }
+      h2 {
+        font-size: clamp(1.5rem, 1.1rem + 1.5vw, 2.2rem);
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        margin: 0 0 2rem;
+        text-wrap: balance;
+      }
+
+      /* ── Tabs ── */
+      .tabs-bar {
+        display: flex;
+        gap: 0.25rem;
+        padding: 0.25rem;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        margin-bottom: 1.2rem;
+        width: fit-content;
+      }
+      .tab-btn {
+        padding: 0.55rem 1.2rem;
+        border-radius: 7px;
+        border: none;
+        background: none;
+        font-family: var(--sans);
+        font-size: 0.88rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        cursor: pointer;
+        transition: background 0.15s var(--ease), color 0.15s var(--ease);
+        min-height: 40px;
+      }
+      .tab-btn:hover {
+        color: var(--text);
+        background: var(--accent-subtle);
+      }
+      .tab-btn[aria-selected='true'] {
+        background: var(--accent);
+        color: #fff;
+      }
+      .tab-btn:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+      .tab-panel {
+        display: none;
+      }
+      .tab-panel.active {
+        display: block;
+      }
+
+      /* ── Feature cards ── */
+      .feat-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+      }
+      .feat-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 1.4rem;
+        transition: transform 0.2s var(--ease), border-color 0.25s var(--ease), box-shadow 0.25s var(--ease);
+      }
+      .feat-card:hover {
+        transform: translateY(-3px);
+        border-color: var(--border-hover);
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+      }
+      .feat-card h3 {
+        margin: 0 0 0.3rem;
+        font-size: 1.05rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      .feat-card h3 span {
+        font-size: 1.2rem;
+      }
+      .feat-desc {
+        color: var(--text-secondary);
+        font-size: 0.88rem;
+        margin: 0;
+        text-wrap: pretty;
+      }
+
+      /* ── Privacy banner ── */
+      .privacy-banner {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 1.2rem 1.5rem;
+        margin-top: 1.2rem;
+      }
+      .privacy-icon {
+        flex: 0 0 auto;
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        background: var(--accent-subtle);
+        display: grid;
+        place-items: center;
+        font-size: 1.3rem;
+      }
+      .privacy-banner p {
+        margin: 0;
+        color: var(--text-secondary);
+        font-size: 0.88rem;
+      }
+      .privacy-banner strong {
+        color: var(--text);
+      }
+
+      /* ── Keyboard shortcuts ── */
+      .shortcuts-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.8rem;
+      }
+      .shortcut-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 1.2rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.7rem;
+        transition: transform 0.2s var(--ease), border-color 0.25s var(--ease), box-shadow 0.25s var(--ease);
+        cursor: default;
+      }
+      .shortcut-card:hover {
+        transform: translateY(-2px);
+        border-color: var(--border-hover);
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+      }
+      .shortcut-card:hover .kbd {
+        transform: translateY(1px);
+        box-shadow: 0 1px 0 var(--border);
+      }
+      .shortcut-keys {
+        display: flex;
+        gap: 0.3rem;
+      }
+      .kbd {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 2rem;
+        height: 2rem;
+        padding: 0 0.5rem;
+        border-radius: var(--radius-sm);
+        background: var(--surface-raised);
+        border: 1px solid var(--border);
+        box-shadow: 0 2px 0 var(--border);
+        font-family: var(--sans);
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: var(--text);
+        transition: transform 0.15s var(--ease), box-shadow 0.15s var(--ease);
+      }
+      .shortcut-info strong {
+        display: block;
+        font-size: 0.92rem;
+        margin-bottom: 0.1rem;
+      }
+      .shortcut-info p {
+        margin: 0;
+        color: var(--text-secondary);
+        font-size: 0.82rem;
+      }
+
+      /* ── Install section ── */
+      .install-note {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-left: 3px solid var(--accent);
+        border-radius: var(--radius);
+        padding: 1.4rem 1.6rem;
+      }
+      .install-note p {
+        margin: 0 0 0.8rem;
+        color: var(--text-secondary);
+        font-size: 0.92rem;
+      }
+      .install-note p:last-child {
+        margin-bottom: 0;
+      }
+      .install-note em {
+        color: var(--text);
+      }
+
+      .code-block {
+        position: relative;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        overflow: hidden;
+        margin: 1rem 0;
+      }
+      .code-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.5rem 0.9rem;
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        font-size: 0.76rem;
+        color: var(--text-secondary);
+      }
+      .code-label {
+        font-family: var(--mono);
+        font-weight: 500;
+      }
+      .copy-btn {
+        padding: 0.3rem 0.7rem;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        background: var(--surface-raised);
+        font-family: var(--sans);
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        cursor: pointer;
+        transition: background 0.15s var(--ease), color 0.15s var(--ease), border-color 0.15s var(--ease);
+        min-height: 30px;
+      }
+      .copy-btn:hover {
+        border-color: var(--border-hover);
+        color: var(--text);
+      }
+      .copy-btn:active {
+        transform: scale(0.96);
+      }
+      .copy-btn.copied {
+        border-color: var(--rec-green);
+        color: var(--rec-green);
+      }
+      .code-block pre {
+        background: var(--terminal-bg);
+        margin: 0;
+        padding: 1rem 1.1rem;
+        font-family: var(--mono);
+        font-size: 0.84rem;
+        line-height: 1.7;
+        color: var(--text);
+        overflow-x: auto;
+        border: none;
+        border-radius: 0;
+      }
+
+      .alt-method {
+        margin-top: 1rem;
+        padding: 1rem 1.2rem;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        font-size: 0.88rem;
+        color: var(--text-secondary);
+      }
+      .alt-method strong {
+        color: var(--text);
+      }
+      .platform-note {
+        margin-top: 1rem;
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+      }
+      .platform-note strong {
+        color: var(--text);
+      }
+
+      /* ── Scroll reveal ── */
+      .reveal {
+        opacity: 0;
+        transform: translateY(20px);
+        transition: opacity 0.5s var(--ease), transform 0.5s var(--ease);
+      }
+      .reveal.visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      /* ── Footer ── */
       footer {
         text-align: center;
-        color: var(--muted);
-        padding: 3rem 0;
-        border-top: 1px solid var(--line);
-        font-size: 0.9rem;
+        color: var(--text-secondary);
+        padding: 2.5rem 0;
+        border-top: 1px solid var(--border);
+        font-size: 0.85rem;
       }
       footer a {
         color: var(--text);
         text-decoration: none;
-        border-bottom: 1px solid var(--line);
+        border-bottom: 1px solid var(--border);
       }
+      footer a:hover {
+        border-color: var(--accent);
+      }
+      footer p {
+        margin: 0.3rem 0;
+      }
+
+      /* ── Responsive ── */
+      @media (max-width: 860px) {
+        .hero-inner {
+          grid-template-columns: 1fr;
+          text-align: center;
+        }
+        .hero-text {
+          align-items: center;
+        }
+        .hero-text .tagline {
+          margin-left: auto;
+          margin-right: auto;
+        }
+        .hero-actions {
+          justify-content: center;
+        }
+        .hero-stack {
+          justify-content: center;
+        }
+        .feat-grid {
+          grid-template-columns: 1fr;
+        }
+        .shortcuts-grid {
+          grid-template-columns: 1fr;
+        }
+        .tabs-bar {
+          width: 100%;
+        }
+        .tab-btn {
+          flex: 1;
+          text-align: center;
+        }
+        .privacy-banner {
+          flex-direction: column;
+          text-align: center;
+        }
+      }
+
+      @media (max-width: 540px) {
+        .shortcuts-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
       @media (prefers-reduced-motion: reduce) {
-        * {
-          transition: none !important;
+        *,
+        *::before,
+        *::after {
+          animation-duration: 0s !important;
+          transition-duration: 0s !important;
+        }
+        html {
           scroll-behavior: auto;
+        }
+        .reveal {
+          opacity: 1;
+          transform: none;
+        }
+        .demo-shape {
+          opacity: 1 !important;
         }
       }
     </style>
   </head>
   <body>
+    <!-- Portfolio nav -->
     <nav class="nav-home" id="navHome" hidden aria-label="Back to portfolio">
-      <a class="nav-btn" id="navBack" href="https://karantrehan3.github.io/" rel="noopener">← Back</a>
-      <a class="nav-btn" href="https://karantrehan3.github.io/" rel="noopener">⌂ Home</a>
+      <a class="nav-btn" id="navBack" href="https://karantrehan3.github.io/" rel="noopener">&#8592; Back</a>
+      <a class="nav-btn" href="https://karantrehan3.github.io/" rel="noopener">&#8962; Home</a>
     </nav>
+
+    <!-- Hero -->
     <header class="hero">
       <div class="wrap">
-        <img class="logo" src="build/icon.png" alt="Snap It app icon" width="132" height="132" />
-        <h1>Snap It</h1>
-        <p class="tagline">
-          A local-only screenshot &amp; screen-recording tool for QA — capture, annotate, and record straight
-          from your menu bar.
-        </p>
-        <div class="cta">
-          <a class="btn btn-primary" href="https://github.com/karantrehan3/snapit/releases/latest"
-            >Download</a
-          >
-          <a class="btn btn-ghost" href="https://github.com/karantrehan3/snapit">View on GitHub</a>
+        <div class="hero-inner">
+          <div class="hero-text">
+            <img class="hero-logo" src="build/icon.png" alt="Snap It app icon" width="80" height="80" />
+            <h1>Snap It</h1>
+            <p class="tagline">
+              Capture, annotate, and record your screen — straight from the menu bar. Everything stays on your
+              machine.
+            </p>
+            <div class="hero-actions">
+              <a class="btn btn-primary" href="https://github.com/karantrehan3/snapit/releases/latest"
+                >Download</a
+              >
+              <a class="btn btn-ghost" href="https://github.com/karantrehan3/snapit">View on GitHub</a>
+            </div>
+            <div class="hero-stack">
+              <span>Electron</span> <span>TypeScript</span> <span>React</span> <span>Konva</span>
+            </div>
+            <p class="hero-platforms">
+              <strong>macOS</strong> &middot; Windows &amp; Linux <span class="tag-exp">(experimental)</span>
+            </p>
+          </div>
+          <div class="hero-demo" aria-hidden="true">
+            <div class="capture-demo">
+              <div class="demo-bar">
+                <span class="demo-dot demo-dot--r"></span>
+                <span class="demo-dot demo-dot--y"></span>
+                <span class="demo-dot demo-dot--g"></span>
+                <span class="demo-title">Snap It &mdash; Capture</span>
+              </div>
+              <div class="demo-canvas">
+                <div class="demo-canvas-bg"></div>
+                <svg
+                  class="demo-svg"
+                  viewBox="0 0 400 260"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <defs>
+                    <marker
+                      id="arrowhead"
+                      markerWidth="8"
+                      markerHeight="6"
+                      refX="8"
+                      refY="3"
+                      orient="auto"
+                    >
+                      <path d="M0,0 L8,3 L0,6" fill="var(--accent)" />
+                    </marker>
+                  </defs>
+                  <!-- Selection border -->
+                  <rect
+                    class="demo-selection"
+                    x="8"
+                    y="8"
+                    width="384"
+                    height="244"
+                    rx="4"
+                    stroke="var(--accent)"
+                    stroke-width="1.5"
+                  />
+                  <!-- Annotation shapes -->
+                  <rect
+                    class="demo-shape"
+                    id="demoRect"
+                    x="30"
+                    y="25"
+                    width="140"
+                    height="80"
+                    rx="4"
+                    stroke="var(--accent)"
+                    stroke-width="2.5"
+                  />
+                  <ellipse
+                    class="demo-shape"
+                    id="demoEllipse"
+                    cx="290"
+                    cy="60"
+                    rx="70"
+                    ry="42"
+                    stroke="var(--accent)"
+                    stroke-width="2.5"
+                  />
+                  <line
+                    class="demo-shape"
+                    id="demoArrow"
+                    x1="100"
+                    y1="145"
+                    x2="260"
+                    y2="190"
+                    stroke="var(--accent)"
+                    stroke-width="2.5"
+                    marker-end="url(#arrowhead)"
+                  />
+                  <path
+                    class="demo-shape"
+                    id="demoPen"
+                    d="M 40 200 Q 80 160 130 195 Q 180 230 230 185 Q 260 165 290 180"
+                    stroke="var(--accent)"
+                    stroke-width="2.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+                <!-- Toolbar -->
+                <div class="demo-toolbar">
+                  <button class="tool-btn" id="toolRect" aria-label="Rectangle tool" tabindex="-1">
+                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                      <rect x="2" y="3" width="12" height="10" rx="1.5" />
+                    </svg>
+                  </button>
+                  <button class="tool-btn" id="toolEllipse" aria-label="Ellipse tool" tabindex="-1">
+                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                      <ellipse cx="8" cy="8" rx="6" ry="5" />
+                    </svg>
+                  </button>
+                  <button class="tool-btn" id="toolArrow" aria-label="Arrow tool" tabindex="-1">
+                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                      <line x1="3" y1="13" x2="13" y2="3" />
+                      <polyline points="7,3 13,3 13,9" />
+                    </svg>
+                  </button>
+                  <button class="tool-btn" id="toolPen" aria-label="Pen tool" tabindex="-1">
+                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                      <path d="M3 12 Q6 5 9 9 Q12 13 14 6" />
+                    </svg>
+                  </button>
+                  <div class="tool-sep"></div>
+                  <div class="tool-colors">
+                    <span class="color-swatch active" style="background: #ff453a"></span>
+                    <span class="color-swatch" style="background: #ff9f0a"></span>
+                    <span class="color-swatch" style="background: #30d158"></span>
+                    <span class="color-swatch" style="background: #5e5ce6"></span>
+                  </div>
+                </div>
+                <div class="demo-toast" id="demoToast">&#10003; Copied to clipboard</div>
+              </div>
+            </div>
+          </div>
         </div>
-        <p class="platforms">
-          <strong>macOS</strong> · Windows &amp; Linux <span class="tag-exp">(experimental)</span>
-        </p>
       </div>
     </header>
 
     <main>
-      <section id="features">
+      <!-- Features -->
+      <section id="features" class="reveal">
         <div class="wrap">
-          <h2>What it does</h2>
-          <div class="grid">
-            <div class="card">
-              <span class="ico">✂️</span>
-              <h3>Capture &amp; annotate</h3>
-              <p>
-                Lightshot-style region capture at native resolution, with shapes, arrows, pen, color, and full
-                undo / redo.
-              </p>
+          <p class="section-label">Capabilities</p>
+          <h2>Two ways to capture, one keyboard away</h2>
+          <div class="tabs-bar" role="tablist" aria-label="Feature category">
+            <button class="tab-btn" role="tab" aria-selected="true" aria-controls="panel-screenshot" id="tab-screenshot">
+              Screenshot
+            </button>
+            <button class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-recording" id="tab-recording">
+              Recording
+            </button>
+          </div>
+
+          <div id="panel-screenshot" class="tab-panel active" role="tabpanel" aria-labelledby="tab-screenshot">
+            <div class="feat-grid">
+              <div class="feat-card">
+                <h3><span>&#9986;</span> Region capture</h3>
+                <p class="feat-desc">
+                  Freeze the entire screen, draw a selection box, and capture at native resolution. No window
+                  juggling.
+                </p>
+              </div>
+              <div class="feat-card">
+                <h3><span>&#9997;&#65039;</span> Annotation tools</h3>
+                <p class="feat-desc">
+                  Rectangle, ellipse, arrow, line, and freehand pen. Annotate directly on the frozen capture
+                  before saving.
+                </p>
+              </div>
+              <div class="feat-card">
+                <h3><span>&#127912;</span> Color presets</h3>
+                <p class="feat-desc">
+                  Quick-switch between color presets for your annotations. Visual clarity without digging through
+                  a color picker.
+                </p>
+              </div>
+              <div class="feat-card">
+                <h3><span>&#8634;</span> Undo &amp; redo</h3>
+                <p class="feat-desc">
+                  Full history stack so you can back out of any annotation. Iterate until the capture tells the
+                  story you need.
+                </p>
+              </div>
             </div>
-            <div class="card">
-              <span class="ico">⏺️</span>
-              <h3>Record the screen</h3>
-              <p>
-                One-key recording to native MP4 — full screen or a region, 30/60 fps, with system and mic
-                audio.
-              </p>
+          </div>
+
+          <div id="panel-recording" class="tab-panel" role="tabpanel" aria-labelledby="tab-recording">
+            <div class="feat-grid">
+              <div class="feat-card">
+                <h3><span>&#9210;</span> One-key recording</h3>
+                <p class="feat-desc">
+                  Hit the hotkey, pick your region or go full screen, and start recording immediately. No setup
+                  dialogs.
+                </p>
+              </div>
+              <div class="feat-card">
+                <h3><span>&#127916;</span> 30 or 60 fps</h3>
+                <p class="feat-desc">
+                  Choose between smooth 60 fps for detailed walkthroughs or lighter 30 fps for quick captures and
+                  smaller files.
+                </p>
+              </div>
+              <div class="feat-card">
+                <h3><span>&#127908;</span> System &amp; mic audio</h3>
+                <p class="feat-desc">
+                  Capture system audio, microphone input, or both. Record exactly what you hear and say in one
+                  take.
+                </p>
+              </div>
+              <div class="feat-card">
+                <h3><span>&#128190;</span> Native MP4</h3>
+                <p class="feat-desc">
+                  Records directly to MP4 with no post-processing or conversion step. Files are ready to share
+                  the moment you stop.
+                </p>
+              </div>
             </div>
-            <div class="card">
-              <span class="ico">🔒</span>
-              <h3>Local-only</h3>
-              <p>
-                Everything stays on your machine. No accounts, no uploads, no telemetry — captures go to your
-                clipboard or a folder you pick.
-              </p>
-            </div>
-            <div class="card">
-              <span class="ico">⌨️</span>
-              <h3>Menu-bar &amp; hotkeys</h3>
-              <p>
-                Lives in the menu bar with configurable global hotkeys — screenshot (⌘⇧9) and record (⌘⇧8).
-              </p>
-            </div>
+          </div>
+
+          <div class="privacy-banner">
+            <div class="privacy-icon">&#128274;</div>
+            <p>
+              <strong>Nothing leaves your machine.</strong> No accounts, no uploads, no telemetry. Captures go to
+              your clipboard or a folder you choose. Your screenshots are yours.
+            </p>
           </div>
         </div>
       </section>
 
-      <section id="install">
+      <!-- Keyboard shortcuts -->
+      <section id="shortcuts" class="reveal">
         <div class="wrap">
-          <h2>Installing on macOS</h2>
-          <div class="note">
+          <p class="section-label">Shortcuts</p>
+          <h2>Keyboard-first workflow</h2>
+          <div class="shortcuts-grid">
+            <div class="shortcut-card">
+              <div class="shortcut-keys">
+                <span class="kbd">&#8984;</span>
+                <span class="kbd">&#8679;</span>
+                <span class="kbd">9</span>
+              </div>
+              <div class="shortcut-info">
+                <strong>Screenshot</strong>
+                <p>Freeze screen and capture a region</p>
+              </div>
+            </div>
+            <div class="shortcut-card">
+              <div class="shortcut-keys">
+                <span class="kbd">&#8984;</span>
+                <span class="kbd">&#8679;</span>
+                <span class="kbd">8</span>
+              </div>
+              <div class="shortcut-info">
+                <strong>Screen recording</strong>
+                <p>Start or stop a screen recording</p>
+              </div>
+            </div>
+            <div class="shortcut-card">
+              <div class="shortcut-keys">
+                <span class="kbd">&#8984;</span>
+                <span class="kbd">Z</span>
+              </div>
+              <div class="shortcut-info">
+                <strong>Undo</strong>
+                <p>Undo the last annotation</p>
+              </div>
+            </div>
+            <div class="shortcut-card">
+              <div class="shortcut-keys">
+                <span class="kbd">&#8984;</span>
+                <span class="kbd">&#8679;</span>
+                <span class="kbd">Z</span>
+              </div>
+              <div class="shortcut-info">
+                <strong>Redo</strong>
+                <p>Redo the last undone annotation</p>
+              </div>
+            </div>
+            <div class="shortcut-card">
+              <div class="shortcut-keys">
+                <span class="kbd">Esc</span>
+              </div>
+              <div class="shortcut-info">
+                <strong>Cancel</strong>
+                <p>Cancel the current capture</p>
+              </div>
+            </div>
+            <div class="shortcut-card">
+              <div class="shortcut-keys">
+                <span class="kbd">&#9166;</span>
+              </div>
+              <div class="shortcut-info">
+                <strong>Confirm</strong>
+                <p>Confirm and save the capture</p>
+              </div>
+            </div>
+          </div>
+          <p style="margin-top: 1rem; color: var(--text-secondary); font-size: 0.85rem">
+            All global hotkeys are configurable from the menu bar preferences.
+          </p>
+        </div>
+      </section>
+
+      <!-- Install -->
+      <section id="install" class="reveal">
+        <div class="wrap">
+          <p class="section-label">Install</p>
+          <h2>Getting started on macOS</h2>
+          <div class="install-note">
             <p>
-              Snap It is signed but not notarized (that needs a paid Apple Developer account), so the first
-              launch is blocked with <em>“could not verify… malware.”</em> The app is safe — open it once
-              with:
-            </p>
-            <pre>xattr -dr com.apple.quarantine /Applications/snapit.app</pre>
-            <p style="margin-top: 0.8rem">
-              …then launch normally. Or:
-              <strong>System Settings → Privacy &amp; Security → Open Anyway</strong>. Windows &amp; Linux
-              builds are experimental and unverified on real hardware.
+              Snap It is signed but not notarized (that requires a paid Apple Developer account), so the first
+              launch is blocked with <em>&ldquo;could not verify &hellip; malware.&rdquo;</em> The app is safe
+              &mdash; clear the quarantine flag once:
             </p>
           </div>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-label">Terminal</span>
+              <button class="copy-btn" aria-label="Copy xattr command to clipboard">Copy</button>
+            </div>
+            <pre><code id="xattrCmd">xattr -dr com.apple.quarantine /Applications/snapit.app</code></pre>
+          </div>
+          <div class="alt-method">
+            <strong>Alternative:</strong> System Settings &#8594; Privacy &amp; Security &#8594; Open Anyway
+          </div>
+          <p class="platform-note">
+            <strong>macOS</strong> is the primary platform. Windows and Linux builds are included in releases but
+            are experimental and unverified on real hardware.
+          </p>
         </div>
       </section>
     </main>
@@ -349,26 +1146,162 @@
     <footer>
       <div class="wrap">
         <p>
-          Built with Electron, TypeScript, React &amp; Konva ·
-          <a href="https://github.com/karantrehan3/snapit">GitHub</a> ·
+          Built with Electron, TypeScript, React &amp; Konva &middot;
+          <a href="https://github.com/karantrehan3/snapit">GitHub</a> &middot;
           <a href="https://github.com/karantrehan3/snapit/blob/master/LICENSE">MIT</a>
         </p>
-        <p>© 2026 Karan Trehan</p>
+        <p>&copy; 2026 Karan Trehan</p>
       </div>
     </footer>
+
     <script>
       (function () {
-        if (new URLSearchParams(location.search).get('ref') !== 'portfolio') return;
-        var nav = document.getElementById('navHome');
-        if (nav) nav.removeAttribute('hidden');
-        var back = document.getElementById('navBack');
-        if (back)
-          back.addEventListener('click', function (e) {
-            if (document.referrer && history.length > 1) {
+        /* ── Portfolio nav ── */
+        if (new URLSearchParams(location.search).get('ref') === 'portfolio') {
+          var nav = document.getElementById('navHome');
+          if (nav) nav.removeAttribute('hidden');
+          var back = document.getElementById('navBack');
+          if (back)
+            back.addEventListener('click', function (e) {
+              if (document.referrer && history.length > 1) {
+                e.preventDefault();
+                history.back();
+              }
+            });
+        }
+
+        var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        /* ── Capture demo animation ── */
+        var shapes = [
+          { shape: 'demoRect', tool: 'toolRect' },
+          { shape: 'demoEllipse', tool: 'toolEllipse' },
+          { shape: 'demoArrow', tool: 'toolArrow' },
+          { shape: 'demoPen', tool: 'toolPen' },
+        ];
+        var toast = document.getElementById('demoToast');
+
+        function clearDemo() {
+          shapes.forEach(function (s) {
+            var el = document.getElementById(s.shape);
+            if (el) el.classList.remove('visible');
+            var btn = document.getElementById(s.tool);
+            if (btn) btn.classList.remove('active');
+          });
+          if (toast) toast.classList.remove('visible');
+        }
+
+        function runDemo() {
+          clearDemo();
+          var idx = 0;
+
+          function nextShape() {
+            if (idx >= shapes.length) {
+              // Show toast, then reset
+              if (toast) toast.classList.add('visible');
+              setTimeout(function () {
+                if (toast) toast.classList.remove('visible');
+                setTimeout(function () {
+                  clearDemo();
+                  setTimeout(runDemo, 600);
+                }, 400);
+              }, 1400);
+              return;
+            }
+
+            var current = shapes[idx];
+            // Deactivate previous tool
+            if (idx > 0) {
+              var prev = document.getElementById(shapes[idx - 1].tool);
+              if (prev) prev.classList.remove('active');
+            }
+            // Activate current tool and show shape
+            var toolEl = document.getElementById(current.tool);
+            var shapeEl = document.getElementById(current.shape);
+            if (toolEl) toolEl.classList.add('active');
+            if (shapeEl) shapeEl.classList.add('visible');
+
+            idx++;
+            setTimeout(nextShape, 900);
+          }
+
+          setTimeout(nextShape, 500);
+        }
+
+        if (reduceMotion) {
+          // Show all shapes at once
+          shapes.forEach(function (s) {
+            var el = document.getElementById(s.shape);
+            if (el) el.style.opacity = '1';
+          });
+        } else {
+          runDemo();
+        }
+
+        /* ── Tabs ── */
+        var tabs = document.querySelectorAll('.tab-btn');
+        tabs.forEach(function (tab) {
+          tab.addEventListener('click', function () {
+            tabs.forEach(function (t) {
+              t.setAttribute('aria-selected', 'false');
+              var panel = document.getElementById(t.getAttribute('aria-controls'));
+              if (panel) panel.classList.remove('active');
+            });
+            tab.setAttribute('aria-selected', 'true');
+            var activePanel = document.getElementById(tab.getAttribute('aria-controls'));
+            if (activePanel) activePanel.classList.add('active');
+          });
+          tab.addEventListener('keydown', function (e) {
+            var idx = Array.from(tabs).indexOf(tab);
+            var next = -1;
+            if (e.key === 'ArrowRight') next = (idx + 1) % tabs.length;
+            else if (e.key === 'ArrowLeft') next = (idx - 1 + tabs.length) % tabs.length;
+            if (next >= 0) {
               e.preventDefault();
-              history.back();
+              tabs[next].click();
+              tabs[next].focus();
             }
           });
+        });
+
+        /* ── Copy to clipboard ── */
+        document.querySelectorAll('.copy-btn').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var code = btn.closest('.code-block').querySelector('code');
+            if (!code) return;
+            var text = code.textContent;
+            navigator.clipboard.writeText(text).then(function () {
+              btn.textContent = 'Copied!';
+              btn.classList.add('copied');
+              setTimeout(function () {
+                btn.textContent = 'Copy';
+                btn.classList.remove('copied');
+              }, 1500);
+            });
+          });
+        });
+
+        /* ── Scroll reveal ── */
+        if (!reduceMotion && 'IntersectionObserver' in window) {
+          var obs = new IntersectionObserver(
+            function (entries) {
+              entries.forEach(function (e) {
+                if (e.isIntersecting) {
+                  e.target.classList.add('visible');
+                  obs.unobserve(e.target);
+                }
+              });
+            },
+            { threshold: 0.12 },
+          );
+          document.querySelectorAll('.reveal').forEach(function (el) {
+            obs.observe(el);
+          });
+        } else {
+          document.querySelectorAll('.reveal').forEach(function (el) {
+            el.classList.add('visible');
+          });
+        }
       })();
     </script>
   </body>
