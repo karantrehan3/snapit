@@ -136,7 +136,7 @@
         display: inline-flex;
         align-items: center;
         gap: 0.35rem;
-        padding: 0.55rem 1.1rem;
+        padding: .5rem .6rem;
         border-radius: 999px;
         font-size: 0.85rem;
         font-weight: 600;
@@ -154,6 +154,7 @@
         transform: translateY(-2px);
         border-color: var(--accent);
       }
+      .has-nav .hero { padding-top: clamp(5rem, 3.5rem + 5vw, 7.5rem); }
 
       /* ── Hero ── */
       .hero {
@@ -886,8 +887,8 @@
 
     <!-- Portfolio nav -->
     <nav class="nav-home" id="navHome" hidden aria-label="Back to portfolio">
-      <a class="nav-btn" id="navBack" href="https://karantrehan3.github.io/" rel="noopener">&#8592; Back</a>
-      <a class="nav-btn" href="https://karantrehan3.github.io/" rel="noopener">&#8962; Home</a>
+      <a class="nav-btn" id="navBack" href="https://karantrehan3.github.io/" rel="noopener" aria-label="Back">&#8592;</a>
+      <a class="nav-btn" href="https://karantrehan3.github.io/" rel="noopener" aria-label="Home">&#8962;</a>
     </nav>
 
     <!-- Hero -->
@@ -1277,6 +1278,7 @@
         if (new URLSearchParams(location.search).get('ref') === 'portfolio') {
           var nav = document.getElementById('navHome');
           if (nav) nav.removeAttribute('hidden');
+          document.body.classList.add('has-nav');
           var back = document.getElementById('navBack');
           if (back)
             back.addEventListener('click', function (e) {
