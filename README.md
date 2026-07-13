@@ -71,6 +71,8 @@ uploaded anywhere.
 - **Per-frame palettes** (each frame gets its own 256 colours → accurate screen colours, no banding)
   plus **inter-frame differencing** (unchanged pixels written transparent) to keep files small.
 - Encoded incrementally while recording, so memory stays bounded and playback is real-time.
+- The setup panel recommends **recording video instead** for Slack / GitHub / Jira — they autoplay
+  video, which is sharper and much smaller than a GIF; one click switches to the video recorder.
 
 **App**
 

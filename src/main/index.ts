@@ -388,6 +388,20 @@ app.whenReady().then(() => {
 
   ipcMain.on('overlay:close', closeOverlayWindow)
 
+  // From the GIF setup panel: switch to a video recording instead (a better share
+  // format for Slack/GitHub/Jira). Tear the GIF overlay down first, then start the
+  // record session only once it has fully closed so the new session isn't cleared
+  // by the outgoing window's 'closed' handler.
+  ipcMain.on('capture:switch-to-record', () => {
+    const win = overlayWindow
+    if (!win) {
+      void startCapture('record')
+      return
+    }
+    win.once('closed', () => void startCapture('record'))
+    closeOverlayWindow()
+  })
+
   ipcMain.handle('record:save', async (_event, data: ArrayBuffer, ext: string) => {
     if (!(data instanceof ArrayBuffer) || data.byteLength === 0) return null
     const safeExt = ext === 'mp4' ? 'mp4' : 'webm'

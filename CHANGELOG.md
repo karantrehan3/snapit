@@ -30,6 +30,8 @@ First public release — a local-only screenshot and screen-recording tool for Q
   the area's actual on-screen resolution and encoded to `.gif` on-device with `gifenc`.
 - Per-frame palettes (accurate screen colours, no banding) plus inter-frame differencing
   (transparency for unchanged pixels) keep mostly-static recordings small.
+- The GIF setup panel recommends recording video instead for Slack / GitHub / Jira (which autoplay
+  it — sharper and smaller); one click switches to the video recorder.
 
 ### App
 

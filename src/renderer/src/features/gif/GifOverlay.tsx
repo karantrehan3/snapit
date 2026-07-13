@@ -1,4 +1,11 @@
-import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactElement } from 'react'
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
+  type ReactElement
+} from 'react'
 import type { DisplaySource } from '@preload/index'
 import type { Mode, Pt, Rect } from '../record/types'
 import { SourcePicker } from '../record/SourcePicker'
@@ -13,6 +20,28 @@ const MAX_FPS = 60
 const FPS_PRESETS = [15, 30, 60]
 
 const clampFps = (n: number): number => Math.min(MAX_FPS, Math.max(MIN_FPS, Math.round(n)))
+
+const recommendBanner: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 6,
+  padding: '10px 12px',
+  borderRadius: 8,
+  background: 'rgba(10, 132, 255, 0.12)',
+  border: '1px solid rgba(10, 132, 255, 0.35)',
+  fontSize: 12,
+  lineHeight: 1.4
+}
+const recommendLink: CSSProperties = {
+  alignSelf: 'flex-start',
+  background: 'none',
+  border: 'none',
+  padding: 0,
+  color: '#0a84ff',
+  font: 'inherit',
+  fontWeight: 600,
+  cursor: 'pointer'
+}
 
 const normalize = (a: Pt, b: Pt): Rect => ({
   x: Math.min(a.x, b.x),
@@ -134,6 +163,16 @@ export function GifOverlay({ source }: { source: DisplaySource }): ReactElement 
             fps ({MIN_FPS}–{MAX_FPS})
           </span>
         </label>
+
+        <div style={recommendBanner}>
+          <span style={{ opacity: 0.85 }}>
+            💡 Sharing to Slack, GitHub or Jira? They autoplay video, which is sharper and much smaller than a
+            GIF.
+          </span>
+          <button type="button" onClick={() => window.snapit.recordVideoInstead()} style={recommendLink}>
+            Record video instead →
+          </button>
+        </div>
 
         {recorder.error && <div style={errorText}>{recorder.error}</div>}
 
