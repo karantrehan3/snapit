@@ -53,6 +53,9 @@ let settingsWindow: BrowserWindow | null = null
 let session: CaptureSession | null = null
 let recordWantsSystemAudio = false
 let recordSourceId: string | null = null
+// When set, the overlay's 'closed' handler starts this capture mode next — used to
+// switch GIF → video without racing the outgoing window's teardown.
+let pendingCaptureMode: CaptureMode | null = null
 
 // Locks the packaged renderer to its own bundle: no remote script, no eval, no
 // plugins, no framing. data:/blob: cover the frozen-frame dataURL, source-picker
@@ -118,6 +121,11 @@ function createOverlayWindow(display: Display): void {
   overlayWindow.on('closed', () => {
     overlayWindow = null
     session = null
+    if (pendingCaptureMode) {
+      const next = pendingCaptureMode
+      pendingCaptureMode = null
+      void startCapture(next)
+    }
   })
 
   loadRenderer(overlayWindow)
@@ -389,16 +397,15 @@ app.whenReady().then(() => {
   ipcMain.on('overlay:close', closeOverlayWindow)
 
   // From the GIF setup panel: switch to a video recording instead (a better share
-  // format for Slack/GitHub/Jira). Tear the GIF overlay down first, then start the
-  // record session only once it has fully closed so the new session isn't cleared
-  // by the outgoing window's 'closed' handler.
+  // format for Slack/GitHub/Jira). Flag the next mode, then close the GIF overlay —
+  // its 'closed' handler starts the record session after teardown, so the new
+  // session isn't cleared by the outgoing window.
   ipcMain.on('capture:switch-to-record', () => {
-    const win = overlayWindow
-    if (!win) {
+    if (!overlayWindow) {
       void startCapture('record')
       return
     }
-    win.once('closed', () => void startCapture('record'))
+    pendingCaptureMode = 'record'
     closeOverlayWindow()
   })
 
