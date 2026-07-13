@@ -24,15 +24,16 @@ import { TRAY_TEMPLATE_DATA_URL, TRAY_COLOUR_DATA_URL } from './trayIcon'
 /**
  * snapit shell.
  *
- * Background tray app with two capture modes behind configurable global hotkeys:
+ * Background tray app with three capture modes behind configurable global hotkeys:
  *   - screenshot: freeze the display, drag-select, annotate → copy / save.
  *   - record: full-screen or region screen recording (optional mic) → .webm.
+ *   - gif: full-screen or region screen recording, encoded client-side → .gif.
  *
  * Captures can be copied to the clipboard, saved to a default folder, or saved-as
  * via a dialog. Hotkeys and the save folder are editable in the settings window.
  */
 
-type CaptureMode = 'screenshot' | 'record'
+type CaptureMode = 'screenshot' | 'record' | 'gif'
 
 type Frame = {
   dataUrl: string
@@ -41,7 +42,10 @@ type Frame = {
   scaleFactor: number
 }
 
-type CaptureSession = { mode: 'screenshot'; frame: Frame } | { mode: 'record'; source: DisplaySource }
+type CaptureSession =
+  | { mode: 'screenshot'; frame: Frame }
+  | { mode: 'record'; source: DisplaySource }
+  | { mode: 'gif'; source: DisplaySource }
 
 let tray: Tray | null = null
 let overlayWindow: BrowserWindow | null = null
@@ -132,7 +136,7 @@ function openSettingsWindow(): void {
   }
   settingsWindow = new BrowserWindow({
     width: 480,
-    height: 360,
+    height: 430,
     resizable: false,
     title: 'snapit Settings',
     webPreferences: {
@@ -177,8 +181,8 @@ function ensureScreenPermission(): void {
 
 async function startCapture(mode: CaptureMode): Promise<void> {
   if (overlayWindow) {
-    // A second record hotkey press stops & saves; otherwise just dismiss.
-    if (session?.mode === 'record') overlayWindow.webContents.send('record:stop')
+    // A second record/gif hotkey press stops & saves; otherwise just dismiss.
+    if (session?.mode === 'record' || session?.mode === 'gif') overlayWindow.webContents.send('record:stop')
     else closeOverlayWindow()
     return
   }
@@ -205,11 +209,12 @@ async function startCapture(mode: CaptureMode): Promise<void> {
       return
     }
   } else {
+    // record and gif both capture a live display source; only the encoding differs.
     try {
-      session = { mode: 'record', source: await getDisplaySource(display) }
+      session = { mode, source: await getDisplaySource(display) }
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err)
-      console.error(`[snapit] record source failed: ${detail}`)
+      console.error(`[snapit] ${mode} source failed: ${detail}`)
       return
     }
   }
@@ -219,17 +224,20 @@ async function startCapture(mode: CaptureMode): Promise<void> {
 
 function registerHotkeys(): void {
   globalShortcut.unregisterAll()
-  const { screenshotHotkey, recordHotkey } = getSettings()
+  const { screenshotHotkey, recordHotkey, gifHotkey } = getSettings()
   if (!globalShortcut.register(screenshotHotkey, () => void startCapture('screenshot'))) {
     console.error(`[snapit] Failed to register screenshot hotkey: ${screenshotHotkey}`)
   }
   if (!globalShortcut.register(recordHotkey, () => void startCapture('record'))) {
     console.error(`[snapit] Failed to register record hotkey: ${recordHotkey}`)
   }
+  if (!globalShortcut.register(gifHotkey, () => void startCapture('gif'))) {
+    console.error(`[snapit] Failed to register gif hotkey: ${gifHotkey}`)
+  }
 }
 
 function buildTray(): void {
-  const { screenshotHotkey, recordHotkey } = getSettings()
+  const { screenshotHotkey, recordHotkey, gifHotkey } = getSettings()
   const menu = Menu.buildFromTemplate([
     // accelerator renders as native key symbols (⌘⇧9 on macOS, Ctrl+Shift+9 elsewhere);
     // registerAccelerator: false keeps it display-only — globalShortcut already fires it.
@@ -244,6 +252,12 @@ function buildTray(): void {
       accelerator: recordHotkey,
       registerAccelerator: false,
       click: () => void startCapture('record')
+    },
+    {
+      label: 'Record GIF',
+      accelerator: gifHotkey,
+      registerAccelerator: false,
+      click: () => void startCapture('gif')
     },
     { type: 'separator' },
     { label: 'Settings…', click: openSettingsWindow },
@@ -318,7 +332,9 @@ app.whenReady().then(() => {
       desktopCapturer
         .getSources({ types: ['screen', 'window'], thumbnailSize: { width: 0, height: 0 } })
         .then((sources) => {
-          const wanted = recordSourceId ?? (session?.mode === 'record' ? session.source.id : null)
+          const sessionSourceId =
+            session?.mode === 'record' || session?.mode === 'gif' ? session.source.id : null
+          const wanted = recordSourceId ?? sessionSourceId
           const source = sources.find((s) => s.id === wanted) ?? sources[0]
           // Loopback system audio relies on ScreenCaptureKit (macOS) / WASAPI (Windows);
           // Linux has no supported loopback, so omit it there rather than fail the stream.
@@ -378,6 +394,18 @@ app.whenReady().then(() => {
     const { saveDir } = getSettings()
     await mkdir(saveDir, { recursive: true })
     const filePath = join(saveDir, `snapit-${timestamp()}.${safeExt}`)
+    await writeFile(filePath, Buffer.from(data))
+    shell.showItemInFolder(filePath)
+    closeOverlayWindow()
+    return filePath
+  })
+
+  // Persist a client-side-encoded GIF (bytes from gifenc); closes the overlay.
+  ipcMain.handle('gif:save', async (_event, data: ArrayBuffer) => {
+    if (!(data instanceof ArrayBuffer) || data.byteLength === 0) return null
+    const { saveDir } = getSettings()
+    await mkdir(saveDir, { recursive: true })
+    const filePath = join(saveDir, `snapit-${timestamp()}.gif`)
     await writeFile(filePath, Buffer.from(data))
     shell.showItemInFolder(filePath)
     closeOverlayWindow()

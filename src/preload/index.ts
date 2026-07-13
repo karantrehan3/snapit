@@ -14,11 +14,15 @@ export type DisplaySource = { id: string; width: number; height: number }
 export type RecordSourceInfo = { id: string; name: string; type: 'screen' | 'window'; thumbnail: string }
 
 /** What the overlay renderer needs to know about the current capture session. */
-export type CaptureSession = { mode: 'screenshot'; frame: Frame } | { mode: 'record'; source: DisplaySource }
+export type CaptureSession =
+  | { mode: 'screenshot'; frame: Frame }
+  | { mode: 'record'; source: DisplaySource }
+  | { mode: 'gif'; source: DisplaySource }
 
 export type Settings = {
   screenshotHotkey: string
   recordHotkey: string
+  gifHotkey: string
   saveDir: string
 }
 
@@ -41,6 +45,8 @@ const api = {
   /** Persist a finished recording (bytes + container ext); closes the overlay. Returns the path. */
   saveRecording: (data: ArrayBuffer, ext: string): Promise<string> =>
     ipcRenderer.invoke('record:save', data, ext),
+  /** Persist a finished GIF (encoded bytes); closes the overlay. Returns the path. */
+  saveGif: (data: ArrayBuffer): Promise<string> => ipcRenderer.invoke('gif:save', data),
   /** Toggle overlay click-through while recording (the Stop pill stays interactive). */
   setMouseIgnore: (ignore: boolean): void => ipcRenderer.send('record:set-ignore-mouse', ignore),
   /** Subscribe to stop-recording requests (record hotkey pressed again). Returns an unsubscribe. */

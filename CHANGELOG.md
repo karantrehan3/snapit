@@ -23,10 +23,18 @@ First public release — a local-only screenshot and screen-recording tool for Q
 - Native `.mp4` (H.264/AAC) when supported, otherwise `.webm`.
 - A draggable Stop pill that's excluded from the recording itself, so captures stay clean.
 
+### GIF recording
+
+- Same source picker and region crop as video, but silent.
+- Frame rate — 15 / 30 / 60 presets or a custom value (5–60 fps, default 30); frames are captured at
+  the area's actual on-screen resolution and encoded to `.gif` on-device with `gifenc`.
+- Per-frame palettes (accurate screen colours, no banding) plus inter-frame differencing
+  (transparency for unchanged pixels) keep mostly-static recordings small.
+
 ### App
 
 - Background menu-bar / tray app (no dock icon) with a branded icon.
-- Configurable global hotkeys — screenshot (`⌘⇧9`) and record (`⌘⇧8`).
+- Configurable global hotkeys — screenshot (`⌘⇧9`), record (`⌘⇧8`), and GIF (`⌘⇧7`).
 - Settings window to edit hotkeys and the save folder, persisted across launches.
 - Capture overlays are content-protected, so they never bleed into a recording.
 

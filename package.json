@@ -21,6 +21,7 @@
     "dist:linux": "npm run build && electron-builder --linux --publish never"
   },
   "dependencies": {
+    "gifenc": "^1.0.3",
     "konva": "^10.3.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",

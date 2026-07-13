@@ -5,6 +5,7 @@ import { app } from 'electron'
 export type Settings = {
   screenshotHotkey: string
   recordHotkey: string
+  gifHotkey: string
   saveDir: string
 }
 
@@ -12,6 +13,7 @@ function defaults(): Settings {
   return {
     screenshotHotkey: 'CommandOrControl+Shift+9',
     recordHotkey: 'CommandOrControl+Shift+8',
+    gifHotkey: 'CommandOrControl+Shift+7',
     saveDir: join(app.getPath('pictures'), 'snapit')
   }
 }
@@ -28,6 +30,7 @@ function coerce(raw: unknown): Settings {
   return {
     screenshotHotkey: typeof o.screenshotHotkey === 'string' ? o.screenshotHotkey : d.screenshotHotkey,
     recordHotkey: typeof o.recordHotkey === 'string' ? o.recordHotkey : d.recordHotkey,
+    gifHotkey: typeof o.gifHotkey === 'string' ? o.gifHotkey : d.gifHotkey,
     saveDir: typeof o.saveDir === 'string' ? o.saveDir : d.saveDir
   }
 }
@@ -38,6 +41,7 @@ function sanitize(partial: Partial<Settings>): Partial<Settings> {
   const out: Partial<Settings> = {}
   if (typeof o.screenshotHotkey === 'string') out.screenshotHotkey = o.screenshotHotkey
   if (typeof o.recordHotkey === 'string') out.recordHotkey = o.recordHotkey
+  if (typeof o.gifHotkey === 'string') out.gifHotkey = o.gifHotkey
   if (typeof o.saveDir === 'string') out.saveDir = o.saveDir
   return out
 }

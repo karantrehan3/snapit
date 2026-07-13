@@ -36,6 +36,8 @@ behind global hotkeys:
   copy or save.
 - **Record** (`⌘⇧8`) — pick any screen or window, optionally crop to a region, choose 30/60 fps and
   audio, and record to a native `.mp4`.
+- **Record GIF** (`⌘⇧7`) — same source/region picker, choose a frame rate, and record a silent
+  animated `.gif` (encoded on-device).
 
 Everything stays on your machine — captures go to the clipboard or a folder you choose. Nothing is
 uploaded anywhere.
@@ -60,6 +62,16 @@ uploaded anywhere.
 - A **draggable Stop pill** floats over the screen; the rest of the overlay is click-through. The
   pill is excluded from the recording itself, so your captures stay clean.
 
+**GIF recording**
+
+- Same source picker (screen / window) and region crop as video, but silent.
+- **Frame rate** — 15 / 30 / 60 presets or a custom value (5–60 fps, default 30); frames are captured
+  at the area's actual on-screen resolution (not the 2× Retina buffer) and encoded to `.gif`
+  on-device with [`gifenc`](https://github.com/mattdesl/gifenc) — no external tools.
+- **Per-frame palettes** (each frame gets its own 256 colours → accurate screen colours, no banding)
+  plus **inter-frame differencing** (unchanged pixels written transparent) to keep files small.
+- Encoded incrementally while recording, so memory stays bounded and playback is real-time.
+
 **App**
 
 - Background **menu-bar / tray app** (no dock icon) with a branded icon.
@@ -73,6 +85,7 @@ uploaded anywhere.
 | -------------------------------- | ---------------------- |
 | Open screenshot capture          | `⌘⇧9` _(configurable)_ |
 | Open recording                   | `⌘⇧8` _(configurable)_ |
+| Open GIF recording               | `⌘⇧7` _(configurable)_ |
 | Copy annotated image             | `⌘C`                   |
 | Undo / Redo                      | `⌘Z` / `⌘⇧Z` (or `⌘Y`) |
 | Delete selected shape            | `Delete` / `Backspace` |
@@ -160,7 +173,7 @@ git push --tags
 ## Tech stack
 
 Electron 42 · TypeScript · electron-vite · React 19 · Konva 10. The renderer is **feature-based**
-(`src/renderer/src/features/{screenshot,record,settings}/`), with the Electron main process in
+(`src/renderer/src/features/{screenshot,record,gif,settings}/`), with the Electron main process in
 `src/main/`. See [`docs/STATUS.md`](docs/STATUS.md) and [`docs/DESIGN.md`](docs/DESIGN.md) for the
 handoff notes and the longer-term roadmap.
 

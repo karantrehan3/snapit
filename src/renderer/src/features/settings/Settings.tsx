@@ -44,6 +44,10 @@ export function Settings(): ReactElement {
         <HotkeyInput value={settings.recordHotkey} onChange={(v) => patch({ recordHotkey: v })} />
       </Field>
 
+      <Field label="GIF hotkey">
+        <HotkeyInput value={settings.gifHotkey} onChange={(v) => patch({ gifHotkey: v })} />
+      </Field>
+
       <Field label="Save folder">
         <input readOnly value={settings.saveDir} style={inputStyle} />
         <button type="button" onClick={() => void browse()} style={browseStyle}>

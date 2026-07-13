@@ -38,12 +38,12 @@ permission belongs to the parent process). macOS quirk notes are in "Known issue
 
 ## What's built (Phase 1 capture + annotate, Phase 2 recording)
 
-The renderer is **feature-based**: `src/renderer/src/features/{screenshot,record,settings}/`, each
+The renderer is **feature-based**: `src/renderer/src/features/{screenshot,record,gif,settings}/`, each
 with its component(s) + hooks + `types.ts` + `styles.ts`. Cross-directory imports use the
 `@renderer` / `@preload` path aliases.
 
-- **Shell** (`src/main/index.ts`): background tray app (dock hidden), two capture modes behind
-  **configurable global hotkeys** — screenshot (⌘⇧9) and record (⌘⇧8).
+- **Shell** (`src/main/index.ts`): background tray app (dock hidden), three capture modes behind
+  **configurable global hotkeys** — screenshot (⌘⇧9), record (⌘⇧8), and GIF (⌘⇧7).
 - **Capture** (`src/main/capture.ts`): freeze-frame of the display under the cursor at native
   (Retina) resolution via `desktopCapturer`; `getDisplaySource()` resolves a live source id for recording.
 - **Editor** (`features/screenshot/`, logic in `useAnnotationEditor`): full-screen Konva stage + DOM grey veil.
@@ -61,8 +61,18 @@ with its component(s) + hooks + `types.ts` + `styles.ts`. Cross-directory import
   Region pipes the stream through a cropped canvas; system (loopback, ScreenCaptureKit) + mic audio
   mix via WebAudio. During recording the overlay is click-through with a **draggable Stop pill**; the
   record hotkey again also stops & saves. (Stop pill is visible in the recording — accepted tradeoff.)
-
-### Commits on `master`
+- **GIF recording** (`features/gif/`, logic in `useGifRecorder`): gif hotkey → setup panel that
+  reuses the record feature's **source picker** + region toggle (no audio, **15/30/60 presets or a
+  custom 5–60 fps**, default 30) → `getDisplayMedia` (audio off) → per-frame canvas draw
+  (region-cropped, resampled from the 2x Retina buffer down to the actual on-screen resolution) →
+  **incremental `gifenc` encoding**. Each frame gets its **own** 256-colour palette (quantized from a
+  1/4 subsample for speed) → accurate screen colours with no cross-frame banding; every frame after
+  the first is a **delta** — a pixel is written transparent (disposal = leave) only when it stays
+  within tolerance of the **accumulated displayed canvas**, not merely the previous raw frame. That
+  distinction is what avoids ghost trails on scrolling content while keeping mostly-static recordings
+  small. Each frame's delay is the measured wall-clock interval, so playback is real-time. Shares the
+  click-through **draggable Stop pill**; gif hotkey again stops & saves. gifenc is main-thread (no
+  Web Worker), so it stays within the production CSP (`script-src 'self'`).
 
 - `a564d9d` scaffold + screenshot/record mode split
 - `b0c04da` annotation editor (movable box, shape select/move, undo/redo)
