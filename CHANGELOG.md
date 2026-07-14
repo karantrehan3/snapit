@@ -3,6 +3,44 @@
 All notable changes to snapit are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [2.0.0] - 2026-07-14
+
+### GIF recording (new)
+
+- New capture mode on `⌘⇧7`: record the screen (full-screen or region) to an animated `.gif`,
+  encoded entirely on-device with `gifenc` — no external tools or ffmpeg binary.
+- Frame rate — 15 / 30 / 60 presets or a custom value (5–60 fps, default 30).
+- Captured at the area's actual on-screen resolution; per-frame 256-colour palettes for accurate
+  screen colours, plus inter-frame differencing (transparency for unchanged pixels) to keep files
+  small.
+- Editable GIF hotkey in Settings and a tray menu item.
+- One-click **"Prefer video?"** nudge — Slack, GitHub and Jira autoplay video, which is sharper and
+  smaller than a GIF.
+
+### Redesigned capture UI
+
+- Record and GIF setup replace the large centred modal with a frosted-glass **command bar** docked
+  at the top of the screen, which stays visible behind it.
+- Source picker in a dropdown popover, frame rate in a compact menu, Full / Region toggle, and
+  system / mic icon toggles (recording).
+- The selected region's red outline now stays on screen **while recording** so you can see the
+  captured area — and it's excluded from the video / GIF (content protection).
+- Microphone is on by default for video recording.
+
+### Install
+
+Download the installer for your platform from the assets below.
+
+> **macOS:** the app is signed (ad-hoc) but not notarized, so the first launch is blocked with
+> _"snapit can't be opened"_ / _"Apple could not verify… malware"_. Open it once with:
+>
+> ```bash
+> xattr -dr com.apple.quarantine /Applications/snapit.app
+> ```
+>
+> …then launch normally. (Or **System Settings → Privacy & Security → Open Anyway**.) This is
+> expected for any app not distributed through a paid Apple Developer account — the app is safe.
+
 ## [1.0.0] - 2026-06-17
 
 First public release — a local-only screenshot and screen-recording tool for QA, in your menu bar.
@@ -23,20 +61,10 @@ First public release — a local-only screenshot and screen-recording tool for Q
 - Native `.mp4` (H.264/AAC) when supported, otherwise `.webm`.
 - A draggable Stop pill that's excluded from the recording itself, so captures stay clean.
 
-### GIF recording
-
-- Same source picker and region crop as video, but silent.
-- Frame rate — 15 / 30 / 60 presets or a custom value (5–60 fps, default 30); frames are captured at
-  the area's actual on-screen resolution and encoded to `.gif` on-device with `gifenc`.
-- Per-frame palettes (accurate screen colours, no banding) plus inter-frame differencing
-  (transparency for unchanged pixels) keep mostly-static recordings small.
-- The GIF setup panel recommends recording video instead for Slack / GitHub / Jira (which autoplay
-  it — sharper and smaller); one click switches to the video recorder.
-
 ### App
 
 - Background menu-bar / tray app (no dock icon) with a branded icon.
-- Configurable global hotkeys — screenshot (`⌘⇧9`), record (`⌘⇧8`), and GIF (`⌘⇧7`).
+- Configurable global hotkeys — screenshot (`⌘⇧9`) and record (`⌘⇧8`).
 - Settings window to edit hotkeys and the save folder, persisted across launches.
 - Capture overlays are content-protected, so they never bleed into a recording.
 
@@ -54,4 +82,5 @@ Download the installer for your platform from the assets below.
 > …then launch normally. (Or **System Settings → Privacy & Security → Open Anyway**.) This is
 > expected for any app not distributed through a paid Apple Developer account — the app is safe.
 
+[2.0.0]: https://github.com/karantrehan3/snapit/releases/tag/v2.0.0
 [1.0.0]: https://github.com/karantrehan3/snapit/releases/tag/v1.0.0
