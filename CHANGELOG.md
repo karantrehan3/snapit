@@ -3,6 +3,41 @@
 All notable changes to snapit are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [2.1.0] - 2026-07-14
+
+### About window
+
+- New **About snapit** window (tray → About snapit): app icon, version, and developer info, with
+  links to the website, GitHub repo, and issue tracker (opened in your browser).
+
+### Update checks
+
+- snapit now checks GitHub for a newer release on launch and periodically. When one is available it
+  shows an **"Update to vX.Y.Z"** item in the tray (plus a notification) that downloads the installer
+  for your platform, and the About window gains a live **Check for updates** with Download / Release
+  notes actions. _(Notify-and-download for now; automatic in-place install will follow once macOS
+  builds are code-signed.)_
+
+### Under the hood
+
+- macOS release builds sign with a stable identity when one is configured, so Privacy permissions
+  (Screen Recording / Microphone) persist across updates instead of re-prompting.
+- Added a vitest test suite covering the update-checker logic.
+
+### Install
+
+Download the installer for your platform from the assets below.
+
+> **macOS:** the app is signed (ad-hoc) but not notarized, so the first launch is blocked with
+> _"snapit can't be opened"_ / _"Apple could not verify… malware"_. Open it once with:
+>
+> ```bash
+> xattr -dr com.apple.quarantine /Applications/snapit.app
+> ```
+>
+> …then launch normally. (Or **System Settings → Privacy & Security → Open Anyway**.) This is
+> expected for any app not distributed through a paid Apple Developer account — the app is safe.
+
 ## [2.0.0] - 2026-07-14
 
 ### GIF recording (new)
@@ -82,5 +117,6 @@ Download the installer for your platform from the assets below.
 > …then launch normally. (Or **System Settings → Privacy & Security → Open Anyway**.) This is
 > expected for any app not distributed through a paid Apple Developer account — the app is safe.
 
+[2.1.0]: https://github.com/karantrehan3/snapit/releases/tag/v2.1.0
 [2.0.0]: https://github.com/karantrehan3/snapit/releases/tag/v2.0.0
 [1.0.0]: https://github.com/karantrehan3/snapit/releases/tag/v1.0.0
