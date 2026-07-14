@@ -13,13 +13,18 @@ import {
   nativeImage,
   shell,
   dialog,
+  Notification,
   session as electronSession,
   systemPreferences,
   type Display
 } from 'electron'
 import { captureDisplay, getDisplaySource, type DisplaySource } from './capture'
 import { getSettings, setSettings, type Settings } from './settings'
+import { checkForUpdate, type UpdateInfo } from './updater'
 import { TRAY_TEMPLATE_DATA_URL, TRAY_COLOUR_DATA_URL } from './trayIcon'
+
+/** How often to re-check GitHub for a newer release while the app runs. */
+const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000
 
 /**
  * snapit shell.
@@ -50,12 +55,15 @@ type CaptureSession =
 let tray: Tray | null = null
 let overlayWindow: BrowserWindow | null = null
 let settingsWindow: BrowserWindow | null = null
+let aboutWindow: BrowserWindow | null = null
 let session: CaptureSession | null = null
 let recordWantsSystemAudio = false
 let recordSourceId: string | null = null
 // When set, the overlay's 'closed' handler starts this capture mode next — used to
 // switch GIF → video without racing the outgoing window's teardown.
 let pendingCaptureMode: CaptureMode | null = null
+// Latest available update (from GitHub), or null when up to date / not yet checked.
+let availableUpdate: UpdateInfo | null = null
 
 // Locks the packaged renderer to its own bundle: no remote script, no eval, no
 // plugins, no framing. data:/blob: cover the frozen-frame dataURL, source-picker
@@ -163,6 +171,32 @@ function openSettingsWindow(): void {
   loadRenderer(settingsWindow, 'settings')
 }
 
+function openAboutWindow(): void {
+  if (aboutWindow) {
+    aboutWindow.focus()
+    return
+  }
+  aboutWindow = new BrowserWindow({
+    width: 380,
+    height: 520,
+    resizable: false,
+    title: 'About snapit',
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: true,
+      spellcheck: false
+    }
+  })
+  aboutWindow.on('closed', () => {
+    aboutWindow = null
+  })
+  aboutWindow.once('ready-to-show', () => {
+    if (process.platform === 'darwin') app.focus({ steal: true })
+    aboutWindow?.focus()
+  })
+  loadRenderer(aboutWindow, 'about')
+}
+
 /** Load the shared renderer, optionally at a hash route (e.g. "settings"). */
 function loadRenderer(win: BrowserWindow, hash = ''): void {
   const suffix = hash ? `#${hash}` : ''
@@ -246,7 +280,7 @@ function registerHotkeys(): void {
 
 function buildTray(): void {
   const { screenshotHotkey, recordHotkey, gifHotkey } = getSettings()
-  const menu = Menu.buildFromTemplate([
+  const template: Electron.MenuItemConstructorOptions[] = [
     // accelerator renders as native key symbols (⌘⇧9 on macOS, Ctrl+Shift+9 elsewhere);
     // registerAccelerator: false keeps it display-only — globalShortcut already fires it.
     {
@@ -270,10 +304,36 @@ function buildTray(): void {
     { type: 'separator' },
     { label: 'Settings…', click: openSettingsWindow },
     { label: 'Open save folder', click: () => void shell.openPath(getSettings().saveDir) },
+    { label: 'About snapit', click: openAboutWindow },
     { type: 'separator' },
     { label: 'Quit snapit', click: () => app.quit() }
-  ])
-  tray?.setContextMenu(menu)
+  ]
+  // Surface an available update at the very top so it's the first thing seen.
+  if (availableUpdate) {
+    template.unshift(
+      {
+        label: `⬇  Update to v${availableUpdate.version}`,
+        click: () => void shell.openExternal(availableUpdate!.downloadUrl)
+      },
+      { type: 'separator' }
+    )
+  }
+  tray?.setContextMenu(Menu.buildFromTemplate(template))
+}
+
+/** Check GitHub for a newer release; update the tray and notify once when found. */
+async function refreshUpdate(): Promise<void> {
+  const found = await checkForUpdate()
+  const isNew = found && found.version !== availableUpdate?.version
+  availableUpdate = found
+  buildTray()
+  tray?.setToolTip(found ? `snapit — update available (v${found.version})` : 'snapit — QA capture')
+  if (isNew && Notification.isSupported()) {
+    new Notification({
+      title: `snapit ${found.version} is available`,
+      body: 'Open the tray menu to download the update.'
+    }).show()
+  }
 }
 
 function createTray(): void {
@@ -356,6 +416,8 @@ app.whenReady().then(() => {
 
   createTray()
   registerHotkeys()
+  void refreshUpdate()
+  setInterval(() => void refreshUpdate(), UPDATE_CHECK_INTERVAL_MS)
 
   ipcMain.handle('capture:get-session', () => session)
 
@@ -462,6 +524,16 @@ app.whenReady().then(() => {
   // the renderer flips it back on when the pointer is over the Stop pill.
   ipcMain.on('record:set-ignore-mouse', (_event, ignore: boolean) => {
     overlayWindow?.setIgnoreMouseEvents(ignore, { forward: true })
+  })
+
+  ipcMain.handle('app:get-info', () => ({ version: app.getVersion() }))
+  ipcMain.on('app:open-external', (_event, url: string) => {
+    if (typeof url === 'string' && /^https:\/\//.test(url)) void shell.openExternal(url)
+  })
+  // Fresh on-demand check from the About window; also refreshes the tray/state.
+  ipcMain.handle('app:check-update', async () => {
+    await refreshUpdate()
+    return availableUpdate
   })
 
   ipcMain.handle('settings:get', () => getSettings())

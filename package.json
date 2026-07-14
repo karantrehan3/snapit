@@ -18,7 +18,9 @@
     "icon": "electron tools/make-icon.cjs",
     "dist:mac": "npm run build && electron-builder --mac --publish never",
     "dist:win": "npm run build && electron-builder --win --publish never",
-    "dist:linux": "npm run build && electron-builder --linux --publish never"
+    "dist:linux": "npm run build && electron-builder --linux --publish never",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "gifenc": "^1.0.3",
@@ -37,7 +39,8 @@
     "electron-vite": "^5.0.0",
     "prettier": "^3.8.4",
     "typescript": "^6.0.3",
-    "vite": "^7.3.5"
+    "vite": "^7.3.5",
+    "vitest": "^4.1.10"
   },
   "volta": {
     "node": "22.22.3"

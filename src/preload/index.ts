@@ -26,6 +26,9 @@ export type Settings = {
   saveDir: string
 }
 
+/** A newer release available on GitHub (from the About window's update check). */
+export type UpdateInfo = { version: string; notesUrl: string; downloadUrl: string }
+
 const api = {
   /** Fetch the current capture session (mode + frozen frame for screenshots). */
   getSession: (): Promise<CaptureSession | null> => ipcRenderer.invoke('capture:get-session'),
@@ -57,6 +60,12 @@ const api = {
     ipcRenderer.on('record:stop', handler)
     return () => ipcRenderer.removeListener('record:stop', handler)
   },
+  /** App identity for the About window. */
+  getAppInfo: (): Promise<{ version: string }> => ipcRenderer.invoke('app:get-info'),
+  /** Check GitHub for a newer release; resolves null when up to date. */
+  checkForUpdate: (): Promise<UpdateInfo | null> => ipcRenderer.invoke('app:check-update'),
+  /** Open an external https URL in the user's browser (About links). */
+  openExternal: (url: string): void => ipcRenderer.send('app:open-external', url),
   /** Settings. */
   getSettings: (): Promise<Settings> => ipcRenderer.invoke('settings:get'),
   setSettings: (partial: Partial<Settings>): Promise<Settings> => ipcRenderer.invoke('settings:set', partial),
