@@ -30,8 +30,31 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Import macOS signing certificate
+        if: matrix.os == 'macos-latest'
+        env:
+          CERT_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          CERT_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+        run: |
+          if [ -z "$CERT_P12" ]; then
+            echo "No MACOS_CERTIFICATE_P12 secret — this build will be ad-hoc signed."
+            exit 0
+          fi
+          CERT_PATH="$RUNNER_TEMP/snapit-cert.p12"
+          KEYCHAIN="$RUNNER_TEMP/snapit-signing.keychain-db"
+          KEYCHAIN_PWD="$(openssl rand -base64 24)"
+          echo "$CERT_P12" | base64 --decode > "$CERT_PATH"
+          security create-keychain -p "$KEYCHAIN_PWD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PWD" "$KEYCHAIN"
+          security import "$CERT_PATH" -k "$KEYCHAIN" -P "$CERT_PWD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PWD" "$KEYCHAIN" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | sed s/\"//g)
+          rm -f "$CERT_PATH"
       - name: Build installer
         run: npm run ${{ matrix.script }}
+        env:
+          SNAPIT_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
       - uses: actions/upload-artifact@v4
         with:
           name: installer-${{ matrix.os }}
