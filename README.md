@@ -148,6 +148,14 @@ verify… malware"_. The app is safe — macOS distrusts anything not notarized 
   **Open Anyway**. (Right-click → **Open** also works on some macOS versions.)
 - **Screen Recording permission:** grant it to snapit (System Settings → Privacy & Security →
   Screen Recording) on first capture, or frames come back black.
+- **Permissions re-prompt after a reinstall/update:** builds are ad-hoc signed, so each new build
+  can look like a different app to macOS and Privacy grants (Screen Recording / Microphone) reset.
+  If capture stops working or you get stuck prompts, clear snapit's grants and re-grant on next
+  launch:
+  ```bash
+  tccutil reset All com.karantrehan.snapit
+  ```
+  Then quit and relaunch snapit. _(This goes away once builds are signed with a stable identity.)_
 
 </details>
 
