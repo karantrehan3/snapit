@@ -3,19 +3,25 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Snap It — local-only screenshot &amp; screen recording</title>
-    <meta name="description" content="A local-only screenshot and screen-recording desktop app. Capture, annotate, and record straight from your menu bar. No uploads, no telemetry." />
+    <title>Snap It — local-only screenshot, recording &amp; image editing</title>
+    <meta
+      name="description"
+      content="A local-only capture desktop app. Screenshot &amp; annotate, record video and GIFs, and open existing images to edit — straight from your menu bar. No uploads, no telemetry."
+    />
     <link rel="icon" href="build/icon.png" />
     <meta property="og:title" content="Snap It" />
-    <meta property="og:description" content="Local-only screenshot & screen recording from your menu bar. Capture, annotate, record — nothing leaves your machine." />
+    <meta
+      property="og:description"
+      content="Local-only screenshots, video &amp; GIF recording, and image editing from your menu bar. Capture, annotate, record, edit — nothing leaves your machine."
+    />
     <meta property="og:image" content="build/icon.png" />
     <meta property="og:type" content="website" />
     <script>
       // Apply saved theme immediately to prevent flash
-      (function() {
-        var t = localStorage.getItem('theme');
-        if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
-      })();
+      ;(function () {
+        var t = localStorage.getItem('theme')
+        if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t)
+      })()
     </script>
     <style>
       /* ── Tokens (dark default) ── */
@@ -136,7 +142,7 @@
         display: inline-flex;
         align-items: center;
         gap: 0.35rem;
-        padding: .5rem .9rem;
+        padding: 0.5rem 0.9rem;
         border-radius: 999px;
         font-size: 0.85rem;
         font-weight: 600;
@@ -148,14 +154,20 @@
         backdrop-filter: blur(14px);
         -webkit-backdrop-filter: blur(14px);
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-        transition: transform 0.2s var(--ease), border-color 0.2s var(--ease), box-shadow 0.2s var(--ease);
+        transition:
+          transform 0.2s var(--ease),
+          border-color 0.2s var(--ease),
+          box-shadow 0.2s var(--ease);
       }
       .nav-btn:hover {
         transform: translateY(-2px);
         border-color: var(--accent);
       }
-      .nav-label { }
-      .has-nav .hero { padding-top: clamp(5rem, 3.5rem + 5vw, 7.5rem); }
+      .nav-label {
+      }
+      .has-nav .hero {
+        padding-top: clamp(5rem, 3.5rem + 5vw, 7.5rem);
+      }
 
       /* ── Hero ── */
       .hero {
@@ -224,7 +236,10 @@
         text-decoration: none;
         border: 1px solid transparent;
         cursor: pointer;
-        transition: transform 0.15s var(--ease), background 0.15s var(--ease), border-color 0.15s var(--ease),
+        transition:
+          transform 0.15s var(--ease),
+          background 0.15s var(--ease),
+          border-color 0.15s var(--ease),
           box-shadow 0.15s var(--ease);
       }
       .btn:hover {
@@ -284,7 +299,9 @@
         border-radius: 12px;
         overflow: hidden;
         border: 1px solid var(--border);
-        box-shadow: 0 8px 40px rgba(0, 0, 0, 0.3), 0 0 0 1px var(--accent-subtle);
+        box-shadow:
+          0 8px 40px rgba(0, 0, 0, 0.3),
+          0 0 0 1px var(--accent-subtle);
       }
       .demo-bar {
         display: flex;
@@ -327,7 +344,8 @@
         position: absolute;
         inset: 0;
         opacity: 0.06;
-        background: repeating-linear-gradient(0deg, transparent, transparent 31px, var(--text) 31px, var(--text) 32px),
+        background:
+          repeating-linear-gradient(0deg, transparent, transparent 31px, var(--text) 31px, var(--text) 32px),
           repeating-linear-gradient(90deg, transparent, transparent 31px, var(--text) 31px, var(--text) 32px);
       }
       .demo-svg {
@@ -371,7 +389,9 @@
         cursor: default;
         display: grid;
         place-items: center;
-        transition: background 0.15s var(--ease), color 0.15s var(--ease);
+        transition:
+          background 0.15s var(--ease),
+          color 0.15s var(--ease);
         pointer-events: none;
       }
       .tool-btn.active {
@@ -416,7 +436,9 @@
         font-weight: 600;
         color: var(--rec-green);
         opacity: 0;
-        transition: opacity 0.3s var(--ease), transform 0.3s var(--ease);
+        transition:
+          opacity 0.3s var(--ease),
+          transform 0.3s var(--ease);
         pointer-events: none;
         white-space: nowrap;
       }
@@ -467,7 +489,9 @@
         font-weight: 600;
         color: var(--text-secondary);
         cursor: pointer;
-        transition: background 0.15s var(--ease), color 0.15s var(--ease);
+        transition:
+          background 0.15s var(--ease),
+          color 0.15s var(--ease);
         min-height: 40px;
       }
       .tab-btn:hover {
@@ -500,7 +524,10 @@
         border: 1px solid var(--border);
         border-radius: var(--radius);
         padding: 1.4rem;
-        transition: transform 0.2s var(--ease), border-color 0.25s var(--ease), box-shadow 0.25s var(--ease);
+        transition:
+          transform 0.2s var(--ease),
+          border-color 0.25s var(--ease),
+          box-shadow 0.25s var(--ease);
       }
       .feat-card:hover {
         transform: translateY(-3px);
@@ -568,7 +595,10 @@
         display: flex;
         flex-direction: column;
         gap: 0.7rem;
-        transition: transform 0.2s var(--ease), border-color 0.25s var(--ease), box-shadow 0.25s var(--ease);
+        transition:
+          transform 0.2s var(--ease),
+          border-color 0.25s var(--ease),
+          box-shadow 0.25s var(--ease);
         cursor: default;
       }
       .shortcut-card:hover {
@@ -599,7 +629,9 @@
         font-size: 0.82rem;
         font-weight: 600;
         color: var(--text);
-        transition: transform 0.15s var(--ease), box-shadow 0.15s var(--ease);
+        transition:
+          transform 0.15s var(--ease),
+          box-shadow 0.15s var(--ease);
       }
       .shortcut-info strong {
         display: block;
@@ -663,7 +695,10 @@
         font-weight: 600;
         color: var(--text-secondary);
         cursor: pointer;
-        transition: background 0.15s var(--ease), color 0.15s var(--ease), border-color 0.15s var(--ease);
+        transition:
+          background 0.15s var(--ease),
+          color 0.15s var(--ease),
+          border-color 0.15s var(--ease);
         min-height: 30px;
       }
       .copy-btn:hover {
@@ -713,19 +748,42 @@
 
       /* ── Theme toggle ── */
       .theme-toggle {
-        position: fixed; top: 1rem; right: 1rem; z-index: 50;
-        width: 2.4rem; height: 2.4rem; border-radius: 50%;
+        position: fixed;
+        top: 1rem;
+        right: 1rem;
+        z-index: 50;
+        width: 2.4rem;
+        height: 2.4rem;
+        border-radius: 50%;
         border: 1px solid var(--border);
         background: color-mix(in srgb, var(--surface) 85%, transparent);
-        backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-        cursor: pointer; display: grid; place-items: center;
-        font-size: 1.15rem; line-height: 1; padding: 0;
-        color: var(--text); font-family: var(--sans);
-        transition: transform .2s var(--ease), border-color .2s var(--ease), box-shadow .2s var(--ease);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        cursor: pointer;
+        display: grid;
+        place-items: center;
+        font-size: 1.15rem;
+        line-height: 1;
+        padding: 0;
+        color: var(--text);
+        font-family: var(--sans);
+        transition:
+          transform 0.2s var(--ease),
+          border-color 0.2s var(--ease),
+          box-shadow 0.2s var(--ease);
       }
-      .theme-toggle:hover { transform: translateY(-2px); border-color: var(--accent); box-shadow: 0 4px 16px rgba(0,0,0,.15); }
-      .theme-toggle:active { transform: scale(.95); }
-      .theme-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      .theme-toggle:hover {
+        transform: translateY(-2px);
+        border-color: var(--accent);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+      }
+      .theme-toggle:active {
+        transform: scale(0.95);
+      }
+      .theme-toggle:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
 
       /* ── Terminal / code blocks stay dark in light mode ── */
       @media (prefers-color-scheme: light) {
@@ -791,7 +849,9 @@
       .reveal {
         opacity: 0;
         transform: translateY(20px);
-        transition: opacity 0.5s var(--ease), transform 0.5s var(--ease);
+        transition:
+          opacity 0.5s var(--ease),
+          transform 0.5s var(--ease);
       }
       .reveal.visible {
         opacity: 1;
@@ -820,8 +880,12 @@
 
       /* ── Responsive ── */
       @media (max-width: 860px) {
-        .nav-label { display: none; }
-        .nav-btn { padding: .5rem .6rem; }
+        .nav-label {
+          display: none;
+        }
+        .nav-btn {
+          padding: 0.5rem 0.6rem;
+        }
         .hero-inner {
           grid-template-columns: 1fr;
           text-align: center;
@@ -886,12 +950,21 @@
   </head>
   <body>
     <!-- Theme toggle -->
-    <button class="theme-toggle" id="themeToggle" aria-label="Switch to light mode" title="Toggle theme"></button>
+    <button
+      class="theme-toggle"
+      id="themeToggle"
+      aria-label="Switch to light mode"
+      title="Toggle theme"
+    ></button>
 
     <!-- Portfolio nav -->
     <nav class="nav-home" id="navHome" hidden aria-label="Back to portfolio">
-      <a class="nav-btn" id="navBack" href="https://karantrehan3.github.io/" rel="noopener" aria-label="Back">&#8592; <span class="nav-label">Back</span></a>
-      <a class="nav-btn" href="https://karantrehan3.github.io/" rel="noopener" aria-label="Home">&#8962; <span class="nav-label">Home</span></a>
+      <a class="nav-btn" id="navBack" href="https://karantrehan3.github.io/" rel="noopener" aria-label="Back"
+        >&#8592; <span class="nav-label">Back</span></a
+      >
+      <a class="nav-btn" href="https://karantrehan3.github.io/" rel="noopener" aria-label="Home"
+        >&#8962; <span class="nav-label">Home</span></a
+      >
     </nav>
 
     <!-- Hero -->
@@ -902,8 +975,8 @@
             <img class="hero-logo" src="build/icon.png" alt="Snap It app icon" width="80" height="80" />
             <h1>Snap It</h1>
             <p class="tagline">
-              Capture, annotate, and record your screen — straight from the menu bar. Everything stays on your
-              machine.
+              Screenshot, record video &amp; GIFs, and edit existing images — all annotated with the same
+              tools, straight from the menu bar. Everything stays on your machine.
             </p>
             <div class="hero-actions">
               <a class="btn btn-primary" href="https://github.com/karantrehan3/snapit/releases/latest"
@@ -924,25 +997,13 @@
                 <span class="demo-dot demo-dot--r"></span>
                 <span class="demo-dot demo-dot--y"></span>
                 <span class="demo-dot demo-dot--g"></span>
-                <span class="demo-title">Snap It &mdash; Capture</span>
+                <span class="demo-title">Snap It &mdash; Editor</span>
               </div>
               <div class="demo-canvas">
                 <div class="demo-canvas-bg"></div>
-                <svg
-                  class="demo-svg"
-                  viewBox="0 0 400 260"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
+                <svg class="demo-svg" viewBox="0 0 400 260" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <defs>
-                    <marker
-                      id="arrowhead"
-                      markerWidth="8"
-                      markerHeight="6"
-                      refX="8"
-                      refY="3"
-                      orient="auto"
-                    >
+                    <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
                       <path d="M0,0 L8,3 L0,6" fill="var(--accent)" />
                     </marker>
                   </defs>
@@ -1019,7 +1080,13 @@
                     </svg>
                   </button>
                   <button class="tool-btn" id="toolPen" aria-label="Pen tool" tabindex="-1">
-                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                    <svg
+                      viewBox="0 0 16 16"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.5"
+                      stroke-linecap="round"
+                    >
                       <path d="M3 12 Q6 5 9 9 Q12 13 14 6" />
                     </svg>
                   </button>
@@ -1044,17 +1111,40 @@
       <section id="features" class="reveal">
         <div class="wrap">
           <p class="section-label">Capabilities</p>
-          <h2>Two ways to capture, one keyboard away</h2>
+          <h2>Capture, record, and edit — one keyboard away</h2>
           <div class="tabs-bar" role="tablist" aria-label="Feature category">
-            <button class="tab-btn" role="tab" aria-selected="true" aria-controls="panel-screenshot" id="tab-screenshot">
+            <button
+              class="tab-btn"
+              role="tab"
+              aria-selected="true"
+              aria-controls="panel-screenshot"
+              id="tab-screenshot"
+            >
               Screenshot
             </button>
-            <button class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-recording" id="tab-recording">
+            <button
+              class="tab-btn"
+              role="tab"
+              aria-selected="false"
+              aria-controls="panel-recording"
+              id="tab-recording"
+            >
               Recording
+            </button>
+            <button class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-gif" id="tab-gif">
+              GIF
+            </button>
+            <button class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-edit" id="tab-edit">
+              Edit image
             </button>
           </div>
 
-          <div id="panel-screenshot" class="tab-panel active" role="tabpanel" aria-labelledby="tab-screenshot">
+          <div
+            id="panel-screenshot"
+            class="tab-panel active"
+            role="tabpanel"
+            aria-labelledby="tab-screenshot"
+          >
             <div class="feat-grid">
               <div class="feat-card">
                 <h3><span>&#9986;</span> Region capture</h3>
@@ -1073,15 +1163,15 @@
               <div class="feat-card">
                 <h3><span>&#127912;</span> Color presets</h3>
                 <p class="feat-desc">
-                  Quick-switch between color presets for your annotations. Visual clarity without digging through
-                  a color picker.
+                  Quick-switch between color presets for your annotations. Visual clarity without digging
+                  through a color picker.
                 </p>
               </div>
               <div class="feat-card">
                 <h3><span>&#8634;</span> Undo &amp; redo</h3>
                 <p class="feat-desc">
-                  Full history stack so you can back out of any annotation. Iterate until the capture tells the
-                  story you need.
+                  Full history stack so you can back out of any annotation. Iterate until the capture tells
+                  the story you need.
                 </p>
               </div>
             </div>
@@ -1092,15 +1182,15 @@
               <div class="feat-card">
                 <h3><span>&#9210;</span> One-key recording</h3>
                 <p class="feat-desc">
-                  Hit the hotkey, pick your region or go full screen, and start recording immediately. No setup
-                  dialogs.
+                  Hit the hotkey, pick your region or go full screen, and start recording immediately. No
+                  setup dialogs.
                 </p>
               </div>
               <div class="feat-card">
                 <h3><span>&#127916;</span> 30 or 60 fps</h3>
                 <p class="feat-desc">
-                  Choose between smooth 60 fps for detailed walkthroughs or lighter 30 fps for quick captures and
-                  smaller files.
+                  Choose between smooth 60 fps for detailed walkthroughs or lighter 30 fps for quick captures
+                  and smaller files.
                 </p>
               </div>
               <div class="feat-card">
@@ -1120,11 +1210,77 @@
             </div>
           </div>
 
+          <div id="panel-gif" class="tab-panel" role="tabpanel" aria-labelledby="tab-gif">
+            <div class="feat-grid">
+              <div class="feat-card">
+                <h3><span>&#127916;</span> Screen &rarr; GIF</h3>
+                <p class="feat-desc">
+                  Record any screen or window, full-screen or a region, straight to an animated GIF &mdash; no
+                  external tools or ffmpeg.
+                </p>
+              </div>
+              <div class="feat-card">
+                <h3><span>&#9881;&#65039;</span> 15 / 30 / 60 fps</h3>
+                <p class="feat-desc">
+                  Pick a frame-rate preset or a custom value (5&ndash;60 fps). Frames are captured at the
+                  area's real on-screen resolution.
+                </p>
+              </div>
+              <div class="feat-card">
+                <h3><span>&#127912;</span> Accurate colors, small files</h3>
+                <p class="feat-desc">
+                  Per-frame 256-color palettes keep screen text crisp, and inter-frame differencing keeps the
+                  file size down.
+                </p>
+              </div>
+              <div class="feat-card">
+                <h3><span>&#128172;</span> Prefer video? One click</h3>
+                <p class="feat-desc">
+                  Slack, GitHub and Jira autoplay video &mdash; sharper and smaller than a GIF. A nudge
+                  switches you to the recorder instantly.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div id="panel-edit" class="tab-panel" role="tabpanel" aria-labelledby="tab-edit">
+            <div class="feat-grid">
+              <div class="feat-card">
+                <h3><span>&#128194;</span> Open With &rarr; Snap It</h3>
+                <p class="feat-desc">
+                  Right-click any PNG, JPG or WebP in Finder and open it in Snap It &mdash; or use the tray's
+                  &ldquo;Open image&hellip;&rdquo; picker.
+                </p>
+              </div>
+              <div class="feat-card">
+                <h3><span>&#9997;&#65039;</span> Same annotation tools</h3>
+                <p class="feat-desc">
+                  The whole image becomes the canvas, edited with the exact rectangle, ellipse, arrow, pen and
+                  color tools you use on screenshots.
+                </p>
+              </div>
+              <div class="feat-card">
+                <h3><span>&#128190;</span> Save a copy or overwrite</h3>
+                <p class="feat-desc">
+                  Export a fresh copy by default, or overwrite the original after a confirmation &mdash; at
+                  native resolution, preserving the format.
+                </p>
+              </div>
+              <div class="feat-card">
+                <h3><span>&#128273;</span> Never the default handler</h3>
+                <p class="feat-desc">
+                  Snap It registers only as an <em>editor</em>, so it shows up in &ldquo;Open With&rdquo;
+                  without ever hijacking Preview or Photos.
+                </p>
+              </div>
+            </div>
+          </div>
+
           <div class="privacy-banner">
             <div class="privacy-icon">&#128274;</div>
             <p>
-              <strong>Nothing leaves your machine.</strong> No accounts, no uploads, no telemetry. Captures go to
-              your clipboard or a folder you choose. Your screenshots are yours.
+              <strong>Nothing leaves your machine.</strong> No accounts, no uploads, no telemetry. Captures go
+              to your clipboard or a folder you choose. Your screenshots are yours.
             </p>
           </div>
         </div>
@@ -1156,6 +1312,17 @@
               <div class="shortcut-info">
                 <strong>Screen recording</strong>
                 <p>Start or stop a screen recording</p>
+              </div>
+            </div>
+            <div class="shortcut-card">
+              <div class="shortcut-keys">
+                <span class="kbd">&#8984;</span>
+                <span class="kbd">&#8679;</span>
+                <span class="kbd">7</span>
+              </div>
+              <div class="shortcut-info">
+                <strong>Record GIF</strong>
+                <p>Start or stop a GIF recording</p>
               </div>
             </div>
             <div class="shortcut-card">
@@ -1227,8 +1394,8 @@
             <strong>Alternative:</strong> System Settings &#8594; Privacy &amp; Security &#8594; Open Anyway
           </div>
           <p class="platform-note">
-            <strong>macOS</strong> is the primary platform. Windows and Linux builds are included in releases but
-            are experimental and unverified on real hardware.
+            <strong>macOS</strong> is the primary platform. Windows and Linux builds are included in releases
+            but are experimental and unverified on real hardware.
           </p>
         </div>
       </section>
@@ -1246,170 +1413,173 @@
     </footer>
 
     <script>
-      (function () {
+      ;(function () {
         /* ── Configurable timing (ms) ── */
-        var DEMO_INITIAL_DELAY = 500;   // pause before first shape appears
-        var SHAPE_INTERVAL     = 900;   // delay between annotation shapes
-        var TOAST_DISPLAY      = 1400;  // how long the "Copied to clipboard" toast shows
-        var TOAST_FADE_PAUSE   = 400;   // pause after toast hides before clearing demo
-        var DEMO_RESTART_DELAY = 600;   // delay before restarting the demo cycle
-        var COPY_FEEDBACK      = 1500;  // "Copied!" button feedback duration
+        var DEMO_INITIAL_DELAY = 500 // pause before first shape appears
+        var SHAPE_INTERVAL = 900 // delay between annotation shapes
+        var TOAST_DISPLAY = 1400 // how long the "Copied to clipboard" toast shows
+        var TOAST_FADE_PAUSE = 400 // pause after toast hides before clearing demo
+        var DEMO_RESTART_DELAY = 600 // delay before restarting the demo cycle
+        var COPY_FEEDBACK = 1500 // "Copied!" button feedback duration
 
         /* ── Theme toggle ── */
-        var toggleBtn = document.getElementById('themeToggle');
-        var root = document.documentElement;
+        var toggleBtn = document.getElementById('themeToggle')
+        var root = document.documentElement
 
         function getEffectiveTheme() {
-          var stored = localStorage.getItem('theme');
-          if (stored === 'light' || stored === 'dark') return stored;
-          return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+          var stored = localStorage.getItem('theme')
+          if (stored === 'light' || stored === 'dark') return stored
+          return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
         }
 
         function applyTheme(theme) {
-          root.setAttribute('data-theme', theme);
-          toggleBtn.textContent = theme === 'dark' ? '☀️' : '🌙';
-          toggleBtn.setAttribute('aria-label', theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+          root.setAttribute('data-theme', theme)
+          toggleBtn.textContent = theme === 'dark' ? '☀️' : '🌙'
+          toggleBtn.setAttribute(
+            'aria-label',
+            theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
+          )
         }
 
-        applyTheme(getEffectiveTheme());
+        applyTheme(getEffectiveTheme())
 
         toggleBtn.addEventListener('click', function () {
-          var next = getEffectiveTheme() === 'dark' ? 'light' : 'dark';
-          localStorage.setItem('theme', next);
-          applyTheme(next);
-        });
+          var next = getEffectiveTheme() === 'dark' ? 'light' : 'dark'
+          localStorage.setItem('theme', next)
+          applyTheme(next)
+        })
 
         window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', function () {
           if (!localStorage.getItem('theme')) {
-            applyTheme(getEffectiveTheme());
+            applyTheme(getEffectiveTheme())
           }
-        });
+        })
 
         /* ── Portfolio nav ── */
         if (new URLSearchParams(location.search).get('ref') === 'portfolio') {
-          var nav = document.getElementById('navHome');
-          if (nav) nav.removeAttribute('hidden');
-          document.body.classList.add('has-nav');
-          var back = document.getElementById('navBack');
+          var nav = document.getElementById('navHome')
+          if (nav) nav.removeAttribute('hidden')
+          document.body.classList.add('has-nav')
+          var back = document.getElementById('navBack')
           if (back)
             back.addEventListener('click', function (e) {
               if (document.referrer && history.length > 1) {
-                e.preventDefault();
-                history.back();
+                e.preventDefault()
+                history.back()
               }
-            });
+            })
         }
 
-        var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
         /* ── Capture demo animation ── */
         var shapes = [
           { shape: 'demoRect', tool: 'toolRect' },
           { shape: 'demoEllipse', tool: 'toolEllipse' },
           { shape: 'demoArrow', tool: 'toolArrow' },
-          { shape: 'demoPen', tool: 'toolPen' },
-        ];
-        var toast = document.getElementById('demoToast');
+          { shape: 'demoPen', tool: 'toolPen' }
+        ]
+        var toast = document.getElementById('demoToast')
 
         function clearDemo() {
           shapes.forEach(function (s) {
-            var el = document.getElementById(s.shape);
-            if (el) el.classList.remove('visible');
-            var btn = document.getElementById(s.tool);
-            if (btn) btn.classList.remove('active');
-          });
-          if (toast) toast.classList.remove('visible');
+            var el = document.getElementById(s.shape)
+            if (el) el.classList.remove('visible')
+            var btn = document.getElementById(s.tool)
+            if (btn) btn.classList.remove('active')
+          })
+          if (toast) toast.classList.remove('visible')
         }
 
         function runDemo() {
-          clearDemo();
-          var idx = 0;
+          clearDemo()
+          var idx = 0
 
           function nextShape() {
             if (idx >= shapes.length) {
               // Show toast, then reset
-              if (toast) toast.classList.add('visible');
+              if (toast) toast.classList.add('visible')
               setTimeout(function () {
-                if (toast) toast.classList.remove('visible');
+                if (toast) toast.classList.remove('visible')
                 setTimeout(function () {
-                  clearDemo();
-                  setTimeout(runDemo, DEMO_RESTART_DELAY);
-                }, TOAST_FADE_PAUSE);
-              }, TOAST_DISPLAY);
-              return;
+                  clearDemo()
+                  setTimeout(runDemo, DEMO_RESTART_DELAY)
+                }, TOAST_FADE_PAUSE)
+              }, TOAST_DISPLAY)
+              return
             }
 
-            var current = shapes[idx];
+            var current = shapes[idx]
             // Deactivate previous tool
             if (idx > 0) {
-              var prev = document.getElementById(shapes[idx - 1].tool);
-              if (prev) prev.classList.remove('active');
+              var prev = document.getElementById(shapes[idx - 1].tool)
+              if (prev) prev.classList.remove('active')
             }
             // Activate current tool and show shape
-            var toolEl = document.getElementById(current.tool);
-            var shapeEl = document.getElementById(current.shape);
-            if (toolEl) toolEl.classList.add('active');
-            if (shapeEl) shapeEl.classList.add('visible');
+            var toolEl = document.getElementById(current.tool)
+            var shapeEl = document.getElementById(current.shape)
+            if (toolEl) toolEl.classList.add('active')
+            if (shapeEl) shapeEl.classList.add('visible')
 
-            idx++;
-            setTimeout(nextShape, SHAPE_INTERVAL);
+            idx++
+            setTimeout(nextShape, SHAPE_INTERVAL)
           }
 
-          setTimeout(nextShape, DEMO_INITIAL_DELAY);
+          setTimeout(nextShape, DEMO_INITIAL_DELAY)
         }
 
         if (reduceMotion) {
           // Show all shapes at once
           shapes.forEach(function (s) {
-            var el = document.getElementById(s.shape);
-            if (el) el.style.opacity = '1';
-          });
+            var el = document.getElementById(s.shape)
+            if (el) el.style.opacity = '1'
+          })
         } else {
-          runDemo();
+          runDemo()
         }
 
         /* ── Tabs ── */
-        var tabs = document.querySelectorAll('.tab-btn');
+        var tabs = document.querySelectorAll('.tab-btn')
         tabs.forEach(function (tab) {
           tab.addEventListener('click', function () {
             tabs.forEach(function (t) {
-              t.setAttribute('aria-selected', 'false');
-              var panel = document.getElementById(t.getAttribute('aria-controls'));
-              if (panel) panel.classList.remove('active');
-            });
-            tab.setAttribute('aria-selected', 'true');
-            var activePanel = document.getElementById(tab.getAttribute('aria-controls'));
-            if (activePanel) activePanel.classList.add('active');
-          });
+              t.setAttribute('aria-selected', 'false')
+              var panel = document.getElementById(t.getAttribute('aria-controls'))
+              if (panel) panel.classList.remove('active')
+            })
+            tab.setAttribute('aria-selected', 'true')
+            var activePanel = document.getElementById(tab.getAttribute('aria-controls'))
+            if (activePanel) activePanel.classList.add('active')
+          })
           tab.addEventListener('keydown', function (e) {
-            var idx = Array.from(tabs).indexOf(tab);
-            var next = -1;
-            if (e.key === 'ArrowRight') next = (idx + 1) % tabs.length;
-            else if (e.key === 'ArrowLeft') next = (idx - 1 + tabs.length) % tabs.length;
+            var idx = Array.from(tabs).indexOf(tab)
+            var next = -1
+            if (e.key === 'ArrowRight') next = (idx + 1) % tabs.length
+            else if (e.key === 'ArrowLeft') next = (idx - 1 + tabs.length) % tabs.length
             if (next >= 0) {
-              e.preventDefault();
-              tabs[next].click();
-              tabs[next].focus();
+              e.preventDefault()
+              tabs[next].click()
+              tabs[next].focus()
             }
-          });
-        });
+          })
+        })
 
         /* ── Copy to clipboard ── */
         document.querySelectorAll('.copy-btn').forEach(function (btn) {
           btn.addEventListener('click', function () {
-            var code = btn.closest('.code-block').querySelector('code');
-            if (!code) return;
-            var text = code.textContent;
+            var code = btn.closest('.code-block').querySelector('code')
+            if (!code) return
+            var text = code.textContent
             navigator.clipboard.writeText(text).then(function () {
-              btn.textContent = 'Copied!';
-              btn.classList.add('copied');
+              btn.textContent = 'Copied!'
+              btn.classList.add('copied')
               setTimeout(function () {
-                btn.textContent = 'Copy';
-                btn.classList.remove('copied');
-              }, COPY_FEEDBACK);
-            });
-          });
-        });
+                btn.textContent = 'Copy'
+                btn.classList.remove('copied')
+              }, COPY_FEEDBACK)
+            })
+          })
+        })
 
         /* ── Scroll reveal ── */
         if (!reduceMotion && 'IntersectionObserver' in window) {
@@ -1417,22 +1587,22 @@
             function (entries) {
               entries.forEach(function (e) {
                 if (e.isIntersecting) {
-                  e.target.classList.add('visible');
-                  obs.unobserve(e.target);
+                  e.target.classList.add('visible')
+                  obs.unobserve(e.target)
                 }
-              });
+              })
             },
-            { threshold: 0.12 },
-          );
+            { threshold: 0.12 }
+          )
           document.querySelectorAll('.reveal').forEach(function (el) {
-            obs.observe(el);
-          });
+            obs.observe(el)
+          })
         } else {
           document.querySelectorAll('.reveal').forEach(function (el) {
-            el.classList.add('visible');
-          });
+            el.classList.add('visible')
+          })
         }
-      })();
+      })()
     </script>
   </body>
 </html>
