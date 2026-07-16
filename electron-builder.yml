@@ -19,12 +19,22 @@ afterPack: build/afterPack.cjs
 # Register snapit as an editor for still images so it appears under Finder's
 # right-click "Open With" (and the Windows/Linux equivalents). role: Editor keeps
 # it a choice, not the default handler — it never hijacks Preview/Photos.
+# NOTE: one entry per extension with a STRING ext — the AppImage target rejects an
+# array-valued ext (mac/win accept both; string works everywhere).
 fileAssociations:
-  - ext:
-      - png
-      - jpg
-      - jpeg
-      - webp
+  - ext: png
+    name: Image
+    description: Image
+    role: Editor
+  - ext: jpg
+    name: Image
+    description: Image
+    role: Editor
+  - ext: jpeg
+    name: Image
+    description: Image
+    role: Editor
+  - ext: webp
     name: Image
     description: Image
     role: Editor
