@@ -3,6 +3,48 @@
 All notable changes to snapit are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [3.0.0] - 2026-07-16
+
+### Open & edit existing images (new)
+
+- Open an image that already lives on disk and annotate it with the full screenshot
+  toolset (rectangle, ellipse, arrow, line, pen, colours, undo / redo, copy) — the same
+  editor, with the whole image as the canvas.
+- **Right-click → Open With → snapit** in Finder (and the Windows equivalent): snapit
+  registers as an _editor_ for `.png` / `.jpg` / `.jpeg` / `.webp`, so it shows up in the
+  menu without ever becoming the default image handler. A tray **"Open image…"** item does
+  the same via a file picker.
+- **Save a copy** is the default, non-destructive action; **Overwrite original…** (in the
+  save dropdown) replaces the file after a confirmation. Export is at the image's native
+  resolution and preserves the original format.
+- The editor opens as a normal window with a Dock / taskbar entry, unlike the capture overlays.
+
+> **Linux note:** a bare `.AppImage` doesn't register file associations until it's integrated into
+> the desktop (e.g. via `appimaged` / AppImageLauncher), so **Open With → snapit** won't appear in
+> the file manager there. Use the tray **"Open image…"** item instead — it works on every platform.
+
+### Under the hood
+
+- snapit now takes a single-instance lock, so opening a file routes to the running tray
+  app instead of launching a duplicate.
+- The annotation engine and toolbar were extracted into a shared `annotate` module reused by
+  both the screenshot overlay and the image editor.
+- Added a vitest suite for the image open/save helpers.
+
+### Install
+
+Download the installer for your platform from the assets below.
+
+> **macOS:** the app is signed (ad-hoc) but not notarized, so the first launch is blocked with
+> _"snapit can't be opened"_ / _"Apple could not verify… malware"_. Open it once with:
+>
+> ```bash
+> xattr -dr com.apple.quarantine /Applications/snapit.app
+> ```
+>
+> …then launch normally. (Or **System Settings → Privacy & Security → Open Anyway**.) This is
+> expected for any app not distributed through a paid Apple Developer account — the app is safe.
+
 ## [2.1.0] - 2026-07-14
 
 ### About window
@@ -117,6 +159,7 @@ Download the installer for your platform from the assets below.
 > …then launch normally. (Or **System Settings → Privacy & Security → Open Anyway**.) This is
 > expected for any app not distributed through a paid Apple Developer account — the app is safe.
 
+[3.0.0]: https://github.com/karantrehan3/snapit/releases/tag/v3.0.0
 [2.1.0]: https://github.com/karantrehan3/snapit/releases/tag/v2.1.0
 [2.0.0]: https://github.com/karantrehan3/snapit/releases/tag/v2.0.0
 [1.0.0]: https://github.com/karantrehan3/snapit/releases/tag/v1.0.0
