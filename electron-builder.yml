@@ -16,6 +16,19 @@ electronLanguages:
 # Ad-hoc sign the mac app so Apple Silicon will launch it (see build/afterPack.cjs).
 afterPack: build/afterPack.cjs
 
+# Register snapit as an editor for still images so it appears under Finder's
+# right-click "Open With" (and the Windows/Linux equivalents). role: Editor keeps
+# it a choice, not the default handler — it never hijacks Preview/Photos.
+fileAssociations:
+  - ext:
+      - png
+      - jpg
+      - jpeg
+      - webp
+    name: Image
+    description: Image
+    role: Editor
+
 mac:
   category: public.app-category.developer-tools
   icon: build/snapit.icns

@@ -58,9 +58,24 @@ export type AnnotationEditor = {
   onEditingKeyDown: (e: ReactKeyboardEvent) => void
   commitEditing: () => void
   startBoxResize: (corner: Corner, e: ReactMouseEvent) => void
+  exportImage: (use: (dataUrl: string) => void, mimeOverride?: string) => void
   onCopy: () => void
   onSave: () => void
   onSaveAs: () => void
+}
+
+/**
+ * Options that let the same engine drive both surfaces:
+ *  - screenshot: drag to select a region on a frozen full-screen frame.
+ *  - image edit: the whole opened image is the canvas (no region select).
+ */
+export type EditorOptions = {
+  /** Pre-set the capture box (image edit sets this to the whole image). */
+  initialBox?: Box | null
+  /** Allow creating / moving / resizing the box by dragging (screenshot only). */
+  regionSelect?: boolean
+  /** Export MIME type (image edit preserves the original format). Defaults to PNG. */
+  mimeType?: string
 }
 
 /**
@@ -68,8 +83,9 @@ export type AnnotationEditor = {
  * text editing, undo/redo, and all pointer/keyboard/wheel interaction for the
  * screenshot overlay. The component stays purely presentational.
  */
-export function useAnnotationEditor(frame: Frame): AnnotationEditor {
-  const [box, setBox] = useState<Box | null>(null)
+export function useAnnotationEditor(frame: Frame, opts: EditorOptions = {}): AnnotationEditor {
+  const { initialBox = null, regionSelect = true, mimeType } = opts
+  const [box, setBox] = useState<Box | null>(initialBox)
   const [tool, setTool] = useState<Tool>('move')
   const [color, setColor] = useState<string>(COLORS[0])
   const [strokeWidth, setStrokeWidth] = useState<number>(DEFAULT_STROKE)
@@ -210,6 +226,12 @@ export function useAnnotationEditor(frame: Frame): AnnotationEditor {
     const p = pointer()
 
     if (!box || !inBox(p, box)) {
+      // Image edit: the box is fixed to the whole image — a click outside it (or
+      // before one exists) just clears the selection rather than starting a new box.
+      if (!regionSelect) {
+        setSelectedId(null)
+        return
+      }
       drag.current = { kind: 'create', start: p, prevBox: box }
       setBox({ x: p.x, y: p.y, w: 0, h: 0 })
       setSelectedId(null)
@@ -229,11 +251,14 @@ export function useAnnotationEditor(frame: Frame): AnnotationEditor {
     }
 
     // Move tool: shape clicks are handled by the shape (cancelBubble) → reaching here
-    // means empty space, so move the box.
+    // means empty space. On the screenshot overlay that drags the box; in image edit
+    // the box is the whole image, so it just clears the selection.
     if (tool === 'move') {
       setSelectedId(null)
-      drag.current = { kind: 'moveBox', last: p }
-      setDragging(true)
+      if (regionSelect) {
+        drag.current = { kind: 'moveBox', last: p }
+        setDragging(true)
+      }
       return
     }
 
@@ -401,8 +426,10 @@ export function useAnnotationEditor(frame: Frame): AnnotationEditor {
     }
   }
 
-  // Flatten the box region to a native-res PNG (UI chrome excluded) and hand it off.
-  const exportPng = (use: (dataUrl: string) => void): void => {
+  // Flatten the box region to a native-res image (UI chrome excluded) and hand it
+  // off. Defaults to the configured mimeType (PNG for screenshot; the original
+  // format for image edit); callers can override it — copy always exports PNG.
+  const exportImage = (use: (dataUrl: string) => void, mimeOverride?: string): void => {
     commitEditing()
     setSelectedId(null)
     trRef.current?.nodes([])
@@ -414,14 +441,16 @@ export function useAnnotationEditor(frame: Frame): AnnotationEditor {
         y: box.y,
         width: box.w,
         height: box.h,
-        pixelRatio: frame.scaleFactor
+        pixelRatio: frame.scaleFactor,
+        mimeType: mimeOverride ?? mimeType
       })
       use(url)
     })
   }
-  const onCopy = (): void => exportPng((url) => window.snapit.copyImage(url))
-  const onSave = (): void => exportPng((url) => void window.snapit.saveImage(url))
-  const onSaveAs = (): void => exportPng((url) => void window.snapit.saveImageAs(url))
+  // Clipboard images are always PNG — nativeImage can't reliably decode webp data URLs.
+  const onCopy = (): void => exportImage((url) => window.snapit.copyImage(url), 'image/png')
+  const onSave = (): void => exportImage((url) => void window.snapit.saveImage(url))
+  const onSaveAs = (): void => exportImage((url) => void window.snapit.saveImageAs(url))
 
   // Cmd/Ctrl+C copies the cropped region too — a keyboard alternative to the Copy
   // button. Skipped while editing text so the textarea's own copy still works.
@@ -488,6 +517,7 @@ export function useAnnotationEditor(frame: Frame): AnnotationEditor {
     onEditingKeyDown,
     commitEditing,
     startBoxResize,
+    exportImage,
     onCopy,
     onSave,
     onSaveAs

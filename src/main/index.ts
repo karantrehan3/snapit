@@ -1,5 +1,6 @@
-import { join } from 'path'
-import { mkdir, writeFile } from 'fs/promises'
+import { join, parse } from 'path'
+import { existsSync } from 'fs'
+import { mkdir, readFile, writeFile } from 'fs/promises'
 import {
   app,
   BrowserWindow,
@@ -21,6 +22,13 @@ import {
 import { captureDisplay, getDisplaySource, type DisplaySource } from './capture'
 import { getSettings, setSettings, type Settings } from './settings'
 import { checkForUpdate, type UpdateInfo } from './updater'
+import {
+  EDITABLE_EXTENSIONS,
+  bufferFromDataUrl,
+  isEditableImage,
+  mimeForPath,
+  normalizeExt
+} from './imageFile'
 import { TRAY_TEMPLATE_DATA_URL, TRAY_COLOUR_DATA_URL } from './trayIcon'
 
 /** How often to re-check GitHub for a newer release while the app runs. */
@@ -52,11 +60,18 @@ type CaptureSession =
   | { mode: 'record'; source: DisplaySource }
   | { mode: 'gif'; source: DisplaySource }
 
+/** An existing image opened for editing (Finder "Open With", argv, or tray dialog). */
+type EditSession = { path: string; name: string; ext: string; mime: string; dataUrl: string }
+
 let tray: Tray | null = null
 let overlayWindow: BrowserWindow | null = null
 let settingsWindow: BrowserWindow | null = null
 let aboutWindow: BrowserWindow | null = null
+let editorWindow: BrowserWindow | null = null
 let session: CaptureSession | null = null
+let editSession: EditSession | null = null
+// Image paths requested before the app is ready (macOS cold-start 'open-file').
+const pendingOpenPaths: string[] = []
 let recordWantsSystemAudio = false
 let recordSourceId: string | null = null
 // When set, the overlay's 'closed' handler starts this capture mode next — used to
@@ -301,6 +316,7 @@ function buildTray(): void {
       registerAccelerator: false,
       click: () => void startCapture('gif')
     },
+    { label: 'Open image…', click: () => void openImageFromDialog() },
     { type: 'separator' },
     { label: 'Settings…', click: openSettingsWindow },
     { label: 'Open save folder', click: () => void shell.openPath(getSettings().saveDir) },
@@ -357,9 +373,144 @@ function pngBuffer(dataUrl: string): Buffer {
   return nativeImage.createFromDataURL(dataUrl).toPNG()
 }
 
+function openEditorWindow(): void {
+  if (editorWindow) {
+    // Replace the current image with the just-opened one (editSession is already set).
+    editorWindow.focus()
+    editorWindow.webContents.reload()
+    return
+  }
+  editorWindow = new BrowserWindow({
+    width: 1000,
+    height: 720,
+    minWidth: 480,
+    minHeight: 360,
+    title: 'snapit — Edit image',
+    backgroundColor: '#1e1e20',
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: true,
+      spellcheck: false
+    }
+  })
+  editorWindow.on('closed', () => {
+    editorWindow = null
+    editSession = null
+    // Back to a background accessory app once the document window is gone.
+    if (process.platform === 'darwin') void app.dock?.hide()
+  })
+  editorWindow.once('ready-to-show', () => {
+    if (process.platform === 'darwin') app.focus({ steal: true })
+    editorWindow?.focus()
+  })
+  // Unlike the capture overlays, the editor is a real document window — give it a
+  // Dock icon (and app switcher entry) while it's open. The icon image itself is
+  // applied once at startup (applyDevDockIcon) so it's already in place here.
+  if (process.platform === 'darwin') void app.dock?.show()
+  loadRenderer(editorWindow, 'edit')
+}
+
+/**
+ * In dev the running binary is Electron, so the Dock shows its generic icon. Point
+ * the Dock tile at snapit's real icon (downscaled to a Dock-appropriate size). Must
+ * run after 'ready' and before any dock.show() so the image is in place. No-op in
+ * packaged builds — those already carry the bundle's .icns.
+ */
+function applyDevDockIcon(): void {
+  if (process.platform !== 'darwin' || !process.env['ELECTRON_RENDERER_URL']) return
+  const icon = nativeImage.createFromPath(join(__dirname, '../../build/icon.png'))
+  if (icon.isEmpty()) {
+    console.warn('[snapit] dev dock icon not found at build/icon.png')
+    return
+  }
+  app.dock?.setIcon(icon.resize({ width: 512, height: 512 }))
+}
+
+function closeEditorWindow(): void {
+  editorWindow?.close()
+  editorWindow = null
+  editSession = null
+}
+
+/** Read an existing image from disk and open it in the editor window. */
+async function openImageForEdit(filePath: string): Promise<void> {
+  if (!isEditableImage(filePath)) {
+    console.warn(`[snapit] refusing to open unsupported file: ${filePath}`)
+    return
+  }
+  const mime = mimeForPath(filePath)
+  if (!mime) return
+  let bytes: Buffer
+  try {
+    bytes = await readFile(filePath)
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err)
+    console.error(`[snapit] failed to read image ${filePath}: ${detail}`)
+    return
+  }
+  editSession = {
+    path: filePath,
+    name: parse(filePath).base,
+    ext: normalizeExt(filePath),
+    mime,
+    dataUrl: `data:${mime};base64,${bytes.toString('base64')}`
+  }
+  console.log(`[snapit] opening image for edit: ${filePath} (${bytes.length} bytes)`)
+  openEditorWindow()
+}
+
+/** Prompt for an image file (tray fallback / dev entry point), then open it. */
+async function openImageFromDialog(): Promise<void> {
+  // The dock is hidden (accessory app), so the app isn't frontmost after a tray
+  // click — without stealing focus the open panel opens behind other windows.
+  if (process.platform === 'darwin') app.focus({ steal: true })
+  try {
+    const { canceled, filePaths } = await dialog.showOpenDialog({
+      properties: ['openFile'],
+      filters: [{ name: 'Images', extensions: [...EDITABLE_EXTENSIONS] }]
+    })
+    if (!canceled && filePaths[0]) await openImageForEdit(filePaths[0])
+  } catch (err) {
+    console.error('[snapit] open-image dialog failed:', err)
+  }
+}
+
+/** Pick an editable image path out of a process argv list (Windows/Linux open-with). */
+function imagePathFromArgv(argv: string[]): string | null {
+  // Scan from the end: the launched file is typically the last argument.
+  for (let i = argv.length - 1; i >= 0; i--) {
+    const arg = argv[i]
+    if (isEditableImage(arg) && existsSync(arg)) return arg
+  }
+  return null
+}
+
+// Single-instance: snapit is a persistent tray app, so a second launch (e.g. a
+// Finder "Open With" on Windows/Linux) must route the file to the running instance
+// instead of spawning a duplicate tray icon.
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+} else {
+  app.on('second-instance', (_event, argv) => {
+    const filePath = imagePathFromArgv(argv)
+    if (filePath) void openImageForEdit(filePath)
+  })
+  // macOS delivers "Open With" / drag-to-dock via 'open-file'. It can fire before
+  // the app is ready (cold start), so queue those paths and drain them in whenReady.
+  app.on('open-file', (event, filePath) => {
+    event.preventDefault()
+    if (app.isReady()) void openImageForEdit(filePath)
+    else pendingOpenPaths.push(filePath)
+  })
+}
+
 app.whenReady().then(() => {
+  // Lost the single-instance race: this process is exiting, do nothing.
+  if (!app.hasSingleInstanceLock()) return
+
   if (process.platform === 'darwin') {
     app.dock?.hide()
+    applyDevDockIcon()
   }
 
   // Kill the macOS spell-checker (NSSpellServer log spam, and we don't need it).
@@ -495,6 +646,55 @@ app.whenReady().then(() => {
     return filePath
   })
 
+  // The image currently open for editing (renderer-safe subset — no disk path).
+  ipcMain.handle('edit:get', () =>
+    editSession ? { dataUrl: editSession.dataUrl, name: editSession.name, ext: editSession.ext } : null
+  )
+
+  // Overwrite the original file in place, after a confirmation (hard to reverse).
+  // Writes only to the main-stored path — never a renderer-supplied one.
+  ipcMain.handle('edit:save', async (_event, dataUrl: string) => {
+    if (!editSession || !isImageDataUrl(dataUrl)) return null
+    const target = editSession
+    const confirmOptions = {
+      type: 'warning' as const,
+      buttons: ['Overwrite', 'Cancel'],
+      defaultId: 0,
+      cancelId: 1,
+      message: 'Overwrite the original image?',
+      detail: target.path
+    }
+    const { response } = editorWindow
+      ? await dialog.showMessageBox(editorWindow, confirmOptions)
+      : await dialog.showMessageBox(confirmOptions)
+    if (response !== 0) return null
+    await writeFile(target.path, bufferFromDataUrl(dataUrl))
+    shell.showItemInFolder(target.path)
+    closeEditorWindow()
+    return target.path
+  })
+
+  // Save the edited image as a new file (a copy), preserving the original format.
+  ipcMain.handle('edit:save-copy', async (_event, dataUrl: string) => {
+    if (!editSession || !isImageDataUrl(dataUrl)) return null
+    const target = editSession
+    const { dir, name } = parse(target.path)
+    const options = {
+      defaultPath: join(dir, `${name} copy.${target.ext}`),
+      filters: [{ name: 'Image', extensions: [target.ext] }]
+    }
+    const result = editorWindow
+      ? await dialog.showSaveDialog(editorWindow, options)
+      : await dialog.showSaveDialog(options)
+    if (result.canceled || !result.filePath) return null
+    await writeFile(result.filePath, bufferFromDataUrl(dataUrl))
+    shell.showItemInFolder(result.filePath)
+    closeEditorWindow()
+    return result.filePath
+  })
+
+  ipcMain.on('edit:close', closeEditorWindow)
+
   // List capturable sources (each screen + each window) with preview thumbnails.
   ipcMain.handle('record:list-sources', async () => {
     const sources = await desktopCapturer.getSources({
@@ -549,6 +749,16 @@ app.whenReady().then(() => {
     })
     return canceled ? null : filePaths[0]
   })
+
+  // Open any image the app was launched to edit: macOS queues them via 'open-file';
+  // Windows/Linux pass the path in this first instance's argv.
+  const startupPaths = [...pendingOpenPaths]
+  pendingOpenPaths.length = 0
+  if (process.platform !== 'darwin') {
+    const argvPath = imagePathFromArgv(process.argv)
+    if (argvPath) startupPaths.push(argvPath)
+  }
+  for (const filePath of startupPaths) void openImageForEdit(filePath)
 })
 
 // Tray app: stay alive when windows close.

@@ -29,8 +29,8 @@
 
 ## What it is
 
-**snapit** is a desktop tray app that lives in your menu bar and gives you two capture modes
-behind global hotkeys:
+**snapit** is a desktop tray app that lives in your menu bar and gives you three capture modes
+behind global hotkeys — plus an editor for images you already have:
 
 - **Screenshot** (`⌘⇧9`) — freeze the screen, drag a resizable selection box, annotate it, then
   copy or save.
@@ -38,6 +38,9 @@ behind global hotkeys:
   audio, and record to a native `.mp4`.
 - **Record GIF** (`⌘⇧7`) — same source/region picker, choose a frame rate, and record a silent
   animated `.gif` (encoded on-device).
+- **Open image** — right-click a `PNG` / `JPG` / `WEBP` in Finder → **Open With → snapit** (or use
+  the tray's **Open image…**), annotate it with the full toolset, and save a copy or overwrite the
+  original.
 
 Everything stays on your machine — captures go to the clipboard or a folder you choose. Nothing is
 uploaded anywhere.
@@ -74,9 +77,20 @@ uploaded anywhere.
 - The setup panel recommends **recording video instead** for Slack / GitHub / Jira — they autoplay
   video, which is sharper and much smaller than a GIF; one click switches to the video recorder.
 
+**Open & edit an image**
+
+- Edit an image that already exists on disk with the same annotation toolset as screenshots — the
+  whole image is the canvas.
+- Entry points: **Finder → right-click → Open With → snapit** for `.png` / `.jpg` / `.jpeg` /
+  `.webp` (snapit registers as an _editor_, so it never becomes your default image handler), or the
+  tray's **Open image…** picker.
+- **Save a copy** (default, non-destructive) or **Overwrite original…** (confirmed first); exports at
+  the image's native resolution and preserves its format.
+
 **App**
 
-- Background **menu-bar / tray app** (no dock icon) with a branded icon.
+- Background **menu-bar / tray app** (no dock icon) with a branded icon; the image editor is a normal
+  window that appears in the Dock / taskbar while open.
 - **Settings** window to edit both hotkeys and the save folder, persisted across launches.
 - Capture overlays are excluded from screen capture (content-protected) so they never bleed into a
   recording.
@@ -112,6 +126,12 @@ Grab the latest build for your OS and run it:
 > capture goes through the PipeWire portal and the capture overlay can't be hidden from recordings.
 > Unsigned-app warnings also apply (Windows SmartScreen → _More info → Run anyway_; Linux may need
 > `libfuse2`). Bug reports from these platforms are welcome.
+
+> **Linux "Open With":** a bare `.AppImage` doesn't register its file associations until it's
+> integrated into the desktop (e.g. via [`appimaged`](https://github.com/probonopd/go-appimage) or
+> AppImageLauncher). Until then, **Open With → snapit** won't appear in your file manager — use the
+> tray's **Open image…** instead, which works everywhere. macOS and Windows register the association
+> automatically on install.
 
 <details>
 <summary><strong>macOS first-launch notes</strong> (Gatekeeper + Screen Recording)</summary>

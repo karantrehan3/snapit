@@ -1,18 +1,15 @@
 import type { ReactElement } from 'react'
-import { Stage, Layer, Image as KonvaImage, Group, Transformer } from 'react-konva'
 import type { Frame } from '@preload/index'
-import { useAnnotationEditor } from './useAnnotationEditor'
-import { renderShape } from './shapes'
-import { Toolbar } from './Toolbar'
+import { useAnnotationEditor } from '@renderer/features/annotate/useAnnotationEditor'
+import { AnnotationStage } from '@renderer/features/annotate/AnnotationStage'
+import { SizePreview } from '@renderer/features/annotate/SizePreview'
+import { Toolbar } from '@renderer/features/annotate/Toolbar'
 import {
   cornerHandle,
   fullDim,
   hintStyle,
   overlayRoot,
   selectionDim,
-  sizePreviewCircle,
-  sizePreviewLabel,
-  sizePreviewWrap,
   textareaStyle,
   toolbarPosition
 } from './styles'
@@ -30,36 +27,7 @@ export function ScreenshotOverlay({ frame }: { frame: Frame }): ReactElement {
 
   return (
     <div style={overlayRoot}>
-      <Stage
-        ref={editor.stageRef}
-        width={frame.width}
-        height={frame.height}
-        onMouseDown={editor.onStageMouseDown}
-        onMouseMove={editor.onStageMouseMove}
-        onMouseUp={editor.onStageMouseUp}
-      >
-        <Layer>
-          <KonvaImage image={editor.bg ?? undefined} width={frame.width} height={frame.height} name="bg" />
-        </Layer>
-
-        {box && (
-          <Layer>
-            <Group x={box.x} y={box.y} clipX={0} clipY={0} clipWidth={box.w} clipHeight={box.h}>
-              {editor.all.map((shape) =>
-                renderShape(shape, editor.selectedId, editing?.id, editor.shapeHandlers)
-              )}
-            </Group>
-            <Transformer
-              ref={editor.trRef}
-              rotateEnabled={false}
-              keepRatio={false}
-              enabledAnchors={['top-left', 'top-right', 'bottom-left', 'bottom-right']}
-              onTransformStart={editor.onTransformStart}
-              onTransformEnd={editor.onTransformEnd}
-            />
-          </Layer>
-        )}
-      </Stage>
+      <AnnotationStage editor={editor} width={frame.width} height={frame.height} />
 
       {/* Grey overtone: everything dimmed except the bright selection window. */}
       {box ? <div style={selectionDim(box)} /> : <div style={fullDim} />}
@@ -95,12 +63,7 @@ export function ScreenshotOverlay({ frame }: { frame: Frame }): ReactElement {
 
       {!box && <div style={hintStyle}>Drag to select · Esc to cancel</div>}
 
-      {sizePreview && (
-        <div style={sizePreviewWrap(sizePreview.x, sizePreview.y)}>
-          <div style={sizePreviewCircle(sizePreview.size)} />
-          <div style={sizePreviewLabel}>{sizePreview.size}px</div>
-        </div>
-      )}
+      <SizePreview preview={sizePreview} />
 
       {box && (
         <Toolbar

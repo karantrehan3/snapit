@@ -15,6 +15,15 @@ type Props = {
   onSaveAs: () => void
   onCancel: () => void
   style: CSSProperties
+  /** Primary save button label/tooltip (image edit overrides to "overwrite original"). */
+  saveLabel?: string
+  saveTitle?: string
+  /** Secondary save action label (image edit demotes "Overwrite original" here). */
+  saveAsLabel?: string
+  /** Tooltip for the secondary save action (e.g. warn that it overwrites the file). */
+  saveAsTitle?: string
+  /** Which way the save dropdown opens ('up' for a bottom-docked toolbar). Default 'down'. */
+  menuPlacement?: 'up' | 'down'
 }
 
 export function Toolbar({
@@ -30,7 +39,12 @@ export function Toolbar({
   onSave,
   onSaveAs,
   onCancel,
-  style
+  style,
+  saveLabel = 'Save',
+  saveTitle = 'Save to folder',
+  saveAsLabel = 'Save As…',
+  saveAsTitle,
+  menuPlacement = 'down'
 }: Props): ReactElement {
   const [saveMenu, setSaveMenu] = useState(false)
   const [colorMenu, setColorMenu] = useState(false)
@@ -82,22 +96,23 @@ export function Toolbar({
       </button>
 
       <div style={{ position: 'relative', display: 'inline-flex' }}>
-        <button title="Save to folder" onClick={onSave} style={splitMain('#34c759')}>
-          Save
+        <button title={saveTitle} onClick={onSave} style={splitMain('#34c759')}>
+          {saveLabel}
         </button>
-        <button title="Save as…" onClick={() => setSaveMenu((m) => !m)} style={splitChevron('#2da14e')}>
+        <button title={saveAsLabel} onClick={() => setSaveMenu((m) => !m)} style={splitChevron('#2da14e')}>
           ▾
         </button>
         {saveMenu && (
-          <div style={menuStyle}>
+          <div style={menuStyle(menuPlacement)}>
             <button
+              title={saveAsTitle}
               onClick={() => {
                 setSaveMenu(false)
                 onSaveAs()
               }}
               style={menuItemStyle}
             >
-              Save As…
+              {saveAsLabel}
             </button>
           </div>
         )}
@@ -219,6 +234,9 @@ function paletteSwatch(color: string, active: boolean): CSSProperties {
 
 function action(bg: string): CSSProperties {
   return {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
     height: 28,
     padding: '0 12px',
     border: 'none',
@@ -227,6 +245,7 @@ function action(bg: string): CSSProperties {
     color: '#fff',
     fontSize: 13,
     fontWeight: 600,
+    whiteSpace: 'nowrap',
     background: bg
   }
 }
@@ -239,16 +258,20 @@ function splitChevron(bg: string): CSSProperties {
   return { ...action(bg), borderRadius: '0 6px 6px 0', padding: '0 8px', fontSize: 11 }
 }
 
-const menuStyle: CSSProperties = {
-  position: 'absolute',
-  top: '100%',
-  left: 0,
-  marginTop: 4,
-  background: 'rgba(40, 40, 42, 0.98)',
-  borderRadius: 6,
-  boxShadow: '0 4px 16px rgba(0, 0, 0, 0.5)',
-  overflow: 'hidden',
-  zIndex: 10
+function menuStyle(placement: 'up' | 'down'): CSSProperties {
+  // 'up' for a bottom-docked toolbar (image editor) so the menu isn't clipped by
+  // the window edge; 'down' for the screenshot toolbar that floats near the top.
+  const vertical = placement === 'up' ? { bottom: '100%', marginBottom: 4 } : { top: '100%', marginTop: 4 }
+  return {
+    position: 'absolute',
+    left: 0,
+    ...vertical,
+    background: 'rgba(40, 40, 42, 0.98)',
+    borderRadius: 6,
+    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.5)',
+    overflow: 'hidden',
+    zIndex: 10
+  }
 }
 
 const menuItemStyle: CSSProperties = {

@@ -29,6 +29,9 @@ export type Settings = {
 /** A newer release available on GitHub (from the About window's update check). */
 export type UpdateInfo = { version: string; notesUrl: string; downloadUrl: string }
 
+/** An existing image opened for editing (renderer-safe: no disk path). */
+export type EditImage = { dataUrl: string; name: string; ext: string }
+
 const api = {
   /** Fetch the current capture session (mode + frozen frame for screenshots). */
   getSession: (): Promise<CaptureSession | null> => ipcRenderer.invoke('capture:get-session'),
@@ -52,6 +55,14 @@ const api = {
     ipcRenderer.invoke('record:save', data, ext),
   /** Persist a finished GIF (encoded bytes); closes the overlay. Returns the path. */
   saveGif: (data: ArrayBuffer): Promise<string> => ipcRenderer.invoke('gif:save', data),
+  /** The image currently open for editing (data URL + display name + format). */
+  getEditSession: (): Promise<EditImage | null> => ipcRenderer.invoke('edit:get'),
+  /** Overwrite the original file (confirmed in main); returns the path or null. Closes the editor. */
+  saveEdit: (dataUrl: string): Promise<string | null> => ipcRenderer.invoke('edit:save', dataUrl),
+  /** Save the edited image as a new copy via a dialog; returns the path or null. Closes the editor. */
+  saveEditCopy: (dataUrl: string): Promise<string | null> => ipcRenderer.invoke('edit:save-copy', dataUrl),
+  /** Dismiss the image editor window without saving. */
+  closeEditor: (): void => ipcRenderer.send('edit:close'),
   /** Toggle overlay click-through while recording (the Stop pill stays interactive). */
   setMouseIgnore: (ignore: boolean): void => ipcRenderer.send('record:set-ignore-mouse', ignore),
   /** Subscribe to stop-recording requests (record hotkey pressed again). Returns an unsubscribe. */
