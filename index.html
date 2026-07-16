@@ -447,6 +447,148 @@
         transform: translate(-50%, -50%) scale(1);
       }
 
+      /* ── Hero scene cycler ── */
+      /* The canvas is always dark (--terminal-bg), so on-canvas chrome uses fixed
+         dark values in both themes rather than theme-flipping surface variables. */
+      .demo-scene {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        transition: opacity 0.5s var(--ease);
+        pointer-events: none;
+      }
+      .demo-scene.active {
+        opacity: 1;
+      }
+      .demo-scene .demo-svg {
+        position: absolute;
+        inset: 0;
+      }
+      .rec-region {
+        position: absolute;
+        left: 22px;
+        top: 22px;
+        right: 22px;
+        bottom: 22px;
+        border: 2px dashed var(--accent);
+        border-radius: 6px;
+      }
+      .rec-badge {
+        position: absolute;
+        top: 14px;
+        left: 16px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 6px;
+        background: rgba(26, 26, 30, 0.92);
+        border: 1px solid #2f2f36;
+        color: #f5f5f7;
+        font: 700 0.7rem var(--sans);
+        letter-spacing: 0.1em;
+      }
+      .rec-badge--gif {
+        color: var(--accent);
+      }
+      .rec-dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: var(--accent);
+        flex: 0 0 auto;
+      }
+      .demo-scene.active .rec-dot {
+        animation: recPulse 1.2s var(--ease) infinite;
+      }
+      @keyframes recPulse {
+        0% {
+          box-shadow: 0 0 0 0 rgba(255, 69, 58, 0.5);
+        }
+        70% {
+          box-shadow: 0 0 0 8px rgba(255, 69, 58, 0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(255, 69, 58, 0);
+        }
+      }
+      .rec-pill,
+      .gif-bar {
+        position: absolute;
+        bottom: 14px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        border-radius: 999px;
+        background: rgba(26, 26, 30, 0.92);
+        border: 1px solid #2f2f36;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        font: 600 0.78rem var(--sans);
+        color: #f5f5f7;
+        white-space: nowrap;
+      }
+      .rec-time {
+        font-family: var(--mono);
+        font-variant-numeric: tabular-nums;
+      }
+      .rec-stop {
+        width: 12px;
+        height: 12px;
+        border-radius: 3px;
+        background: var(--accent);
+      }
+      .edit-photo {
+        position: absolute;
+        left: 22px;
+        top: 22px;
+        right: 22px;
+        bottom: 52px;
+        border-radius: 8px;
+        overflow: hidden;
+        background: linear-gradient(135deg, #3a2f5e 0%, #1f3b57 55%, #20544e 100%);
+      }
+      .ph-bar {
+        position: absolute;
+        height: 9px;
+        border-radius: 5px;
+        background: rgba(255, 255, 255, 0.28);
+      }
+      .edit-anno {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+      }
+      .edit-actions {
+        position: absolute;
+        bottom: 12px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: inline-flex;
+        align-items: stretch;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+      }
+      .edit-save {
+        padding: 6px 14px;
+        background: var(--rec-green);
+        color: #fff;
+        font: 600 0.78rem var(--sans);
+      }
+      .edit-caret {
+        display: inline-flex;
+        align-items: center;
+        padding: 0 8px;
+        background: color-mix(in srgb, var(--rec-green) 82%, #000);
+        color: #fff;
+        font-size: 0.7rem;
+      }
+
       /* ── Sections ── */
       section {
         padding: var(--space) 0;
@@ -997,108 +1139,177 @@
                 <span class="demo-dot demo-dot--r"></span>
                 <span class="demo-dot demo-dot--y"></span>
                 <span class="demo-dot demo-dot--g"></span>
-                <span class="demo-title">Snap It &mdash; Editor</span>
+                <span class="demo-title" id="demoTitle">Snap It &mdash; Screenshot</span>
               </div>
               <div class="demo-canvas">
                 <div class="demo-canvas-bg"></div>
-                <svg class="demo-svg" viewBox="0 0 400 260" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <defs>
-                    <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-                      <path d="M0,0 L8,3 L0,6" fill="var(--accent)" />
-                    </marker>
-                  </defs>
-                  <!-- Selection border -->
-                  <rect
-                    class="demo-selection"
-                    x="8"
-                    y="8"
-                    width="384"
-                    height="244"
-                    rx="4"
-                    stroke="var(--accent)"
-                    stroke-width="1.5"
-                  />
-                  <!-- Annotation shapes -->
-                  <rect
-                    class="demo-shape"
-                    id="demoRect"
-                    x="30"
-                    y="25"
-                    width="140"
-                    height="80"
-                    rx="4"
-                    stroke="var(--accent)"
-                    stroke-width="2.5"
-                  />
-                  <ellipse
-                    class="demo-shape"
-                    id="demoEllipse"
-                    cx="290"
-                    cy="60"
-                    rx="70"
-                    ry="42"
-                    stroke="var(--accent)"
-                    stroke-width="2.5"
-                  />
-                  <line
-                    class="demo-shape"
-                    id="demoArrow"
-                    x1="100"
-                    y1="145"
-                    x2="260"
-                    y2="190"
-                    stroke="var(--accent)"
-                    stroke-width="2.5"
-                    marker-end="url(#arrowhead)"
-                  />
-                  <path
-                    class="demo-shape"
-                    id="demoPen"
-                    d="M 40 200 Q 80 160 130 195 Q 180 230 230 185 Q 260 165 290 180"
-                    stroke="var(--accent)"
-                    stroke-width="2.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  />
-                </svg>
-                <!-- Toolbar -->
-                <div class="demo-toolbar">
-                  <button class="tool-btn" id="toolRect" aria-label="Rectangle tool" tabindex="-1">
-                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-                      <rect x="2" y="3" width="12" height="10" rx="1.5" />
-                    </svg>
-                  </button>
-                  <button class="tool-btn" id="toolEllipse" aria-label="Ellipse tool" tabindex="-1">
-                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-                      <ellipse cx="8" cy="8" rx="6" ry="5" />
-                    </svg>
-                  </button>
-                  <button class="tool-btn" id="toolArrow" aria-label="Arrow tool" tabindex="-1">
-                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-                      <line x1="3" y1="13" x2="13" y2="3" />
-                      <polyline points="7,3 13,3 13,9" />
-                    </svg>
-                  </button>
-                  <button class="tool-btn" id="toolPen" aria-label="Pen tool" tabindex="-1">
-                    <svg
-                      viewBox="0 0 16 16"
-                      fill="none"
-                      stroke="currentColor"
+
+                <!-- Scene 1: Screenshot & annotate -->
+                <div class="demo-scene active" data-scene="shot">
+                  <svg class="demo-svg" viewBox="0 0 400 260" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                      <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+                        <path d="M0,0 L8,3 L0,6" fill="var(--accent)" />
+                      </marker>
+                    </defs>
+                    <rect
+                      class="demo-selection"
+                      x="8"
+                      y="8"
+                      width="384"
+                      height="244"
+                      rx="4"
+                      stroke="var(--accent)"
                       stroke-width="1.5"
+                    />
+                    <rect
+                      class="demo-shape"
+                      id="demoRect"
+                      x="30"
+                      y="25"
+                      width="140"
+                      height="80"
+                      rx="4"
+                      stroke="var(--accent)"
+                      stroke-width="2.5"
+                    />
+                    <ellipse
+                      class="demo-shape"
+                      id="demoEllipse"
+                      cx="290"
+                      cy="60"
+                      rx="70"
+                      ry="42"
+                      stroke="var(--accent)"
+                      stroke-width="2.5"
+                    />
+                    <line
+                      class="demo-shape"
+                      id="demoArrow"
+                      x1="100"
+                      y1="145"
+                      x2="260"
+                      y2="190"
+                      stroke="var(--accent)"
+                      stroke-width="2.5"
+                      marker-end="url(#arrowhead)"
+                    />
+                    <path
+                      class="demo-shape"
+                      id="demoPen"
+                      d="M 40 200 Q 80 160 130 195 Q 180 230 230 185 Q 260 165 290 180"
+                      stroke="var(--accent)"
+                      stroke-width="2.5"
                       stroke-linecap="round"
-                    >
-                      <path d="M3 12 Q6 5 9 9 Q12 13 14 6" />
-                    </svg>
-                  </button>
-                  <div class="tool-sep"></div>
-                  <div class="tool-colors">
-                    <span class="color-swatch active" style="background: #ff453a"></span>
-                    <span class="color-swatch" style="background: #ff9f0a"></span>
-                    <span class="color-swatch" style="background: #30d158"></span>
-                    <span class="color-swatch" style="background: #5e5ce6"></span>
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                  <div class="demo-toolbar">
+                    <button class="tool-btn" id="toolRect" aria-label="Rectangle tool" tabindex="-1">
+                      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <rect x="2" y="3" width="12" height="10" rx="1.5" />
+                      </svg>
+                    </button>
+                    <button class="tool-btn" id="toolEllipse" aria-label="Ellipse tool" tabindex="-1">
+                      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <ellipse cx="8" cy="8" rx="6" ry="5" />
+                      </svg>
+                    </button>
+                    <button class="tool-btn" id="toolArrow" aria-label="Arrow tool" tabindex="-1">
+                      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <line x1="3" y1="13" x2="13" y2="3" />
+                        <polyline points="7,3 13,3 13,9" />
+                      </svg>
+                    </button>
+                    <button class="tool-btn" id="toolPen" aria-label="Pen tool" tabindex="-1">
+                      <svg
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        stroke-linecap="round"
+                      >
+                        <path d="M3 12 Q6 5 9 9 Q12 13 14 6" />
+                      </svg>
+                    </button>
+                    <div class="tool-sep"></div>
+                    <div class="tool-colors">
+                      <span class="color-swatch active" style="background: #ff453a"></span>
+                      <span class="color-swatch" style="background: #ff9f0a"></span>
+                      <span class="color-swatch" style="background: #30d158"></span>
+                      <span class="color-swatch" style="background: #5e5ce6"></span>
+                    </div>
                   </div>
+                  <div class="demo-toast" data-toast>&#10003; Copied to clipboard</div>
                 </div>
-                <div class="demo-toast" id="demoToast">&#10003; Copied to clipboard</div>
+
+                <!-- Scene 2: Record video -->
+                <div class="demo-scene" data-scene="video">
+                  <div class="rec-region"></div>
+                  <div class="rec-badge"><span class="rec-dot"></span> REC</div>
+                  <div class="rec-pill">
+                    <span class="rec-dot"></span>
+                    <span class="rec-time" data-timer>00:00</span>
+                    <span class="rec-stop"></span>
+                  </div>
+                  <div class="demo-toast" data-toast>&#10003; Saved snapit&hellip;.mp4</div>
+                </div>
+
+                <!-- Scene 3: Record GIF -->
+                <div class="demo-scene" data-scene="gif">
+                  <div class="rec-region"></div>
+                  <div class="rec-badge rec-badge--gif">GIF</div>
+                  <div class="gif-bar"><span class="rec-dot"></span> Recording &middot; 30 fps</div>
+                  <div class="demo-toast" data-toast>&#10003; Saved snapit&hellip;.gif</div>
+                </div>
+
+                <!-- Scene 4: Edit an existing image -->
+                <div class="demo-scene" data-scene="edit">
+                  <div class="edit-photo">
+                    <span class="ph-bar" style="left: 16px; top: 16px; width: 120px"></span>
+                    <span class="ph-bar" style="left: 16px; top: 36px; width: 210px; opacity: 0.65"></span>
+                    <span class="ph-bar" style="left: 16px; top: 54px; width: 170px; opacity: 0.45"></span>
+                    <svg
+                      class="edit-anno"
+                      viewBox="0 0 360 150"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <defs>
+                        <marker id="ah2" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+                          <path d="M0,0 L8,3 L0,6" fill="var(--accent)" />
+                        </marker>
+                      </defs>
+                      <rect
+                        class="demo-shape"
+                        id="editRect"
+                        x="158"
+                        y="52"
+                        width="150"
+                        height="74"
+                        rx="5"
+                        stroke="var(--accent)"
+                        stroke-width="2.5"
+                      />
+                      <line
+                        class="demo-shape"
+                        id="editArrow"
+                        x1="60"
+                        y1="28"
+                        x2="156"
+                        y2="72"
+                        stroke="var(--accent)"
+                        stroke-width="2.5"
+                        marker-end="url(#ah2)"
+                      />
+                    </svg>
+                  </div>
+                  <div class="edit-actions">
+                    <span class="edit-save">Save a copy</span>
+                    <span class="edit-caret">&#9662;</span>
+                  </div>
+                  <div class="demo-toast" data-toast>&#10003; Saved a copy</div>
+                </div>
               </div>
             </div>
           </div>
@@ -1415,11 +1626,11 @@
     <script>
       ;(function () {
         /* ── Configurable timing (ms) ── */
-        var DEMO_INITIAL_DELAY = 500 // pause before first shape appears
-        var SHAPE_INTERVAL = 900 // delay between annotation shapes
-        var TOAST_DISPLAY = 1400 // how long the "Copied to clipboard" toast shows
-        var TOAST_FADE_PAUSE = 400 // pause after toast hides before clearing demo
-        var DEMO_RESTART_DELAY = 600 // delay before restarting the demo cycle
+        var SCENE_DISPLAY = 3600 // how long each hero scene stays visible
+        var SHOT_START = 350 // delay before the first annotation appears
+        var SHOT_STEP = 520 // delay between successive annotation shapes
+        var TIMER_TICK = 380 // recording-timer increment interval
+        var TOAST_LEAD = 750 // show a scene's toast this long before it ends
         var COPY_FEEDBACK = 1500 // "Copied!" button feedback duration
 
         /* ── Theme toggle ── */
@@ -1472,70 +1683,129 @@
 
         var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
-        /* ── Capture demo animation ── */
-        var shapes = [
+        /* ── Hero scene cycler (Screenshot → Record → GIF → Edit) ── */
+        var demoTitle = document.getElementById('demoTitle')
+        var demoScenes = Array.prototype.slice.call(document.querySelectorAll('.demo-scene'))
+        var SCENE_TITLE = {
+          shot: 'Snap It — Screenshot',
+          video: 'Snap It — Record',
+          gif: 'Snap It — GIF',
+          edit: 'Snap It — Edit image'
+        }
+        var shotSteps = [
           { shape: 'demoRect', tool: 'toolRect' },
           { shape: 'demoEllipse', tool: 'toolEllipse' },
           { shape: 'demoArrow', tool: 'toolArrow' },
           { shape: 'demoPen', tool: 'toolPen' }
         ]
-        var toast = document.getElementById('demoToast')
+        var editSteps = ['editRect', 'editArrow']
+        var sceneTimers = []
 
-        function clearDemo() {
-          shapes.forEach(function (s) {
-            var el = document.getElementById(s.shape)
-            if (el) el.classList.remove('visible')
-            var btn = document.getElementById(s.tool)
-            if (btn) btn.classList.remove('active')
+        function clearSceneTimers() {
+          sceneTimers.forEach(function (t) {
+            clearTimeout(t)
+            clearInterval(t)
           })
-          if (toast) toast.classList.remove('visible')
+          sceneTimers = []
         }
 
-        function runDemo() {
-          clearDemo()
-          var idx = 0
+        function resetScene(scene) {
+          scene.querySelectorAll('.demo-shape').forEach(function (el) {
+            el.classList.remove('visible')
+          })
+          scene.querySelectorAll('.tool-btn').forEach(function (el) {
+            el.classList.remove('active')
+          })
+          var toast = scene.querySelector('[data-toast]')
+          if (toast) toast.classList.remove('visible')
+          var timer = scene.querySelector('[data-timer]')
+          if (timer) timer.textContent = '00:00'
+        }
 
-          function nextShape() {
-            if (idx >= shapes.length) {
-              // Show toast, then reset
-              if (toast) toast.classList.add('visible')
-              setTimeout(function () {
-                if (toast) toast.classList.remove('visible')
-                setTimeout(function () {
-                  clearDemo()
-                  setTimeout(runDemo, DEMO_RESTART_DELAY)
-                }, TOAST_FADE_PAUSE)
-              }, TOAST_DISPLAY)
+        function fmtTime(s) {
+          var m = Math.floor(s / 60)
+          return (m < 10 ? '0' : '') + m + ':' + (s % 60 < 10 ? '0' : '') + (s % 60)
+        }
+
+        function showToast(scene) {
+          var toast = scene.querySelector('[data-toast]')
+          if (toast) toast.classList.add('visible')
+        }
+
+        function revealShapes(scene, steps, useTools) {
+          var i = 0
+          function step() {
+            if (i >= steps.length) {
+              showToast(scene)
               return
             }
-
-            var current = shapes[idx]
-            // Deactivate previous tool
-            if (idx > 0) {
-              var prev = document.getElementById(shapes[idx - 1].tool)
-              if (prev) prev.classList.remove('active')
+            if (useTools) {
+              if (i > 0) {
+                var prev = document.getElementById(steps[i - 1].tool)
+                if (prev) prev.classList.remove('active')
+              }
+              var tool = document.getElementById(steps[i].tool)
+              if (tool) tool.classList.add('active')
             }
-            // Activate current tool and show shape
-            var toolEl = document.getElementById(current.tool)
-            var shapeEl = document.getElementById(current.shape)
-            if (toolEl) toolEl.classList.add('active')
-            if (shapeEl) shapeEl.classList.add('visible')
-
-            idx++
-            setTimeout(nextShape, SHAPE_INTERVAL)
+            var id = useTools ? steps[i].shape : steps[i]
+            var shape = document.getElementById(id)
+            if (shape) shape.classList.add('visible')
+            i++
+            sceneTimers.push(setTimeout(step, SHOT_STEP))
           }
+          sceneTimers.push(setTimeout(step, SHOT_START))
+        }
 
-          setTimeout(nextShape, DEMO_INITIAL_DELAY)
+        function runRecording(scene) {
+          var timer = scene.querySelector('[data-timer]')
+          if (timer) {
+            var t = 0
+            sceneTimers.push(
+              setInterval(function () {
+                t++
+                timer.textContent = fmtTime(t)
+              }, TIMER_TICK)
+            )
+          }
+          sceneTimers.push(
+            setTimeout(function () {
+              showToast(scene)
+            }, SCENE_DISPLAY - TOAST_LEAD)
+          )
+        }
+
+        function activateScene(idx) {
+          clearSceneTimers()
+          demoScenes.forEach(function (s) {
+            s.classList.remove('active')
+            resetScene(s)
+          })
+          var scene = demoScenes[idx]
+          if (!scene) return
+          scene.classList.add('active')
+          var name = scene.getAttribute('data-scene')
+          if (demoTitle) demoTitle.textContent = SCENE_TITLE[name] || 'Snap It'
+          if (name === 'shot') revealShapes(scene, shotSteps, true)
+          else if (name === 'edit') revealShapes(scene, editSteps, false)
+          else runRecording(scene)
         }
 
         if (reduceMotion) {
-          // Show all shapes at once
-          shapes.forEach(function (s) {
-            var el = document.getElementById(s.shape)
-            if (el) el.style.opacity = '1'
-          })
-        } else {
-          runDemo()
+          // Show the first scene statically (CSS forces .demo-shape visible); no cycling.
+          if (demoScenes[0]) {
+            demoScenes[0].classList.add('active')
+            demoScenes[0].querySelectorAll('.demo-shape').forEach(function (el) {
+              el.classList.add('visible')
+            })
+          }
+          if (demoTitle) demoTitle.textContent = SCENE_TITLE.shot
+        } else if (demoScenes.length) {
+          var sceneIdx = 0
+          activateScene(0)
+          setInterval(function () {
+            sceneIdx = (sceneIdx + 1) % demoScenes.length
+            activateScene(sceneIdx)
+          }, SCENE_DISPLAY)
         }
 
         /* ── Tabs ── */
