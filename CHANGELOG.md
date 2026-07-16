@@ -3,6 +3,19 @@
 All notable changes to snapit are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [3.0.1] - 2026-07-16
+
+### macOS: permissions persist across updates
+
+- macOS builds are now signed with a **stable identity**, so Privacy permissions (Screen Recording /
+  Microphone) survive updates instead of being dropped every version. The first update from an older
+  ad-hoc build re-prompts **once**, then sticks.
+- Documented the manual reset for stuck grants — `tccutil reset All com.karantrehan.snapit` — in the
+  README's macOS notes.
+
+> Still not notarized (that needs a paid Apple Developer account), so the first launch after download
+> continues to need the `xattr -dr com.apple.quarantine …` / right-click → Open step.
+
 ## [3.0.0] - 2026-07-16
 
 ### Open & edit existing images (new)
@@ -159,6 +172,7 @@ Download the installer for your platform from the assets below.
 > …then launch normally. (Or **System Settings → Privacy & Security → Open Anyway**.) This is
 > expected for any app not distributed through a paid Apple Developer account — the app is safe.
 
+[3.0.1]: https://github.com/karantrehan3/snapit/releases/tag/v3.0.1
 [3.0.0]: https://github.com/karantrehan3/snapit/releases/tag/v3.0.0
 [2.1.0]: https://github.com/karantrehan3/snapit/releases/tag/v2.1.0
 [2.0.0]: https://github.com/karantrehan3/snapit/releases/tag/v2.0.0
