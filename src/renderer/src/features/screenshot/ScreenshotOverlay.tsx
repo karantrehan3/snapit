@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react'
+import { useEffect, type ReactElement } from 'react'
 import type { Frame } from '@preload/index'
 import { useAnnotationEditor } from '@renderer/features/annotate/useAnnotationEditor'
 import { AnnotationStage } from '@renderer/features/annotate/AnnotationStage'
@@ -21,9 +21,17 @@ import {
  * except the selection box. All interaction lives in useAnnotationEditor — this
  * component just renders the stage, overlays, text box, and toolbar.
  */
-export function ScreenshotOverlay({ frame }: { frame: Frame }): ReactElement {
+export function ScreenshotOverlay({ frame, onReady }: { frame: Frame; onReady?: () => void }): ReactElement {
   const editor = useAnnotationEditor(frame)
   const { box, editing, sizePreview } = editor
+
+  // Signal once the frozen frame has been drawn, so main can reveal the window with
+  // the screenshot already on screen (no transparent-then-frame flicker).
+  useEffect(() => {
+    if (!editor.bg) return
+    const raf = requestAnimationFrame(() => onReady?.())
+    return () => cancelAnimationFrame(raf)
+  }, [editor.bg, onReady])
 
   return (
     <div style={overlayRoot}>

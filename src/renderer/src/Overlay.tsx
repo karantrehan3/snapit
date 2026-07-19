@@ -21,9 +21,21 @@ const GifOverlay = lazy(() =>
  */
 export function Overlay(): ReactElement | null {
   const [session, setSession] = useState<CaptureSession | null>(null)
+  // Bumped per capture to remount the mode overlay with clean state (window is reused).
+  const [captureKey, setCaptureKey] = useState(0)
 
   useEffect(() => {
-    void window.snapit.getSession().then(setSession)
+    const apply = (s: CaptureSession | null): void => {
+      setSession(s)
+      if (s) setCaptureKey((k) => k + 1)
+    }
+    // Reused window: main pushes each new session (or null on dismiss) over IPC.
+    const unsub = window.snapit.onSession(apply)
+    // Cover the first capture, in case the session was set before this mounted.
+    void window.snapit.getSession().then((s) => {
+      if (s) apply(s)
+    })
+    return unsub
   }, [])
 
   useEffect(() => {
@@ -37,14 +49,16 @@ export function Overlay(): ReactElement | null {
   }, [session])
 
   if (!session) return null
+  // Main reveals the hidden window only once we report the frame has painted.
+  const onReady = (): void => window.snapit.signalOverlayReady()
   return (
-    <Suspense fallback={null}>
+    <Suspense key={captureKey} fallback={null}>
       {session.mode === 'screenshot' ? (
-        <ScreenshotOverlay frame={session.frame} />
+        <ScreenshotOverlay frame={session.frame} onReady={onReady} />
       ) : session.mode === 'gif' ? (
-        <GifOverlay source={session.source} />
+        <GifOverlay source={session.source} onReady={onReady} />
       ) : (
-        <RecordOverlay source={session.source} />
+        <RecordOverlay source={session.source} onReady={onReady} />
       )}
     </Suspense>
   )

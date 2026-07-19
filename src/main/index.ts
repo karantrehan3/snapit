@@ -31,6 +31,12 @@ import {
 } from './imageFile'
 import { TRAY_TEMPLATE_DATA_URL, TRAY_COLOUR_DATA_URL } from './trayIcon'
 
+// macOS 26 (Tahoe) presents transparent full-screen windows so slowly the overlay took
+// 2-3s to appear; disabling GPU acceleration fixes it. macOS 26+ only, before 'ready'.
+// https://github.com/electron/electron/issues/48311
+const macOSMajor = process.platform === 'darwin' ? parseInt(process.getSystemVersion().split('.')[0], 10) : 0
+if (macOSMajor >= 26) app.disableHardwareAcceleration()
+
 /** How often to re-check GitHub for a newer release while the app runs. */
 const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000
 
@@ -74,8 +80,7 @@ let editSession: EditSession | null = null
 const pendingOpenPaths: string[] = []
 let recordWantsSystemAudio = false
 let recordSourceId: string | null = null
-// When set, the overlay's 'closed' handler starts this capture mode next — used to
-// switch GIF → video without racing the outgoing window's teardown.
+// Start this mode once the current overlay is dismissed (the GIF → video switch).
 let pendingCaptureMode: CaptureMode | null = null
 // Latest available update (from GitHub), or null when up to date / not yet checked.
 let availableUpdate: UpdateInfo | null = null
@@ -100,14 +105,14 @@ const CSP = [
 /** A renderer-supplied value is only accepted as image bytes if it's an image dataURL. */
 const isImageDataUrl = (v: unknown): v is string => typeof v === 'string' && v.startsWith('data:image/')
 
-function createOverlayWindow(display: Display): void {
-  const { x, y, width, height } = display.bounds
+/**
+ * Create the overlay window once and reuse it. macOS takes 1-3s to present a freshly
+ * created full-screen window, so recreating it per capture made every screenshot slow.
+ */
+function ensureOverlayWindow(): BrowserWindow {
+  if (overlayWindow) return overlayWindow
 
   overlayWindow = new BrowserWindow({
-    x,
-    y,
-    width,
-    height,
     show: false,
     frame: false,
     transparent: true,
@@ -124,7 +129,10 @@ function createOverlayWindow(display: Display): void {
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: true,
-      spellcheck: false
+      spellcheck: false,
+      // Hidden between captures; without this Chromium throttles the hidden window's
+      // rAF/timers and the paint handshake (below) would stall ~1s.
+      backgroundThrottling: false
     }
   })
 
@@ -133,31 +141,74 @@ function createOverlayWindow(display: Display): void {
   // The default floating always-on-top still sits above normal windows AND can be key.
   overlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
 
-  overlayWindow.once('ready-to-show', () => {
-    overlayWindow?.show()
-    // The Dock is hidden (accessory app), so explicitly activate the app — otherwise
-    // the window never becomes "key" and HTML inputs (text annotation) can't be typed.
-    if (process.platform === 'darwin') app.focus({ steal: true })
-    overlayWindow?.focus()
-    overlayWindow?.webContents.focus()
-  })
   overlayWindow.on('closed', () => {
     overlayWindow = null
-    session = null
-    if (pendingCaptureMode) {
-      const next = pendingCaptureMode
-      pendingCaptureMode = null
-      void startCapture(next)
-    }
   })
 
+  // Loaded once; it stays mounted and receives each capture via IPC.
   loadRenderer(overlayWindow)
+
+  return overlayWindow
 }
 
+function revealOverlay(): void {
+  overlayWindow?.show()
+  // The Dock is hidden (accessory app), so explicitly activate the app — otherwise
+  // the window never becomes "key" and HTML inputs (text annotation) can't be typed.
+  if (process.platform === 'darwin') app.focus({ steal: true })
+  overlayWindow?.focus()
+  overlayWindow?.webContents.focus()
+}
+
+// Reveal only after the renderer reports it painted the frame, else the window shows
+// before the frame lands and flickers. The timer is a fallback so a missed signal
+// can't leave the overlay stuck hidden.
+let revealFallback: ReturnType<typeof setTimeout> | null = null
+
+function revealWhenPainted(): void {
+  if (revealFallback) clearTimeout(revealFallback)
+  revealFallback = setTimeout(doReveal, 400)
+}
+
+function doReveal(): void {
+  if (!revealFallback) return
+  clearTimeout(revealFallback)
+  revealFallback = null
+  revealOverlay()
+}
+
+/** Position the reused overlay on the cursor's display and push the session to it. */
+function showOverlay(display: Display): void {
+  const win = ensureOverlayWindow()
+  win.setBounds(display.bounds)
+  // Reset state a prior recording may have left on (window is reused, not recreated).
+  win.setContentProtection(false)
+  win.setIgnoreMouseEvents(false)
+
+  const push = (): void => {
+    win.webContents.send('capture:session', session)
+    revealWhenPainted()
+  }
+  // First capture: renderer still loading, so push once ready; later captures push now.
+  if (win.webContents.isLoading()) win.webContents.once('did-finish-load', push)
+  else push()
+}
+
+/** Dismiss the current capture: clear the renderer, hide the overlay (kept alive). */
 function closeOverlayWindow(): void {
-  overlayWindow?.close()
-  overlayWindow = null
   session = null
+  if (revealFallback) {
+    clearTimeout(revealFallback)
+    revealFallback = null
+  }
+  // Unmount the mode overlay (stops any recorder) before hiding.
+  overlayWindow?.webContents.send('capture:session', null)
+  overlayWindow?.hide()
+  if (pendingCaptureMode) {
+    const next = pendingCaptureMode
+    pendingCaptureMode = null
+    void startCapture(next)
+  }
 }
 
 function openSettingsWindow(): void {
@@ -237,9 +288,9 @@ function ensureScreenPermission(): void {
 }
 
 async function startCapture(mode: CaptureMode): Promise<void> {
-  if (overlayWindow) {
+  if (session) {
     // A second record/gif hotkey press stops & saves; otherwise just dismiss.
-    if (session?.mode === 'record' || session?.mode === 'gif') overlayWindow.webContents.send('record:stop')
+    if (session.mode === 'record' || session.mode === 'gif') overlayWindow?.webContents.send('record:stop')
     else closeOverlayWindow()
     return
   }
@@ -276,7 +327,7 @@ async function startCapture(mode: CaptureMode): Promise<void> {
     }
   }
 
-  createOverlayWindow(display)
+  showOverlay(display)
 }
 
 function registerHotkeys(): void {
@@ -572,6 +623,9 @@ app.whenReady().then(() => {
 
   ipcMain.handle('capture:get-session', () => session)
 
+  // The renderer reports it has painted the pushed frame; reveal the overlay now.
+  ipcMain.on('overlay:ready', doReveal)
+
   ipcMain.on('capture:copy', (_event, dataUrl: string) => {
     if (!isImageDataUrl(dataUrl)) return
     clipboard.writeImage(nativeImage.createFromDataURL(dataUrl))
@@ -614,7 +668,7 @@ app.whenReady().then(() => {
   // its 'closed' handler starts the record session after teardown, so the new
   // session isn't cleared by the outgoing window.
   ipcMain.on('capture:switch-to-record', () => {
-    if (!overlayWindow) {
+    if (!session) {
       void startCapture('record')
       return
     }
@@ -712,8 +766,8 @@ app.whenReady().then(() => {
   // Set before each recording: system/loopback audio + which source to capture.
   // Also exclude the overlay (and its Stop pill) from screen capture so it stays
   // visible to the user but never lands in the recording. macOS sets the window's
-  // NSWindowSharingType to none (Windows: SetWindowDisplayAffinity); a fresh overlay
-  // per session defaults back to off. No-op on Linux — the pill stays in recordings there.
+  // NSWindowSharingType to none (Windows: SetWindowDisplayAffinity); showOverlay
+  // resets it to off before each capture. No-op on Linux — the pill stays in recordings there.
   ipcMain.handle('record:prepare', (_event, opts: { systemAudio: boolean; sourceId: string }) => {
     recordWantsSystemAudio = opts.systemAudio
     recordSourceId = opts.sourceId

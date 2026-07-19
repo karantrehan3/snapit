@@ -1,4 +1,4 @@
-import { useState, type ReactElement } from 'react'
+import { useEffect, useState, type ReactElement } from 'react'
 import type { DisplaySource } from '@preload/index'
 import { useSourcePicker } from '../record/useSourcePicker'
 import { useRegionSelect } from '../record/useRegionSelect'
@@ -32,8 +32,20 @@ const DEFAULT_FPS = 30
  * region outline stays on screen (excluded from the capture by content
  * protection); the Stop pill is a draggable floater.
  */
-export function GifOverlay({ source }: { source: DisplaySource }): ReactElement {
+export function GifOverlay({
+  source,
+  onReady
+}: {
+  source: DisplaySource
+  onReady?: () => void
+}): ReactElement {
   const [fps, setFps] = useState(DEFAULT_FPS)
+
+  // The live desktop shows through immediately; signal on mount so main reveals us.
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => onReady?.())
+    return () => cancelAnimationFrame(raf)
+  }, [onReady])
 
   const picker = useSourcePicker(source.id)
   const { selectedId, canRegion } = picker

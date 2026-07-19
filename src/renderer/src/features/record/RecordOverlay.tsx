@@ -1,4 +1,4 @@
-import { useState, type ReactElement } from 'react'
+import { useEffect, useState, type ReactElement } from 'react'
 import type { DisplaySource } from '@preload/index'
 import { useRecorder } from './useRecorder'
 import { useSourcePicker } from './useSourcePicker'
@@ -30,10 +30,22 @@ import {
  * stays on screen (excluded from the capture by content protection) and the
  * overlay is click-through apart from the draggable Stop pill.
  */
-export function RecordOverlay({ source }: { source: DisplaySource }): ReactElement {
+export function RecordOverlay({
+  source,
+  onReady
+}: {
+  source: DisplaySource
+  onReady?: () => void
+}): ReactElement {
   const [systemAudio, setSystemAudio] = useState(true)
   const [mic, setMic] = useState(true)
   const [fps, setFps] = useState(60)
+
+  // The live desktop shows through immediately; signal on mount so main reveals us.
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => onReady?.())
+    return () => cancelAnimationFrame(raf)
+  }, [onReady])
 
   const picker = useSourcePicker(source.id)
   const { selectedId, canRegion } = picker

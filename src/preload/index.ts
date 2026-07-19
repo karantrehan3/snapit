@@ -35,6 +35,14 @@ export type EditImage = { dataUrl: string; name: string; ext: string }
 const api = {
   /** Fetch the current capture session (mode + frozen frame for screenshots). */
   getSession: (): Promise<CaptureSession | null> => ipcRenderer.invoke('capture:get-session'),
+  /** Subscribe to session pushes for the reused overlay (null on dismiss). Returns an unsubscribe. */
+  onSession: (cb: (session: CaptureSession | null) => void): (() => void) => {
+    const handler = (_e: unknown, session: CaptureSession | null): void => cb(session)
+    ipcRenderer.on('capture:session', handler)
+    return () => ipcRenderer.removeListener('capture:session', handler)
+  },
+  /** Tell main the pushed capture has painted, so it can reveal the overlay flicker-free. */
+  signalOverlayReady: (): void => ipcRenderer.send('overlay:ready'),
   /** Copy a (cropped) PNG data URL to the clipboard; closes the overlay. */
   copyImage: (dataUrl: string): void => ipcRenderer.send('capture:copy', dataUrl),
   /** Save a PNG to the configured folder; returns the path. Closes the overlay. */
