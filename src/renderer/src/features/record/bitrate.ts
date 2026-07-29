@@ -1,18 +1,21 @@
 /**
- * Bits per pixel per second.
+ * Bits per pixel per second — a ceiling, not a target; easy screen content spends far
+ * less. Calibrated by measurement, and revised twice, so the reasoning is worth keeping:
  *
- * Calibrated against OBS rather than guessed: OBS writes 1080p60 screen capture at
- * 0.54–0.66 Mbps, or ~0.005 bits per pixel per second, at a quality users are happy
- * with. It gets there with x264 High profile — CABAC and B-frames — which measured
- * ~2.5x more efficient than the constrained-baseline realtime encoder Chromium hands
- * MediaRecorder. So matching that quality here needs roughly 0.013; this rounds up to
- * 0.02 for headroom on high-motion content, and remains a ceiling rather than a
- * target — static screen content spends far less.
+ * - OBS writes 1080p60 screen capture at 0.46–0.66 Mbps, i.e. ~0.004–0.005 bits per
+ *   pixel per second, at a quality users are happy with. That is the bar.
+ * - Sweeping this encoder at 1920x1246/30fps against a lossless reference showed SSIM
+ *   flat (~0.854) from 406 kbps all the way to 817 kbps, and the delivered bitrate
+ *   *saturating* near 810 kbps: asking for 0.015 or 0.020 produced the same file as
+ *   0.012. Headroom above ~0.012 buys nothing on ordinary content and only inflates
+ *   demanding footage, which is exactly what a real 1920x1246 capture did — it pinned
+ *   its 1435 kbps ceiling and produced 1476 kbps, 3.2x what OBS spends.
  *
- * The previous 0.1 was ~7.5x above what this encoder needs, which is most of why
- * snapit's files dwarfed OBS's for the same footage.
+ * 0.012 sits ~3x OBS's own figure, which is the margin this encoder needs: it is stuck
+ * on Chromium's realtime path, so even at High profile it emits no B-frames (OBS's x264
+ * uses 2). Drop toward 0.010 for smaller files if quality holds on real footage.
  */
-const BITS_PER_PIXEL = 0.02
+const BITS_PER_PIXEL = 0.012
 /** Floor, so a small region crop still gets a usable bitrate. */
 const MIN_BITRATE = 500_000
 /** Ceiling, so a 4K60 capture can't ask for a bitrate no share target wants. */

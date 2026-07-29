@@ -15,8 +15,8 @@ describe('targetBitrate', () => {
     // OBS writes 1080p60 screen capture at ~0.66 Mbps. Chromium's constrained-baseline
     // encoder needs more than that, but low single-digit Mbps — not the tens.
     const hd60 = targetBitrate(1920, 1080, 60)
-    expect(hd60).toBeGreaterThan(1_500_000)
-    expect(hd60).toBeLessThan(4_000_000)
+    expect(hd60).toBeGreaterThan(1_000_000)
+    expect(hd60).toBeLessThan(3_000_000)
   })
 
   it('floors tiny region captures', () => {
@@ -25,8 +25,12 @@ describe('targetBitrate', () => {
   })
 
   it('caps very large captures', () => {
-    expect(targetBitrate(3840, 2160, 120)).toBe(MAX)
+    expect(targetBitrate(5120, 2880, 120)).toBe(MAX)
     expect(targetBitrate(7680, 4320, 120)).toBe(MAX)
+  })
+
+  it('leaves a 4K60 capture under the cap, so the ceiling only catches extremes', () => {
+    expect(targetBitrate(3840, 2160, 60)).toBeLessThan(MAX)
   })
 
   it('never returns a non-positive or non-finite bitrate for degenerate input', () => {
