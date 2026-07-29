@@ -54,11 +54,11 @@ export function Overlay(): ReactElement | null {
   return (
     <Suspense key={captureKey} fallback={null}>
       {session.mode === 'screenshot' ? (
-        <ScreenshotOverlay frame={session.frame} onReady={onReady} />
+        <ScreenshotOverlay frame={session.frame} workArea={session.workArea} onReady={onReady} />
       ) : session.mode === 'gif' ? (
-        <GifOverlay source={session.source} onReady={onReady} />
+        <GifOverlay source={session.source} workArea={session.workArea} onReady={onReady} />
       ) : (
-        <RecordOverlay source={session.source} onReady={onReady} />
+        <RecordOverlay source={session.source} workArea={session.workArea} onReady={onReady} />
       )}
     </Suspense>
   )

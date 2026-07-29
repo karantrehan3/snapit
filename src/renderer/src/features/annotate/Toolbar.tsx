@@ -1,5 +1,15 @@
-import { useState, type CSSProperties, type ReactElement } from 'react'
+import { useState, type CSSProperties, type ReactElement, type RefObject } from 'react'
 import { COLORS, PALETTE, TOOLS, type Tool } from './types'
+import {
+  palettePopover,
+  paletteSwatch,
+  toolbarAction as action,
+  toolbarBar as barStyle,
+  toolbarBtn as btn,
+  toolbarCustomSwatch as customSwatch,
+  toolbarSep,
+  toolbarSwatch as swatch
+} from './styles'
 
 type Props = {
   tool: Tool
@@ -15,6 +25,8 @@ type Props = {
   onSaveAs: () => void
   onCancel: () => void
   style: CSSProperties
+  /** Attach for measurement, so placement can use the real width (see useToolbarPlacement). */
+  barRef?: RefObject<HTMLDivElement | null>
   /** Primary save button label/tooltip (image edit overrides to "overwrite original"). */
   saveLabel?: string
   saveTitle?: string
@@ -40,6 +52,7 @@ export function Toolbar({
   onSaveAs,
   onCancel,
   style,
+  barRef,
   saveLabel = 'Save',
   saveTitle = 'Save to folder',
   saveAsLabel = 'Save As…',
@@ -51,14 +64,14 @@ export function Toolbar({
   const isPreset = COLORS.includes(color)
 
   return (
-    <div style={{ ...barStyle, ...style }}>
+    <div ref={barRef} style={{ ...barStyle, ...style }}>
       {/* TODO: re-enable the Text tool once text-annotation focus is fixed (see docs/STATUS.md). */}
       {TOOLS.filter((t) => t.tool !== 'text').map((t) => (
         <button key={t.tool} title={t.title} onClick={() => setTool(t.tool)} style={btn(tool === t.tool)}>
           {t.tool === 'move' ? <MoveIcon /> : t.label}
         </button>
       ))}
-      <span style={sep} />
+      <span style={toolbarSep} />
       {COLORS.map((c) => (
         <button key={c} title={c} onClick={() => setColor(c)} style={swatch(c, color === c)} />
       ))}
@@ -84,7 +97,7 @@ export function Toolbar({
           </div>
         )}
       </div>
-      <span style={sep} />
+      <span style={toolbarSep} />
       <button title="Undo (⌘Z)" onClick={onUndo} disabled={!canUndo} style={btn(false, !canUndo)}>
         ↶
       </button>
@@ -147,107 +160,6 @@ function MoveIcon(): ReactElement {
       <polyline points="18 9 21 12 18 15" />
     </svg>
   )
-}
-
-const barStyle: CSSProperties = {
-  position: 'fixed',
-  display: 'flex',
-  alignItems: 'center',
-  gap: 4,
-  padding: '6px 8px',
-  background: 'rgba(30, 30, 32, 0.95)',
-  borderRadius: 8,
-  boxShadow: '0 4px 16px rgba(0, 0, 0, 0.4)',
-  font: '14px -apple-system, system-ui, sans-serif'
-}
-
-const sep: CSSProperties = { width: 1, height: 22, background: 'rgba(255, 255, 255, 0.2)', margin: '0 4px' }
-
-function btn(active: boolean, disabled = false): CSSProperties {
-  return {
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 28,
-    height: 28,
-    border: 'none',
-    borderRadius: 6,
-    cursor: disabled ? 'default' : 'pointer',
-    color: '#fff',
-    fontSize: 15,
-    opacity: disabled ? 0.4 : 1,
-    background: active ? '#0a84ff' : 'rgba(255, 255, 255, 0.08)'
-  }
-}
-
-function swatch(color: string, active: boolean): CSSProperties {
-  return {
-    width: 22,
-    height: 22,
-    borderRadius: '50%',
-    cursor: 'pointer',
-    background: color,
-    border: active ? '2px solid #fff' : '2px solid rgba(255, 255, 255, 0.25)'
-  }
-}
-
-/** Custom-color swatch: a rainbow ring with the picked color in the center. */
-function customSwatch(active: boolean, color: string): CSSProperties {
-  return {
-    position: 'relative',
-    display: 'inline-block',
-    width: 22,
-    height: 22,
-    borderRadius: '50%',
-    overflow: 'hidden',
-    cursor: 'pointer',
-    background: `conic-gradient(red, yellow, lime, aqua, blue, magenta, red)`,
-    boxShadow: active ? `inset 0 0 0 4px ${color}, 0 0 0 2px #fff` : 'inset 0 0 0 4px rgba(0,0,0,0.25)'
-  }
-}
-
-const palettePopover: CSSProperties = {
-  position: 'absolute',
-  bottom: '100%',
-  left: 0,
-  marginBottom: 8,
-  display: 'grid',
-  gridTemplateColumns: 'repeat(7, 20px)',
-  gap: 5,
-  padding: 8,
-  background: 'rgba(40, 40, 42, 0.98)',
-  borderRadius: 8,
-  boxShadow: '0 4px 16px rgba(0, 0, 0, 0.5)',
-  zIndex: 10
-}
-
-function paletteSwatch(color: string, active: boolean): CSSProperties {
-  return {
-    width: 20,
-    height: 20,
-    borderRadius: 4,
-    cursor: 'pointer',
-    background: color,
-    border: active ? '2px solid #0a84ff' : '1px solid rgba(255, 255, 255, 0.25)'
-  }
-}
-
-function action(bg: string): CSSProperties {
-  return {
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 28,
-    padding: '0 12px',
-    border: 'none',
-    borderRadius: 6,
-    cursor: 'pointer',
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: 600,
-    whiteSpace: 'nowrap',
-    background: bg
-  }
 }
 
 function splitMain(bg: string): CSSProperties {

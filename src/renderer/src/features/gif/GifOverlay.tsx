@@ -1,11 +1,12 @@
 import { useEffect, useState, type ReactElement } from 'react'
-import type { DisplaySource } from '@preload/index'
+import type { DisplaySource, WorkArea } from '@preload/index'
+import { useLiveSurface } from '../annotate-live/useLiveSurface'
 import { useSourcePicker } from '../record/useSourcePicker'
 import { useRegionSelect } from '../record/useRegionSelect'
 import { SourceDropdown } from '../record/SourceDropdown'
 import { FpsControl } from '../record/FpsControl'
 import { ModeToggle } from '../record/ModeToggle'
-import { RecordingPill } from '../record/RecordingPill'
+import { RecordingChrome } from '../record/RecordingChrome'
 import { useGifRecorder } from './useGifRecorder'
 import {
   barDivider,
@@ -16,7 +17,6 @@ import {
   ghostIcon,
   linkButton,
   primaryButton,
-  recordingBorder,
   regionBox,
   stage
 } from '../record/styles'
@@ -30,13 +30,16 @@ const DEFAULT_FPS = 30
  * source picker (popover), full/region toggle and frame rate. A subtle nudge
  * offers switching to video (better for Slack/GitHub/Jira). While recording, the
  * region outline stays on screen (excluded from the capture by content
- * protection); the Stop pill is a draggable floater.
+ * protection); the Stop pill is a draggable floater. GIF frames always route
+ * through a canvas, so annotation needs no pre-arming here.
  */
 export function GifOverlay({
   source,
+  workArea,
   onReady
 }: {
   source: DisplaySource
+  workArea: WorkArea
   onReady?: () => void
 }): ReactElement {
   const [fps, setFps] = useState(DEFAULT_FPS)
@@ -50,31 +53,21 @@ export function GifOverlay({
   const picker = useSourcePicker(source.id)
   const { selectedId, canRegion } = picker
   const region = useRegionSelect(canRegion)
-  const recorder = useGifRecorder()
+
+  // GIF frames always route through a canvas, so nothing extra is needed to make
+  // annotation possible — but it still only maps correctly onto the display this
+  // overlay covers, never onto a window or second-display capture.
+  const surface = useLiveSurface(canRegion)
+  const recorder = useGifRecorder(surface.options)
 
   if (recorder.phase === 'recording') {
     return (
-      <>
-        {region.regionMode && region.box && (
-          <div
-            style={{
-              ...recordingBorder,
-              left: region.box.x,
-              top: region.box.y,
-              width: region.box.w,
-              height: region.box.h
-            }}
-          />
-        )}
-        <RecordingPill
-          elapsed={recorder.elapsed}
-          saving={recorder.saving}
-          pillPos={recorder.pillPos}
-          pillRef={recorder.pillRef}
-          onGripMouseDown={recorder.onPillMouseDown}
-          onStop={recorder.stop}
-        />
-      </>
+      <RecordingChrome
+        recorder={recorder}
+        surface={surface}
+        regionBox={region.regionMode ? region.box : null}
+        workArea={workArea}
+      />
     )
   }
 

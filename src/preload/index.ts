@@ -13,11 +13,19 @@ export type DisplaySource = { id: string; width: number; height: number }
 /** A selectable capture source (a screen or a window) with a preview thumbnail. */
 export type RecordSourceInfo = { id: string; name: string; type: 'screen' | 'window'; thumbnail: string }
 
+/**
+ * Usable area of the display, in overlay-window coordinates — the Dock and menu bar
+ * excluded. Overlay chrome must be positioned against this, not against
+ * window.innerWidth/Height, which cover the full display including those strips.
+ */
+export type WorkArea = { x: number; y: number; w: number; h: number }
+
 /** What the overlay renderer needs to know about the current capture session. */
-export type CaptureSession =
+export type CaptureSession = (
   | { mode: 'screenshot'; frame: Frame }
   | { mode: 'record'; source: DisplaySource }
   | { mode: 'gif'; source: DisplaySource }
+) & { workArea: WorkArea }
 
 export type Settings = {
   screenshotHotkey: string

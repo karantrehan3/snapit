@@ -2,8 +2,6 @@ import type { CSSProperties } from 'react'
 import type { Box } from '@renderer/lib/image'
 import type { Editing } from '@renderer/features/annotate/types'
 
-const TOOLBAR_HEIGHT = 44
-const GAP = 8
 const DIM = 'rgba(165, 165, 170, 0.42)'
 
 export const overlayRoot: CSSProperties = { position: 'fixed', inset: 0, userSelect: 'none' }
@@ -74,12 +72,4 @@ export const hintStyle: CSSProperties = {
   font: '14px -apple-system, system-ui, sans-serif',
   opacity: 0.85,
   pointerEvents: 'none'
-}
-
-export function toolbarPosition(sel: Box): CSSProperties {
-  const below = sel.y + sel.h + GAP
-  const top =
-    below + TOOLBAR_HEIGHT <= window.innerHeight ? below : Math.max(GAP, sel.y - TOOLBAR_HEIGHT - GAP)
-  const left = Math.min(Math.max(GAP, sel.x), Math.max(GAP, window.innerWidth - 420))
-  return { top, left }
 }

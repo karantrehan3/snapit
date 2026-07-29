@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type RefObject } from 'react'
-import type { Phase, Pt, Rect, RecordParams } from './types'
+import type { AnnotationOptions, Phase, Pt, Rect, RecordParams } from './types'
+import { useRecordingPointer } from './useRecordingPointer'
+import { targetBitrate } from './bitrate'
+import { drawAnnotations } from '../annotate-live/composite'
+import { useLatestRef } from '@renderer/lib/useLatestRef'
 
 const MIN_REGION = 8
 const MP4_CANDIDATES = [
@@ -34,15 +38,14 @@ export type Recorder = {
 /**
  * Screen-recording engine: acquires the display stream (+ optional system/mic
  * audio), optionally crops to a region via canvas, records with MediaRecorder,
- * and saves the result. Owns the recording lifecycle, the elapsed timer, and the
- * draggable Stop-pill / click-through behaviour while recording.
+ * and saves the result. Owns the recording lifecycle and the elapsed timer; the
+ * Stop-pill / click-through behaviour lives in useRecordingPointer.
  */
-export function useRecorder(): Recorder {
+export function useRecorder({ drawMode, getAnnotationCanvas }: AnnotationOptions): Recorder {
   const [phase, setPhase] = useState<Phase>('setup')
   const [elapsed, setElapsed] = useState(0)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [pillPos, setPillPos] = useState<Pt | null>(null)
 
   const phaseRef = useRef<Phase>('setup')
   const recorderRef = useRef<MediaRecorder | null>(null)
@@ -52,13 +55,17 @@ export function useRecorder(): Recorder {
   const extRef = useRef<'mp4' | 'webm'>('webm')
   const rafRef = useRef<number | undefined>(undefined)
   const timerRef = useRef<number | undefined>(undefined)
-  const pillRef = useRef<HTMLDivElement>(null)
-  const pillDrag = useRef<{ dx: number; dy: number } | null>(null)
   const savingRef = useRef(false)
+
+  const { pillPos, pillRef, onPillMouseDown } = useRecordingPointer(phase, drawMode)
 
   useEffect(() => {
     phaseRef.current = phase
   }, [phase])
+
+  const drawModeRef = useLatestRef(drawMode)
+  // Held in a ref so the long-lived rAF copy loop never closes over a stale getter.
+  const annoRef = useLatestRef(getAnnotationCanvas)
 
   const cleanupStreams = (): void => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current)
@@ -97,6 +104,10 @@ export function useRecorder(): Recorder {
     })
     const onKey = (e: KeyboardEvent): void => {
       if (e.key !== 'Escape') return
+      // Draw mode owns Escape (clear, then exit): stopping here would end the
+      // recording when the user only meant to dismiss their annotations. The record
+      // hotkey still stops from anywhere.
+      if (drawModeRef.current) return
       if (phaseRef.current === 'recording') stop()
       else window.snapit.closeOverlay()
     }
@@ -109,45 +120,6 @@ export function useRecorder(): Recorder {
 
   useEffect(() => () => cleanupStreams(), [])
 
-  // While recording, keep the overlay click-through except over the (draggable) pill.
-  useEffect(() => {
-    if (phase !== 'recording') return
-    window.snapit.setMouseIgnore(true)
-    let over = false
-    const onMove = (e: MouseEvent): void => {
-      if (pillDrag.current) {
-        window.snapit.setMouseIgnore(false)
-        setPillPos({ x: e.clientX - pillDrag.current.dx, y: e.clientY - pillDrag.current.dy })
-        return
-      }
-      const r = pillRef.current?.getBoundingClientRect()
-      const isOver =
-        !!r && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom
-      if (isOver !== over) {
-        over = isOver
-        window.snapit.setMouseIgnore(!isOver)
-      }
-    }
-    const onUp = (): void => {
-      pillDrag.current = null
-    }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
-    return () => {
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
-      window.snapit.setMouseIgnore(false)
-    }
-  }, [phase])
-
-  const onPillMouseDown = (e: ReactMouseEvent): void => {
-    if ((e.target as HTMLElement).closest('button')) return // let the Stop button click through
-    const r = pillRef.current?.getBoundingClientRect()
-    if (!r) return
-    pillDrag.current = { dx: e.clientX - r.left, dy: e.clientY - r.top }
-    e.preventDefault()
-  }
-
   const getDisplayStream = async (
     systemAudio: boolean,
     frameRate: number,
@@ -157,21 +129,30 @@ export function useRecorder(): Recorder {
     return navigator.mediaDevices.getDisplayMedia({ video: { frameRate }, audio: systemAudio })
   }
 
-  // Pipe the full-screen video through a canvas cropped to the selected region.
-  const buildRegionVideo = (
+  /**
+   * Pipe the display video through a canvas — cropped to `region`, or the whole
+   * frame when it is null. This is also the only path that can burn in annotations,
+   * since MediaRecorder encodes whatever this canvas holds.
+   */
+  const buildCanvasVideo = (
     display: MediaStream,
-    region: Rect,
+    region: Rect | null,
     scale: number,
-    frameRate: number
+    frameRate: number,
+    frame: { w: number; h: number }
   ): MediaStream => {
-    const sx = Math.round(region.x * scale)
-    const sy = Math.round(region.y * scale)
-    const sw = Math.round(region.w * scale)
-    const sh = Math.round(region.h * scale)
+    const sx = region ? Math.round(region.x * scale) : 0
+    const sy = region ? Math.round(region.y * scale) : 0
+    const sw = region ? Math.round(region.w * scale) : frame.w
+    const sh = region ? Math.round(region.h * scale) : frame.h
     const canvas = document.createElement('canvas')
     canvas.width = sw
     canvas.height = sh
-    const ctx = canvas.getContext('2d')
+    // alpha: false — the video frame covers the canvas completely every draw, so the
+    // destination never needs transparency (annotations still composite over it
+    // normally). Skipping the alpha channel makes this per-frame blit cheaper, which
+    // matters now that full-screen recording takes this path by default.
+    const ctx = canvas.getContext('2d', { alpha: false })
     const video = document.createElement('video')
     video.srcObject = new MediaStream(display.getVideoTracks())
     video.muted = true
@@ -183,7 +164,11 @@ export function useRecorder(): Recorder {
     const draw = (now: number): void => {
       if (now - lastDraw >= minInterval) {
         lastDraw = now
-        ctx?.drawImage(video, sx, sy, sw, sh, 0, 0, sw, sh)
+        if (region) ctx?.drawImage(video, sx, sy, sw, sh, 0, 0, sw, sh)
+        // Full frame: the scale-only form draws the whole video in, so a track that
+        // reports a different size than getSettings() did can't yield a bad crop.
+        else ctx?.drawImage(video, 0, 0, canvas.width, canvas.height)
+        drawAnnotations(ctx, annoRef.current(), region, canvas.width, canvas.height)
       }
       rafRef.current = requestAnimationFrame(draw)
     }
@@ -206,7 +191,8 @@ export function useRecorder(): Recorder {
 
   const start = async (params: RecordParams): Promise<void> => {
     setError(null)
-    const { selectedId, systemAudio, mic, fps, regionMode, box, fallbackWidth } = params
+    const { selectedId, systemAudio, mic, fps, regionMode, box, annotatable, fallbackWidth, fallbackHeight } =
+      params
     if (regionMode && (!box || box.w < MIN_REGION || box.h < MIN_REGION)) {
       setError('Drag to select a region first.')
       return
@@ -216,12 +202,21 @@ export function useRecorder(): Recorder {
       const display = await getDisplayStream(systemAudio, fps, selectedId)
       streamsRef.current.push(display)
       const settings = display.getVideoTracks()[0]?.getSettings()
-      const scale = (settings?.width ?? fallbackWidth) / window.innerWidth
+      const nativeW = settings?.width ?? fallbackWidth
+      const nativeH = settings?.height ?? fallbackHeight
+      const scale = nativeW / window.innerWidth
 
+      // Region mode always goes through the canvas (it has to, to crop). Full-screen
+      // does too whenever this source can be annotated, so the pencil works at any
+      // moment — MediaRecorder can't swap its video track after start(), so the route
+      // can't be added later. Sources that can't be annotated keep the zero-copy path.
+      const frame = { w: nativeW, h: nativeH }
       const recordStream =
         regionMode && box
-          ? buildRegionVideo(display, box, scale, fps)
-          : new MediaStream(display.getVideoTracks())
+          ? buildCanvasVideo(display, box, scale, fps, frame)
+          : annotatable
+            ? buildCanvasVideo(display, null, scale, fps, frame)
+            : new MediaStream(display.getVideoTracks())
 
       const audioTracks: MediaStreamTrack[] = []
       if (systemAudio) audioTracks.push(...display.getAudioTracks())
@@ -239,7 +234,13 @@ export function useRecorder(): Recorder {
 
       const { mimeType, ext } = pickRecording()
       extRef.current = ext
-      const rec = new MediaRecorder(recordStream, mimeType ? { mimeType } : undefined)
+      // Encode size: the cropped canvas in region mode, the native frame otherwise.
+      const encodeW = regionMode && box ? Math.round(box.w * scale) : nativeW
+      const encodeH = regionMode && box ? Math.round(box.h * scale) : nativeH
+      const rec = new MediaRecorder(recordStream, {
+        ...(mimeType ? { mimeType } : {}),
+        videoBitsPerSecond: targetBitrate(encodeW, encodeH, fps)
+      })
       recorderRef.current = rec
       chunksRef.current = []
       rec.ondataavailable = (e): void => {

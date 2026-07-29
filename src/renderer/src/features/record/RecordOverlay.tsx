@@ -1,12 +1,13 @@
 import { useEffect, useState, type ReactElement } from 'react'
-import type { DisplaySource } from '@preload/index'
+import type { DisplaySource, WorkArea } from '@preload/index'
+import { useLiveSurface } from '../annotate-live/useLiveSurface'
 import { useRecorder } from './useRecorder'
 import { useSourcePicker } from './useSourcePicker'
 import { useRegionSelect } from './useRegionSelect'
 import { SourceDropdown } from './SourceDropdown'
 import { FpsControl } from './FpsControl'
 import { ModeToggle } from './ModeToggle'
-import { RecordingPill } from './RecordingPill'
+import { RecordingChrome } from './RecordingChrome'
 import {
   barDivider,
   centerHint,
@@ -16,7 +17,6 @@ import {
   ghostIcon,
   iconToggle,
   primaryButton,
-  recordingBorder,
   regionBox,
   stage
 } from './styles'
@@ -28,13 +28,16 @@ import {
  * source picker (popover), full/region toggle, fps, and system/mic audio. Region
  * mode dims the screen via the selection box. While recording, the region outline
  * stays on screen (excluded from the capture by content protection) and the
- * overlay is click-through apart from the draggable Stop pill.
+ * overlay is click-through apart from the draggable Stop pill — or fully
+ * interactive while annotating.
  */
 export function RecordOverlay({
   source,
+  workArea,
   onReady
 }: {
   source: DisplaySource
+  workArea: WorkArea
   onReady?: () => void
 }): ReactElement {
   const [systemAudio, setSystemAudio] = useState(true)
@@ -50,31 +53,21 @@ export function RecordOverlay({
   const picker = useSourcePicker(source.id)
   const { selectedId, canRegion } = picker
   const region = useRegionSelect(canRegion)
-  const recorder = useRecorder()
+
+  // `canRegion` means the source is the display this overlay covers, which is what makes
+  // screen-space annotations map onto the frame 1:1 — a window or second-display capture
+  // would stretch them onto a different area.
+  const surface = useLiveSurface(canRegion)
+  const recorder = useRecorder(surface.options)
 
   if (recorder.phase === 'recording') {
     return (
-      <>
-        {region.regionMode && region.box && (
-          <div
-            style={{
-              ...recordingBorder,
-              left: region.box.x,
-              top: region.box.y,
-              width: region.box.w,
-              height: region.box.h
-            }}
-          />
-        )}
-        <RecordingPill
-          elapsed={recorder.elapsed}
-          saving={recorder.saving}
-          pillPos={recorder.pillPos}
-          pillRef={recorder.pillRef}
-          onGripMouseDown={recorder.onPillMouseDown}
-          onStop={recorder.stop}
-        />
-      </>
+      <RecordingChrome
+        recorder={recorder}
+        surface={surface}
+        regionBox={region.regionMode ? region.box : null}
+        workArea={workArea}
+      />
     )
   }
 
@@ -136,7 +129,6 @@ export function RecordOverlay({
         <button type="button" style={iconToggle(mic)} onClick={() => setMic((v) => !v)} title="Microphone">
           🎤
         </button>
-
         <div style={barDivider} />
         <button
           type="button"
@@ -157,7 +149,9 @@ export function RecordOverlay({
               fps,
               regionMode: region.regionMode,
               box: region.box,
-              fallbackWidth: source.width
+              annotatable: canRegion,
+              fallbackWidth: source.width,
+              fallbackHeight: source.height
             })
           }
         >

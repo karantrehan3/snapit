@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type RefObject } from 'react'
 import { GIFEncoder, quantize, applyPalette } from 'gifenc'
-import type { Phase, Pt, Rect } from '../record/types'
+import type { AnnotationOptions, Phase, Pt, Rect } from '../record/types'
+import { useRecordingPointer } from '../record/useRecordingPointer'
+import { drawAnnotations } from '../annotate-live/composite'
+import { useLatestRef } from '@renderer/lib/useLatestRef'
 
 const MIN_REGION = 8
 /** Palette colours per frame; the 256th slot is reserved for transparency on deltas. */
@@ -53,14 +56,14 @@ function buildPalette(pixels: Uint32Array): number[][] {
  * Inter-frame differencing keeps files small: a pixel is written only when it
  * drifts from the *accumulated displayed canvas* (not merely the previous raw
  * frame), which is what avoids ghost trails on scrolling content. Mirrors
- * useRecorder's lifecycle, elapsed timer, and draggable Stop-pill / click-through.
+ * useRecorder's lifecycle and elapsed timer; the Stop-pill / click-through
+ * behaviour is shared via useRecordingPointer.
  */
-export function useGifRecorder(): GifRecorder {
+export function useGifRecorder({ drawMode, getAnnotationCanvas }: AnnotationOptions): GifRecorder {
   const [phase, setPhase] = useState<Phase>('setup')
   const [elapsed, setElapsed] = useState(0)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [pillPos, setPillPos] = useState<Pt | null>(null)
 
   const phaseRef = useRef<Phase>('setup')
   const streamsRef = useRef<MediaStream[]>([])
@@ -68,13 +71,17 @@ export function useGifRecorder(): GifRecorder {
   const frameCountRef = useRef(0)
   const rafRef = useRef<number | undefined>(undefined)
   const timerRef = useRef<number | undefined>(undefined)
-  const pillRef = useRef<HTMLDivElement>(null)
-  const pillDrag = useRef<{ dx: number; dy: number } | null>(null)
   const savingRef = useRef(false)
+
+  const { pillPos, pillRef, onPillMouseDown } = useRecordingPointer(phase, drawMode)
 
   useEffect(() => {
     phaseRef.current = phase
   }, [phase])
+
+  const drawModeRef = useLatestRef(drawMode)
+  // Held in a ref so the long-lived rAF encode loop never closes over a stale getter.
+  const annoRef = useLatestRef(getAnnotationCanvas)
 
   const cleanupStreams = (): void => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current)
@@ -110,7 +117,8 @@ export function useGifRecorder(): GifRecorder {
   useEffect(() => {
     const off = window.snapit.onStopRecording(() => stop())
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') stop()
+      // Draw mode owns Escape (clear, then exit) — see useRecorder for the rationale.
+      if (e.key === 'Escape' && !drawModeRef.current) stop()
     }
     window.addEventListener('keydown', onKey)
     return () => {
@@ -120,45 +128,6 @@ export function useGifRecorder(): GifRecorder {
   }, [])
 
   useEffect(() => () => cleanupStreams(), [])
-
-  // While recording, keep the overlay click-through except over the (draggable) pill.
-  useEffect(() => {
-    if (phase !== 'recording') return
-    window.snapit.setMouseIgnore(true)
-    let over = false
-    const onMove = (e: MouseEvent): void => {
-      if (pillDrag.current) {
-        window.snapit.setMouseIgnore(false)
-        setPillPos({ x: e.clientX - pillDrag.current.dx, y: e.clientY - pillDrag.current.dy })
-        return
-      }
-      const r = pillRef.current?.getBoundingClientRect()
-      const isOver =
-        !!r && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom
-      if (isOver !== over) {
-        over = isOver
-        window.snapit.setMouseIgnore(!isOver)
-      }
-    }
-    const onUp = (): void => {
-      pillDrag.current = null
-    }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
-    return () => {
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
-      window.snapit.setMouseIgnore(false)
-    }
-  }, [phase])
-
-  const onPillMouseDown = (e: ReactMouseEvent): void => {
-    if ((e.target as HTMLElement).closest('button')) return // let the Stop button click through
-    const r = pillRef.current?.getBoundingClientRect()
-    if (!r) return
-    pillDrag.current = { dx: e.clientX - r.left, dy: e.clientY - r.top }
-    e.preventDefault()
-  }
 
   const getDisplayStream = async (frameRate: number, sourceId: string): Promise<MediaStream> => {
     await window.snapit.prepareRecording(false, sourceId)
@@ -235,6 +204,9 @@ export function useGifRecorder(): GifRecorder {
         if (dt >= minInterval) {
           lastDraw = now
           ctx.drawImage(video, sx, sy, sw, sh, 0, 0, outW, outH)
+          // Burn annotations in *before* the read-back, so they're part of the frame
+          // that gets quantized and delta-diffed rather than a separate overlay.
+          drawAnnotations(ctx, annoRef.current(), regionMode && box ? box : null, outW, outH)
           const rgba = ctx.getImageData(0, 0, outW, outH).data
           const cur = new Uint32Array(rgba.buffer)
           const delay = Math.round(dt)

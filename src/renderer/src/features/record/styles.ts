@@ -319,6 +319,24 @@ export const recDot: CSSProperties = {
   animation: 'snapitPulse 1.4s ease-out infinite'
 }
 
+/** Toggle inside the recording pill (draw mode) — rounder and smaller than iconToggle. */
+export function pillToggle(active: boolean): CSSProperties {
+  return {
+    boxSizing: 'border-box',
+    width: 26,
+    height: 26,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 999,
+    cursor: 'pointer',
+    fontSize: 13,
+    color: '#fff',
+    border: active ? '1px solid rgba(10, 132, 255, 0.9)' : '1px solid rgba(255, 255, 255, 0.18)',
+    background: active ? 'rgba(10, 132, 255, 0.32)' : 'rgba(255, 255, 255, 0.08)'
+  }
+}
+
 export const stopButton: CSSProperties = {
   height: 26,
   padding: '0 12px',

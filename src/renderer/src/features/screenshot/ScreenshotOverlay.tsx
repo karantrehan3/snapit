@@ -1,18 +1,11 @@
 import { useEffect, type ReactElement } from 'react'
-import type { Frame } from '@preload/index'
+import type { Frame, WorkArea } from '@preload/index'
 import { useAnnotationEditor } from '@renderer/features/annotate/useAnnotationEditor'
 import { AnnotationStage } from '@renderer/features/annotate/AnnotationStage'
 import { SizePreview } from '@renderer/features/annotate/SizePreview'
 import { Toolbar } from '@renderer/features/annotate/Toolbar'
-import {
-  cornerHandle,
-  fullDim,
-  hintStyle,
-  overlayRoot,
-  selectionDim,
-  textareaStyle,
-  toolbarPosition
-} from './styles'
+import { useToolbarPlacement } from '@renderer/features/annotate/useToolbarPlacement'
+import { cornerHandle, fullDim, hintStyle, overlayRoot, selectionDim, textareaStyle } from './styles'
 
 /**
  * Screenshot capture + annotation editor.
@@ -21,9 +14,18 @@ import {
  * except the selection box. All interaction lives in useAnnotationEditor — this
  * component just renders the stage, overlays, text box, and toolbar.
  */
-export function ScreenshotOverlay({ frame, onReady }: { frame: Frame; onReady?: () => void }): ReactElement {
+export function ScreenshotOverlay({
+  frame,
+  workArea,
+  onReady
+}: {
+  frame: Frame
+  workArea: WorkArea
+  onReady?: () => void
+}): ReactElement {
   const editor = useAnnotationEditor(frame)
   const { box, editing, sizePreview } = editor
+  const toolbar = useToolbarPlacement(box, workArea)
 
   // Signal once the frozen frame has been drawn, so main can reveal the window with
   // the screenshot already on screen (no transparent-then-frame flicker).
@@ -87,7 +89,8 @@ export function ScreenshotOverlay({ frame, onReady }: { frame: Frame; onReady?: 
           onSave={editor.onSave}
           onSaveAs={editor.onSaveAs}
           onCancel={() => window.snapit.closeOverlay()}
-          style={toolbarPosition(box)}
+          barRef={toolbar.barRef}
+          style={toolbar.style}
         />
       )}
     </div>

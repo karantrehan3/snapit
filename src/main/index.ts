@@ -61,10 +61,28 @@ type Frame = {
   scaleFactor: number
 }
 
-type CaptureSession =
+/**
+ * Usable area of the display, in overlay-window coordinates. Excludes the macOS Dock
+ * and menu bar (and the Windows taskbar). The overlay window spans the display's full
+ * bounds, so chrome positioned against the window alone can land behind them.
+ */
+type WorkArea = { x: number; y: number; w: number; h: number }
+
+type CaptureSession = (
   | { mode: 'screenshot'; frame: Frame }
   | { mode: 'record'; source: DisplaySource }
   | { mode: 'gif'; source: DisplaySource }
+) & { workArea: WorkArea }
+
+/** `display.workArea` is in screen coordinates; shift it to be window-relative. */
+function windowWorkArea(display: Display): WorkArea {
+  return {
+    x: display.workArea.x - display.bounds.x,
+    y: display.workArea.y - display.bounds.y,
+    w: display.workArea.width,
+    h: display.workArea.height
+  }
+}
 
 /** An existing image opened for editing (Finder "Open With", argv, or tray dialog). */
 type EditSession = { path: string; name: string; ext: string; mime: string; dataUrl: string }
@@ -304,6 +322,7 @@ async function startCapture(mode: CaptureMode): Promise<void> {
       const dataUrl = await captureDisplay(display)
       session = {
         mode,
+        workArea: windowWorkArea(display),
         frame: {
           dataUrl,
           width: display.bounds.width,
@@ -319,7 +338,7 @@ async function startCapture(mode: CaptureMode): Promise<void> {
   } else {
     // record and gif both capture a live display source; only the encoding differs.
     try {
-      session = { mode, source: await getDisplaySource(display) }
+      session = { mode, workArea: windowWorkArea(display), source: await getDisplaySource(display) }
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err)
       console.error(`[snapit] ${mode} source failed: ${detail}`)
