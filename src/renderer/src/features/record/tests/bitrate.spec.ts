@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { targetBitrate } from '../bitrate'
 
-const MIN = 800_000
-const MAX = 40_000_000
+const MIN = 500_000
+const MAX = 12_000_000
 
 describe('targetBitrate', () => {
   it('scales with the pixel rate', () => {
@@ -11,11 +11,12 @@ describe('targetBitrate', () => {
     expect(at60).toBe(at30 * 2)
   })
 
-  it('lands in a sane range for common screen resolutions', () => {
-    // 1080p30 screen capture — single-digit Mbps, not the tens.
-    const hd = targetBitrate(1920, 1080, 30)
-    expect(hd).toBeGreaterThan(4_000_000)
-    expect(hd).toBeLessThan(10_000_000)
+  it('stays within a few times what OBS spends on the same footage', () => {
+    // OBS writes 1080p60 screen capture at ~0.66 Mbps. Chromium's constrained-baseline
+    // encoder needs more than that, but low single-digit Mbps — not the tens.
+    const hd60 = targetBitrate(1920, 1080, 60)
+    expect(hd60).toBeGreaterThan(1_500_000)
+    expect(hd60).toBeLessThan(4_000_000)
   })
 
   it('floors tiny region captures', () => {
@@ -24,7 +25,7 @@ describe('targetBitrate', () => {
   })
 
   it('caps very large captures', () => {
-    expect(targetBitrate(3840, 2160, 60)).toBe(MAX)
+    expect(targetBitrate(3840, 2160, 120)).toBe(MAX)
     expect(targetBitrate(7680, 4320, 120)).toBe(MAX)
   })
 

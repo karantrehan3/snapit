@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type R
 import type { AnnotationOptions, Phase, Pt, Rect, RecordParams } from './types'
 import { useRecordingPointer } from './useRecordingPointer'
 import { targetBitrate } from './bitrate'
+import { encodeSize } from './encodeSize'
 import { drawAnnotations } from '../annotate-live/composite'
 import { useLatestRef } from '@renderer/lib/useLatestRef'
 
@@ -139,20 +140,23 @@ export function useRecorder({ drawMode, getAnnotationCanvas }: AnnotationOptions
     region: Rect | null,
     scale: number,
     frameRate: number,
-    frame: { w: number; h: number }
+    frame: { w: number; h: number },
+    out: { w: number; h: number }
   ): MediaStream => {
     const sx = region ? Math.round(region.x * scale) : 0
     const sy = region ? Math.round(region.y * scale) : 0
     const sw = region ? Math.round(region.w * scale) : frame.w
     const sh = region ? Math.round(region.h * scale) : frame.h
     const canvas = document.createElement('canvas')
-    canvas.width = sw
-    canvas.height = sh
+    canvas.width = out.w
+    canvas.height = out.h
     // alpha: false — the video frame covers the canvas completely every draw, so the
     // destination never needs transparency (annotations still composite over it
     // normally). Skipping the alpha channel makes this per-frame blit cheaper, which
     // matters now that full-screen recording takes this path by default.
     const ctx = canvas.getContext('2d', { alpha: false })
+    // High-quality resampling for the Retina 2x → 1x downscale, as the GIF path does.
+    if (ctx) ctx.imageSmoothingQuality = 'high'
     const video = document.createElement('video')
     video.srcObject = new MediaStream(display.getVideoTracks())
     video.muted = true
@@ -164,7 +168,7 @@ export function useRecorder({ drawMode, getAnnotationCanvas }: AnnotationOptions
     const draw = (now: number): void => {
       if (now - lastDraw >= minInterval) {
         lastDraw = now
-        if (region) ctx?.drawImage(video, sx, sy, sw, sh, 0, 0, sw, sh)
+        if (region) ctx?.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height)
         // Full frame: the scale-only form draws the whole video in, so a track that
         // reports a different size than getSettings() did can't yield a bad crop.
         else ctx?.drawImage(video, 0, 0, canvas.width, canvas.height)
@@ -211,11 +215,16 @@ export function useRecorder({ drawMode, getAnnotationCanvas }: AnnotationOptions
       // moment — MediaRecorder can't swap its video track after start(), so the route
       // can't be added later. Sources that can't be annotated keep the zero-copy path.
       const frame = { w: nativeW, h: nativeH }
+      // Encode at logical size, not the Retina device pixels the capture arrives in —
+      // see encodeSize for why that costs so much. The zero-copy path can't resize
+      // (nothing redraws its frames), so it stays native.
+      const source = regionMode && box ? { w: box.w * scale, h: box.h * scale } : frame
+      const out = encodeSize(source.w, source.h, scale)
       const recordStream =
         regionMode && box
-          ? buildCanvasVideo(display, box, scale, fps, frame)
+          ? buildCanvasVideo(display, box, scale, fps, frame, out)
           : annotatable
-            ? buildCanvasVideo(display, null, scale, fps, frame)
+            ? buildCanvasVideo(display, null, scale, fps, frame, out)
             : new MediaStream(display.getVideoTracks())
 
       const audioTracks: MediaStreamTrack[] = []
@@ -234,9 +243,11 @@ export function useRecorder({ drawMode, getAnnotationCanvas }: AnnotationOptions
 
       const { mimeType, ext } = pickRecording()
       extRef.current = ext
-      // Encode size: the cropped canvas in region mode, the native frame otherwise.
-      const encodeW = regionMode && box ? Math.round(box.w * scale) : nativeW
-      const encodeH = regionMode && box ? Math.round(box.h * scale) : nativeH
+      // Bitrate follows whatever actually gets encoded: the downscaled canvas on either
+      // canvas route, the untouched native frame on the zero-copy one.
+      const viaCanvas = Boolean((regionMode && box) || annotatable)
+      const encodeW = viaCanvas ? out.w : nativeW
+      const encodeH = viaCanvas ? out.h : nativeH
       const rec = new MediaRecorder(recordStream, {
         ...(mimeType ? { mimeType } : {}),
         videoBitsPerSecond: targetBitrate(encodeW, encodeH, fps)
