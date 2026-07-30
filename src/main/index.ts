@@ -31,11 +31,15 @@ import {
 } from './imageFile'
 import { TRAY_TEMPLATE_DATA_URL, TRAY_COLOUR_DATA_URL } from './trayIcon'
 
-// macOS 26 (Tahoe) presents transparent full-screen windows so slowly the overlay took
-// 2-3s to appear; disabling GPU acceleration fixes it. macOS 26+ only, before 'ready'.
-// https://github.com/electron/electron/issues/48311
-const macOSMajor = process.platform === 'darwin' ? parseInt(process.getSystemVersion().split('.')[0], 10) : 0
-if (macOSMajor >= 26) app.disableHardwareAcceleration()
+// NOTE: app.disableHardwareAcceleration() used to be called here on macOS 26+, because
+// Tahoe presents transparent full-screen windows so slowly the overlay took 2-3s to appear
+// (https://github.com/electron/electron/issues/48311). It is gone because it cost more than
+// it bought: without the GPU, WebCodecs has no `bitrateMode: 'quantizer'`, so recordings
+// fell back to a software encoder needing ~1012 kbps for the quality constant-quality
+// reaches at 677 kbps — and the fallback also tags colour as BT.601, which looks flat.
+//
+// If the slow overlay returns, prefer a narrower switch. Measured: 'disable-gpu-rasterization'
+// keeps quantizer mode available, while 'disable-gpu-compositing' does not.
 
 /** How often to re-check GitHub for a newer release while the app runs. */
 const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000
@@ -284,11 +288,35 @@ function openAboutWindow(): void {
 /** Load the shared renderer, optionally at a hash route (e.g. "settings"). */
 function loadRenderer(win: BrowserWindow, hash = ''): void {
   const suffix = hash ? `#${hash}` : ''
+  forwardRendererConsole(win)
   if (process.env['ELECTRON_RENDERER_URL']) {
     void win.loadURL(`${process.env['ELECTRON_RENDERER_URL']}${suffix}`)
   } else {
     void win.loadFile(join(__dirname, '../renderer/index.html'), hash ? { hash } : undefined)
   }
+}
+
+/**
+ * Mirror renderer warnings and errors into the terminal during development.
+ *
+ * Without this, anything thrown in an overlay is only visible if you happen to have that
+ * window's devtools open — and the overlay is transparent, click-through and short-lived,
+ * so in practice nobody does. Recording bugs in particular were invisible.
+ */
+function forwardRendererConsole(win: BrowserWindow): void {
+  if (!process.env['ELECTRON_RENDERER_URL']) return
+  win.webContents.on('console-message', (details) => {
+    // All levels: an 'info' breadcrumb right before a failure is usually what identifies it.
+    const where =
+      details.level === 'error' && details.sourceId ? ` (${details.sourceId}:${details.lineNumber})` : ''
+    console.log(`[renderer:${details.level}] ${details.message}${where}`)
+  })
+  win.webContents.on('render-process-gone', (_e, d) => {
+    console.error(`[renderer] process gone: ${d.reason} (exit ${d.exitCode})`)
+  })
+  win.webContents.on('preload-error', (_e, path, err) => {
+    console.error(`[renderer] preload error in ${path}: ${err.message}`)
+  })
 }
 
 /** Log screen-recording status and, if not granted, open the Settings pane. */
