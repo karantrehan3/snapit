@@ -1,53 +1,36 @@
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type RefObject } from 'react'
-import { GIFEncoder, quantize, applyPalette } from 'gifenc'
 import type { AnnotationOptions, Phase, Pt, Rect } from '../record/types'
 import { useRecordingPointer } from '../record/useRecordingPointer'
+import { encodeSize } from '../record/encodeSize'
+import { createMp4Encoder, type Mp4Encoder } from '../record/mp4Encoder'
 import { drawAnnotations } from '../annotate-live/composite'
 import { gifEncodeSize } from './gifSize'
+import { createGifWriter, type GifWriter } from './gifWriter'
 import { useLatestRef } from '@renderer/lib/useLatestRef'
 
 const MIN_REGION = 8
-/**
- * Palette colours per frame; the 256th slot is reserved for transparency on deltas.
- *
- * Do not "optimise" this downwards — it makes files *bigger*, which is counterintuitive
- * enough to be worth recording. Measured on 60 frames of real screen content: 255 colours
- * produced 4241 KB, 128 produced 5324 KB, 64 produced 6053 KB and 32 produced 7012 KB. A
- * coarser palette makes more pixels quantize to something other than what is already
- * displayed, so the delta below finds more changed pixels, fewer stay transparent, and the
- * banding it introduces breaks up the runs LZW relies on.
- */
-const MAX_COLORS = 255
-/** Quantize the palette from every Nth pixel — 4× faster, and plenty for 256 colours. */
-const PALETTE_SAMPLE = 4
-/**
- * Max per-channel delta (0–255) for a pixel to count as unchanged vs what's already
- * displayed — small enough to catch real edits, large enough to ignore quantization noise.
- *
- * This is the strongest size lever in the encoder, because every pixel it lets through as
- * "unchanged" becomes transparent and compresses to nothing. Measured at 1024 wide against
- * a lossless reference, quality is flat across a wide range while size falls sharply:
- * tol 10 → 1915 KB @ SSIM 0.9657, tol 14 → 1028 KB @ 0.9542, tol 16 → 809 KB @ 0.9543,
- * tol 18 → 661 KB @ 0.9531, tol 20 → 589 KB @ 0.9474. Quality only starts to give way at
- * 20, so 18 sits at the knee.
- *
- * Raising it further risks stale pixels (ghosting): drift is bounded by this value, since
- * anything exceeding it gets redrawn.
- */
-const COLOR_TOLERANCE = 18
 
 const msg = (e: unknown): string => (e instanceof Error ? e.message : String(e))
 
-/** Pack a palette entry [r,g,b] into an opaque little-endian RGBA uint32 (matches getImageData). */
-const packRgb = (p: number[]): number => ((255 << 24) | (p[2] << 16) | (p[1] << 8) | p[0]) >>> 0
+/**
+ * Output format for a silent capture.
+ *
+ * `mp4` is the default because GIF cannot come close on size — it has no lossy transform,
+ * no motion compensation and a 256-colour palette per frame. Measured on identical frames at
+ * the same resolution, an already-optimised GIF took 661 KB at SSIM 0.9631 where H.264
+ * managed 110 KB at a *better* 0.9741. `gif` remains for destinations that require the
+ * format outright.
+ */
+export type SilentFormat = 'mp4' | 'gif'
 
-/** Everything the GIF recorder needs to start a capture (no audio — GIFs are silent). */
+/** Everything the recorder needs to start a silent capture (no audio in either format). */
 export type GifParams = {
   selectedId: string
   fps: number
   regionMode: boolean
   box: Rect | null
   fallbackWidth: number
+  format: SilentFormat
 }
 
 export type GifRecorder = {
@@ -62,24 +45,18 @@ export type GifRecorder = {
   stop: () => void
 }
 
-/** Build a per-frame palette from a subsample of the frame (rgba4444 keeps an alpha channel
- * so delta frames can map unchanged pixels to a transparent entry). */
-function buildPalette(pixels: Uint32Array): number[][] {
-  const sampled = new Uint32Array(Math.ceil(pixels.length / PALETTE_SAMPLE))
-  for (let i = 0, j = 0; i < pixels.length; i += PALETTE_SAMPLE, j++) sampled[j] = pixels[i]
-  return quantize(new Uint8Array(sampled.buffer), MAX_COLORS, { format: 'rgba4444' })
-}
-
 /**
- * GIF-recording engine: acquires the display stream (no audio), draws the
- * (optionally region-cropped) frames onto a canvas at the area's on-screen size,
- * and encodes to a GIF incrementally with gifenc. Each frame gets its **own**
- * 256-colour palette (accurate colours for screen UIs — no cross-frame banding).
- * Inter-frame differencing keeps files small: a pixel is written only when it
- * drifts from the *accumulated displayed canvas* (not merely the previous raw
- * frame), which is what avoids ghost trails on scrolling content. Mirrors
- * useRecorder's lifecycle and elapsed timer; the Stop-pill / click-through
- * behaviour is shared via useRecordingPointer.
+ * Silent-capture engine: acquires the display stream (no audio), draws the optionally
+ * region-cropped frames onto a canvas, and encodes either to MP4 via WebCodecs (see
+ * mp4Encoder) or to a GIF via gifenc (see gifWriter).
+ *
+ * The two differ in more than the encoder. MP4 uses the video path's sizing, which floors
+ * the long edge at OBS-grade resolution; GIF is capped at 1024 instead, because its size
+ * tracks pixel count almost linearly. GIF also needs the frame pixels read back from the
+ * canvas each tick, while the MP4 encoder pulls frames from the canvas itself.
+ *
+ * Mirrors useRecorder's lifecycle and elapsed timer; the Stop-pill / click-through behaviour
+ * is shared via useRecordingPointer.
  */
 export function useGifRecorder({ drawMode, getAnnotationCanvas }: AnnotationOptions): GifRecorder {
   const [phase, setPhase] = useState<Phase>('setup')
@@ -89,8 +66,8 @@ export function useGifRecorder({ drawMode, getAnnotationCanvas }: AnnotationOpti
 
   const phaseRef = useRef<Phase>('setup')
   const streamsRef = useRef<MediaStream[]>([])
-  const encoderRef = useRef<ReturnType<typeof GIFEncoder> | null>(null)
-  const frameCountRef = useRef(0)
+  const gifRef = useRef<GifWriter | null>(null)
+  const mp4Ref = useRef<Mp4Encoder | null>(null)
   const rafRef = useRef<number | undefined>(undefined)
   const timerRef = useRef<number | undefined>(undefined)
   const savingRef = useRef(false)
@@ -108,6 +85,10 @@ export function useGifRecorder({ drawMode, getAnnotationCanvas }: AnnotationOpti
   const cleanupStreams = (): void => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current)
     rafRef.current = undefined
+    // Only set here when tearing down without saving; finalize() clears it before flushing.
+    mp4Ref.current?.abort()
+    mp4Ref.current = null
+    gifRef.current = null
     streamsRef.current.forEach((s) => s.getTracks().forEach((t) => t.stop()))
     streamsRef.current = []
   }
@@ -117,17 +98,38 @@ export function useGifRecorder({ drawMode, getAnnotationCanvas }: AnnotationOpti
     savingRef.current = true
     setSaving(true)
     window.clearInterval(timerRef.current)
-    cleanupStreams()
-    const gif = encoderRef.current
-    if (!gif || frameCountRef.current === 0) {
+    // Stop drawing before flushing so no frame is handed to a closing encoder.
+    if (rafRef.current) cancelAnimationFrame(rafRef.current)
+    rafRef.current = undefined
+    const gif = gifRef.current
+    const mp4 = mp4Ref.current
+    gifRef.current = null
+    mp4Ref.current = null
+
+    try {
+      if (mp4) {
+        const bytes = await mp4.finish()
+        cleanupStreams()
+        await window.snapit.saveRecording(bytes.slice().buffer, 'mp4')
+        return
+      }
+      if (gif && gif.frameCount() > 0) {
+        const bytes = gif.finish()
+        cleanupStreams()
+        // Copy into a tightly-bounded ArrayBuffer so the main process's
+        // `instanceof ArrayBuffer` guard accepts it over IPC.
+        await window.snapit.saveGif(bytes.slice().buffer)
+        return
+      }
+      cleanupStreams()
       window.snapit.closeOverlay()
-      return
+    } catch (e) {
+      console.error('[snapit] silent capture save failed:', msg(e))
+      cleanupStreams()
+      savingRef.current = false
+      setSaving(false)
+      setError(`Could not save the recording: ${msg(e)}`)
     }
-    gif.finish()
-    const bytes = gif.bytes()
-    // Copy into a tightly-bounded ArrayBuffer so the main process's
-    // `instanceof ArrayBuffer` guard accepts it over IPC.
-    await window.snapit.saveGif(bytes.slice().buffer)
   }
 
   const stop = (): void => {
@@ -165,7 +167,7 @@ export function useGifRecorder({ drawMode, getAnnotationCanvas }: AnnotationOpti
 
   const start = async (params: GifParams): Promise<void> => {
     setError(null)
-    const { selectedId, fps, regionMode, box, fallbackWidth } = params
+    const { selectedId, fps, regionMode, box, fallbackWidth, format } = params
     if (regionMode && (!box || box.w < MIN_REGION || box.h < MIN_REGION)) {
       setError('Drag to select a region first.')
       return
@@ -191,10 +193,10 @@ export function useGifRecorder({ drawMode, getAnnotationCanvas }: AnnotationOpti
       const sw = regionMode && box ? Math.round(box.w * scale) : video.videoWidth
       const sh = regionMode && box ? Math.round(box.h * scale) : video.videoHeight
 
-      // Encode at the captured area's on-screen (logical) size, capped for GIF — see
-      // gifEncodeSize. Not the 2x Retina device buffer: that is 4x the pixels, and GIF pays
-      // for every one of them.
-      const { w: outW, h: outH } = gifEncodeSize(sw, sh, scale)
+      // Neither format encodes the 2x Retina device buffer — that is 4x the pixels. MP4 uses
+      // the video path's sizing; GIF is capped harder, since its size tracks pixel count
+      // almost linearly (see gifEncodeSize).
+      const { w: outW, h: outH } = format === 'gif' ? gifEncodeSize(sw, sh, scale) : encodeSize(sw, sh, scale)
 
       const canvas = document.createElement('canvas')
       canvas.width = outW
@@ -205,72 +207,51 @@ export function useGifRecorder({ drawMode, getAnnotationCanvas }: AnnotationOpti
       ctx.imageSmoothingEnabled = true
       ctx.imageSmoothingQuality = 'high'
 
-      const gif = GIFEncoder()
-      encoderRef.current = gif
-      frameCountRef.current = 0
+      if (format === 'gif') gifRef.current = createGifWriter(outW, outH)
+      else
+        mp4Ref.current = await createMp4Encoder({ canvas, width: outW, height: outH, fps, audioTrack: null })
 
-      // The canvas as it will actually be *displayed* (accumulated, post-quantization).
-      // Diffing each new frame against this — not against the raw previous frame — is
-      // what prevents ghost trails: any pixel that has drifted from what's on screen
-      // gets redrawn, while genuinely-static pixels stay transparent (tiny files).
-      const shown = new Uint32Array(outW * outH)
+      /** Draw the current video frame, with annotations burnt in, into the canvas. */
+      const drawNow = (): void => {
+        ctx.drawImage(video, sx, sy, sw, sh, 0, 0, outW, outH)
+        // Burn annotations in *before* any read-back, so they're part of the frame that gets
+        // encoded rather than a separate overlay.
+        drawAnnotations(ctx, annoRef.current(), regionMode && box ? box : null, outW, outH)
+      }
 
-      // Throttle to the target fps; use the *measured* interval as each frame's
-      // delay so the GIF plays back in real time even if encoding falls behind.
+      // Throttle to the target fps. GIF uses the *measured* interval as each frame's delay,
+      // so it plays back in real time even if encoding falls behind; MP4 carries a real
+      // timestamp instead. `encoding` skips a tick while the MP4 encoder is still busy, so a
+      // slow encode can't queue frames without bound.
       const minInterval = 1000 / fps
+      const startedAt = performance.now()
       let lastDraw = 0
+      let encoding = false
       const draw = (now: number): void => {
+        rafRef.current = requestAnimationFrame(draw)
         if (lastDraw === 0) lastDraw = now
         const dt = now - lastDraw
-        if (dt >= minInterval) {
-          lastDraw = now
-          ctx.drawImage(video, sx, sy, sw, sh, 0, 0, outW, outH)
-          // Burn annotations in *before* the read-back, so they're part of the frame
-          // that gets quantized and delta-diffed rather than a separate overlay.
-          drawAnnotations(ctx, annoRef.current(), regionMode && box ? box : null, outW, outH)
-          const rgba = ctx.getImageData(0, 0, outW, outH).data
-          const cur = new Uint32Array(rgba.buffer)
-          const delay = Math.round(dt)
-          // Per-frame palette from the current frame — accurate colours, no
-          // cross-frame banding. rgba4444 leaves room for a transparent entry.
-          const palette = buildPalette(cur)
+        if (encoding || dt < minInterval) return
+        lastDraw = now
+        drawNow()
 
-          if (frameCountRef.current === 0) {
-            // First frame: full opaque base layer; seed the displayed canvas from it.
-            const index = applyPalette(rgba, palette, 'rgba4444')
-            gif.writeFrame(index, outW, outH, { palette, delay, dispose: 1 })
-            for (let i = 0; i < index.length; i++) shown[i] = packRgb(palette[index[i]])
-          } else {
-            // Delta frame: only pixels that visibly differ from what's displayed are
-            // written; the rest stay transparent and reveal the canvas beneath.
-            palette.push([0, 0, 0, 0])
-            const transparentIndex = palette.length - 1
-            const delta = new Uint8ClampedArray(rgba)
-            const d32 = new Uint32Array(delta.buffer)
-            for (let i = 0; i < d32.length; i++) {
-              const c = cur[i]
-              const s = shown[i]
-              const dr = Math.abs((c & 255) - (s & 255))
-              const dg = Math.abs(((c >> 8) & 255) - ((s >> 8) & 255))
-              const db = Math.abs(((c >> 16) & 255) - ((s >> 16) & 255))
-              if (dr <= COLOR_TOLERANCE && dg <= COLOR_TOLERANCE && db <= COLOR_TOLERANCE) d32[i] = 0
-            }
-            const index = applyPalette(delta, palette, 'rgba4444')
-            gif.writeFrame(index, outW, outH, {
-              palette,
-              delay,
-              transparent: true,
-              transparentIndex,
-              dispose: 1
-            })
-            // Advance the displayed canvas by the pixels we actually redrew.
-            for (let i = 0; i < index.length; i++) {
-              if (index[i] !== transparentIndex) shown[i] = packRgb(palette[index[i]])
-            }
-          }
-          frameCountRef.current += 1
+        const gifWriter = gifRef.current
+        if (gifWriter) {
+          gifWriter.addFrame(ctx.getImageData(0, 0, outW, outH).data, Math.round(dt))
+          return
         }
-        rafRef.current = requestAnimationFrame(draw)
+        const encoder = mp4Ref.current
+        if (!encoder) return
+        encoding = true
+        void encoder
+          .addFrame((performance.now() - startedAt) / 1000)
+          .catch((e) => {
+            console.error(`[snapit] frame encode failed: ${msg(e)}`)
+            setError(`Recording failed: ${msg(e)}`)
+          })
+          .finally(() => {
+            encoding = false
+          })
       }
       rafRef.current = requestAnimationFrame(draw)
 

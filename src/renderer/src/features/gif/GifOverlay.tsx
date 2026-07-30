@@ -7,7 +7,8 @@ import { SourceDropdown } from '../record/SourceDropdown'
 import { FpsControl } from '../record/FpsControl'
 import { ModeToggle } from '../record/ModeToggle'
 import { RecordingChrome } from '../record/RecordingChrome'
-import { useGifRecorder } from './useGifRecorder'
+import { useGifRecorder, type SilentFormat } from './useGifRecorder'
+import { FormatToggle } from './FormatToggle'
 import {
   barDivider,
   centerHint,
@@ -24,14 +25,15 @@ import {
 const DEFAULT_FPS = 30
 
 /**
- * GIF overlay — floating command bar (mirrors RecordOverlay, minus audio).
+ * Silent-capture overlay — floating command bar (mirrors RecordOverlay, minus audio).
  *
- * The live screen stays visible; a frosted-glass bar docks top-centre with the
- * source picker (popover), full/region toggle and frame rate. A subtle nudge
- * offers switching to video (better for Slack/GitHub/Jira). While recording, the
- * region outline stays on screen (excluded from the capture by content
- * protection); the Stop pill is a draggable floater. GIF frames always route
- * through a canvas, so annotation needs no pre-arming here.
+ * The live screen stays visible; a frosted-glass bar docks top-centre with the source picker
+ * (popover), full/region toggle, frame rate and the output format. MP4 is the default: it is
+ * roughly 8x smaller than GIF at better quality, and GIF stays for destinations that require
+ * the format. A nudge offers the full recorder when audio is needed. While recording, the
+ * region outline stays on screen (excluded from the capture by content protection); the Stop
+ * pill is a draggable floater. Frames always route through a canvas in either format, so
+ * annotation needs no pre-arming here.
  */
 export function GifOverlay({
   source,
@@ -43,6 +45,7 @@ export function GifOverlay({
   onReady?: () => void
 }): ReactElement {
   const [fps, setFps] = useState(DEFAULT_FPS)
+  const [format, setFormat] = useState<SilentFormat>('mp4')
 
   // The live desktop shows through immediately; signal on mount so main reveals us.
   useEffect(() => {
@@ -122,13 +125,16 @@ export function GifOverlay({
         <FpsControl value={fps} onChange={setFps} />
 
         <div style={barDivider} />
+        <FormatToggle format={format} onChange={setFormat} />
+
+        <div style={barDivider} />
         <button
           type="button"
           style={linkButton}
           onClick={() => window.snapit.recordVideoInstead()}
-          title="Video is sharper & smaller for Slack, GitHub and Jira"
+          title="Record with audio instead"
         >
-          Prefer video? →
+          Need audio? →
         </button>
 
         <div style={barDivider} />
@@ -149,11 +155,12 @@ export function GifOverlay({
               fps,
               regionMode: region.regionMode,
               box: region.box,
-              fallbackWidth: source.width
+              fallbackWidth: source.width,
+              format
             })
           }
         >
-          <span style={{ fontSize: 10 }}>●</span> Start GIF
+          <span style={{ fontSize: 10 }}>●</span> Start {format === 'gif' ? 'GIF' : 'MP4'}
         </button>
       </div>
     </div>
