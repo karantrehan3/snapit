@@ -3,16 +3,38 @@ import { GIFEncoder, quantize, applyPalette } from 'gifenc'
 import type { AnnotationOptions, Phase, Pt, Rect } from '../record/types'
 import { useRecordingPointer } from '../record/useRecordingPointer'
 import { drawAnnotations } from '../annotate-live/composite'
+import { gifEncodeSize } from './gifSize'
 import { useLatestRef } from '@renderer/lib/useLatestRef'
 
 const MIN_REGION = 8
-/** Palette colours per frame; the 256th slot is reserved for transparency on deltas. */
+/**
+ * Palette colours per frame; the 256th slot is reserved for transparency on deltas.
+ *
+ * Do not "optimise" this downwards — it makes files *bigger*, which is counterintuitive
+ * enough to be worth recording. Measured on 60 frames of real screen content: 255 colours
+ * produced 4241 KB, 128 produced 5324 KB, 64 produced 6053 KB and 32 produced 7012 KB. A
+ * coarser palette makes more pixels quantize to something other than what is already
+ * displayed, so the delta below finds more changed pixels, fewer stay transparent, and the
+ * banding it introduces breaks up the runs LZW relies on.
+ */
 const MAX_COLORS = 255
 /** Quantize the palette from every Nth pixel — 4× faster, and plenty for 256 colours. */
 const PALETTE_SAMPLE = 4
-/** Max per-channel delta (0–255) for a pixel to count as unchanged vs what's already
- * displayed — small enough to catch real edits, large enough to ignore quantization noise. */
-const COLOR_TOLERANCE = 10
+/**
+ * Max per-channel delta (0–255) for a pixel to count as unchanged vs what's already
+ * displayed — small enough to catch real edits, large enough to ignore quantization noise.
+ *
+ * This is the strongest size lever in the encoder, because every pixel it lets through as
+ * "unchanged" becomes transparent and compresses to nothing. Measured at 1024 wide against
+ * a lossless reference, quality is flat across a wide range while size falls sharply:
+ * tol 10 → 1915 KB @ SSIM 0.9657, tol 14 → 1028 KB @ 0.9542, tol 16 → 809 KB @ 0.9543,
+ * tol 18 → 661 KB @ 0.9531, tol 20 → 589 KB @ 0.9474. Quality only starts to give way at
+ * 20, so 18 sits at the knee.
+ *
+ * Raising it further risks stale pixels (ghosting): drift is bounded by this value, since
+ * anything exceeding it gets redrawn.
+ */
+const COLOR_TOLERANCE = 18
 
 const msg = (e: unknown): string => (e instanceof Error ? e.message : String(e))
 
@@ -169,11 +191,10 @@ export function useGifRecorder({ drawMode, getAnnotationCanvas }: AnnotationOpti
       const sw = regionMode && box ? Math.round(box.w * scale) : video.videoWidth
       const sh = regionMode && box ? Math.round(box.h * scale) : video.videoHeight
 
-      // Encode at the captured area's actual on-screen (logical) size — the
-      // resolution you see, not the 2x Retina device buffer. Sharp, matches the
-      // screen 1:1, and far smaller/faster than encoding full device pixels.
-      const outW = Math.max(1, Math.round(sw / scale))
-      const outH = Math.max(1, Math.round(sh / scale))
+      // Encode at the captured area's on-screen (logical) size, capped for GIF — see
+      // gifEncodeSize. Not the 2x Retina device buffer: that is 4x the pixels, and GIF pays
+      // for every one of them.
+      const { w: outW, h: outH } = gifEncodeSize(sw, sh, scale)
 
       const canvas = document.createElement('canvas')
       canvas.width = outW
