@@ -7,10 +7,9 @@ import { drawAnnotations } from '../annotate-live/composite'
 import { gifEncodeSize } from './gifSize'
 import { createGifWriter, type GifWriter } from './gifWriter'
 import { useLatestRef } from '@renderer/lib/useLatestRef'
+import { errorMessage as msg } from '@renderer/lib/errorMessage'
 
 const MIN_REGION = 8
-
-const msg = (e: unknown): string => (e instanceof Error ? e.message : String(e))
 
 /**
  * Output format for a silent capture.

@@ -5,22 +5,9 @@ import { encodeSize } from './encodeSize'
 import { createMp4Encoder, type Mp4Encoder } from './mp4Encoder'
 import { drawAnnotations } from '../annotate-live/composite'
 import { useLatestRef } from '@renderer/lib/useLatestRef'
+import { errorMessage as msg } from '@renderer/lib/errorMessage'
 
 const MIN_REGION = 8
-
-/**
- * Readable message for anything thrown. DOMException does not extend Error and stringifies
- * to "[object DOMException]", which hid the cause of a recording failure completely — so
- * pull `name`/`message` off whatever this is rather than trusting instanceof.
- */
-const msg = (e: unknown): string => {
-  if (e instanceof Error) return e.message
-  if (typeof e === 'object' && e !== null && 'name' in e) {
-    const { name, message } = e as { name?: unknown; message?: unknown }
-    return [name, message].filter(Boolean).join(': ') || String(e)
-  }
-  return String(e)
-}
 
 export type Recorder = {
   phase: Phase

@@ -7,18 +7,10 @@ import {
   Output
 } from 'mediabunny'
 import { AUDIO_BITRATE, KEY_FRAME_INTERVAL_SEC, encoderPlans, type EncoderPlan } from './encoderConfig'
+import { errorMessage } from '@renderer/lib/errorMessage'
 
 /** How many frames may sit in the encoder before we stop handing it more. */
 const MAX_QUEUED_FRAMES = 4
-
-/** DOMException doesn't extend Error and stringifies uselessly; read its fields directly. */
-function describe(e: unknown): string {
-  if (typeof e === 'object' && e !== null && 'name' in e) {
-    const { name, message } = e as { name?: unknown; message?: unknown }
-    return [name, message].filter(Boolean).join(': ') || String(e)
-  }
-  return String(e)
-}
 
 export type Mp4Encoder = {
   /** Encode the canvas as it stands now, at `timestampSec` from the start of the recording. */
@@ -80,7 +72,9 @@ export async function createMp4Encoder(opts: Mp4EncoderOptions): Promise<Mp4Enco
   if (audioTrack) {
     const audioSource = new MediaStreamAudioTrackSource(audioTrack, { codec: 'aac', bitrate: AUDIO_BITRATE })
     // mediabunny reports its internal audio failures only here; unhandled, they stay silent.
-    void audioSource.errorPromise.catch((e) => console.error(`[snapit] audio source error: ${describe(e)}`))
+    void audioSource.errorPromise.catch((e) =>
+      console.error(`[snapit] audio source error: ${errorMessage(e)}`)
+    )
     output.addAudioTrack(audioSource)
   }
   await output.start()
@@ -96,16 +90,11 @@ export async function createMp4Encoder(opts: Mp4EncoderOptions): Promise<Mp4Enco
     error: (e) => {
       // Logged, not just stored: a failure here closes the codec, so every later encode()
       // throws InvalidStateError and the real cause would otherwise be buried under them.
-      console.error(`[snapit] video encoder error: ${describe(e)}`)
-      encodeError = e instanceof Error ? e : new Error(describe(e))
+      console.error(`[snapit] video encoder error: ${errorMessage(e)}`)
+      encodeError = e instanceof Error ? e : new Error(errorMessage(e))
     }
   })
   encoder.configure(plan.config)
-  const rate = plan.quantizer === null ? `vbr ${plan.config.bitrate} bps` : `qp ${plan.quantizer}`
-  console.info(
-    `[snapit] encoder: ${plan.config.codec} ${width}x${height}@${fps} ${rate} state=${encoder.state} ` +
-      `canvas=${canvas.width}x${canvas.height} audio=${audioTrack ? 'yes' : 'no'}`
-  )
 
   let lastKeyFrameSec = -Infinity
   let closed = false

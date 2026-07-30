@@ -306,9 +306,9 @@ function loadRenderer(win: BrowserWindow, hash = ''): void {
 function forwardRendererConsole(win: BrowserWindow): void {
   if (!process.env['ELECTRON_RENDERER_URL']) return
   win.webContents.on('console-message', (details) => {
-    // All levels: an 'info' breadcrumb right before a failure is usually what identifies it.
-    const where =
-      details.level === 'error' && details.sourceId ? ` (${details.sourceId}:${details.lineNumber})` : ''
+    // Warnings and errors only — forwarding every level buries them in framework chatter.
+    if (details.level !== 'warning' && details.level !== 'error') return
+    const where = details.sourceId ? ` (${details.sourceId}:${details.lineNumber})` : ''
     console.log(`[renderer:${details.level}] ${details.message}${where}`)
   })
   win.webContents.on('render-process-gone', (_e, d) => {
