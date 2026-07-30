@@ -36,8 +36,8 @@ behind global hotkeys — plus an editor for images you already have:
   copy or save.
 - **Record** (`⌘⇧8`) — pick any screen or window, optionally crop to a region, choose 30/60 fps and
   audio, and record to a native `.mp4`.
-- **Record GIF** (`⌘⇧7`) — same source/region picker, choose a frame rate, and record a silent
-  animated `.gif` (encoded on-device).
+- **Record silent** (`⌘⇧7`) — same source/region picker and frame rate, with no audio. Saves a
+  silent `.mp4` by default, or an animated `.gif` if you switch the format toggle.
 - **Open image** — right-click a `PNG` / `JPG` / `WEBP` in Finder → **Open With → snapit** (or use
   the tray's **Open image…**), annotate it with the full toolset, and save a copy or overwrite the
   original.
@@ -61,21 +61,27 @@ uploaded anywhere.
 
 - Source picker for any screen or window; full-screen or **region** crop.
 - **30 / 60 fps**, with optional system audio and microphone (mixed when both are on).
-- Native **`.mp4`** (H.264/AAC) when the runtime supports it, otherwise `.webm`.
+- Native **`.mp4`** (H.264 High profile / AAC), encoded with **WebCodecs at constant quality** — bits
+  follow the content, so a static screen costs almost nothing and a fast scroll gets what it needs.
 - A **draggable Stop pill** floats over the screen; the rest of the overlay is click-through. The
   pill is excluded from the recording itself, so your captures stay clean.
 
-**GIF recording**
+**Silent recording — MP4 or GIF**
 
-- Same source picker (screen / window) and region crop as video, but silent.
-- **Frame rate** — 15 / 30 / 60 presets or a custom value (5–60 fps, default 30); frames are captured
-  at the area's actual on-screen resolution (not the 2× Retina buffer) and encoded to `.gif`
-  on-device with [`gifenc`](https://github.com/mattdesl/gifenc) — no external tools.
-- **Per-frame palettes** (each frame gets its own 256 colours → accurate screen colours, no banding)
-  plus **inter-frame differencing** (unchanged pixels written transparent) to keep files small.
-- Encoded incrementally while recording, so memory stays bounded and playback is real-time.
-- The setup panel recommends **recording video instead** for Slack / GitHub / Jira — they autoplay
-  video, which is sharper and much smaller than a GIF; one click switches to the video recorder.
+- Same source picker (screen / window) and region crop as video, but with no audio track.
+- **Format toggle** — `MP4` (default) or `GIF`. MP4 is roughly **8× smaller than GIF at better
+  quality**: measured on identical frames at the same resolution, GIF took 661 KB where H.264
+  managed 110 KB and scored higher for fidelity. GIF has no lossy transform, no motion
+  compensation and only 256 colours per frame, so no amount of tuning closes that gap. It stays
+  available for the places that still insist on the format.
+- **Frame rate** — 15 / 30 / 60 presets or a custom value (5–60 fps, default 30). Neither format
+  encodes the 2× Retina buffer; GIF is capped harder (1024px long edge) because its size tracks
+  pixel count almost linearly.
+- GIF specifics: encoded on-device with [`gifenc`](https://github.com/mattdesl/gifenc) — no external
+  tools — using **per-frame palettes** (accurate screen colours, no banding) plus **inter-frame
+  differencing** against the accumulated _displayed_ canvas, which keeps files small without leaving
+  ghost trails on scrolling content.
+- Either format is encoded incrementally while recording, so memory stays bounded.
 
 **Open & edit an image**
 
@@ -101,7 +107,7 @@ uploaded anywhere.
 | -------------------------------- | ---------------------- |
 | Open screenshot capture          | `⌘⇧9` _(configurable)_ |
 | Open recording                   | `⌘⇧8` _(configurable)_ |
-| Open GIF recording               | `⌘⇧7` _(configurable)_ |
+| Open silent recording (MP4/GIF)  | `⌘⇧7` _(configurable)_ |
 | Copy annotated image             | `⌘C`                   |
 | Undo / Redo                      | `⌘Z` / `⌘⇧Z` (or `⌘Y`) |
 | Delete selected shape            | `Delete` / `Backspace` |

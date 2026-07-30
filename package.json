@@ -1,6 +1,6 @@
 {
   "name": "snapit",
-  "version": "3.0.1",
+  "version": "3.1.0",
   "description": "Local QA tool — Lightshot-style screenshots, recording, and live session analysis",
   "main": "./out/main/index.js",
   "author": "Karan Trehan",

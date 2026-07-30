@@ -3,6 +3,41 @@
 All notable changes to snapit are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [3.1.0] - 2026-07-30
+
+### Recordings are much smaller, and sharper
+
+Recording no longer goes through `MediaRecorder`, which offered no quality control and pinned the
+encoder to a low-latency path built for live streaming. Measured against a lossless reference, it
+could not exceed SSIM 0.949 **at any bitrate** — it simply stopped improving. snapit now drives
+WebCodecs directly at **constant quality**, the same approach OBS uses: bits follow the content, so
+a static screen costs almost nothing while a fast scroll gets what it needs.
+
+- **~2× smaller at higher quality.** On an identical capture, 766 kbps → 374 kbps.
+- **Correct colours.** Recordings were being tagged BT.601 while their content was BT.709, which
+  made everything look flat and slightly off-hue. Fixed.
+- **Sensible resolution.** Captures no longer encode the full 2× Retina buffer — four times the
+  pixels for detail you cannot see — but never drop below 1080p-class either.
+- **Frame rate holds up.** Full-screen capture was falling well short of its target; it now tracks it.
+
+### Silent recording: MP4 by default, GIF still there
+
+The GIF mode is now a **silent recorder with a format toggle**, defaulting to MP4.
+
+- MP4 is roughly **8× smaller than GIF at better quality** — measured on identical frames at the
+  same resolution, 110 KB versus 661 KB. GIF has no lossy transform, no motion compensation and
+  256 colours per frame, so tuning cannot close that gap.
+- **GIF output is still ~6× smaller** than before if you need the format: capped at 1024px on the
+  long edge, with a wider unchanged-pixel tolerance. Quality is essentially unchanged.
+
+### Also
+
+- **Annotate while recording.** Draw on screen mid-recording, in both video and silent modes; the
+  annotations are burnt into the capture.
+- Hardware acceleration is enabled again on macOS 26. It had been disabled to make the capture
+  overlay appear instantly, but that also removed the GPU encoder — costing both file size and the
+  correct colour tagging above. If the overlay feels slow to appear again, please open an issue.
+
 ## [3.0.1] - 2026-07-16
 
 ### macOS: permissions persist across updates
