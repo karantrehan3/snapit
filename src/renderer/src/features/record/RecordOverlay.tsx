@@ -7,6 +7,8 @@ import { useRegionSelect } from './useRegionSelect'
 import { SourceDropdown } from './SourceDropdown'
 import { FpsControl } from './FpsControl'
 import { ModeToggle } from './ModeToggle'
+import { QualityControl } from './QualityControl'
+import { DEFAULT_QUALITY, type QualityPreset } from './quality'
 import { RecordingChrome } from './RecordingChrome'
 import {
   barDivider,
@@ -43,6 +45,7 @@ export function RecordOverlay({
   const [systemAudio, setSystemAudio] = useState(true)
   const [mic, setMic] = useState(true)
   const [fps, setFps] = useState(60)
+  const [quality, setQuality] = useState<QualityPreset>(DEFAULT_QUALITY)
 
   // The live desktop shows through immediately; signal on mount so main reveals us.
   useEffect(() => {
@@ -118,6 +121,9 @@ export function RecordOverlay({
         <FpsControl value={fps} onChange={setFps} />
 
         <div style={barDivider} />
+        <QualityControl value={quality} onChange={setQuality} />
+
+        <div style={barDivider} />
         <button
           type="button"
           style={iconToggle(systemAudio)}
@@ -151,7 +157,8 @@ export function RecordOverlay({
               box: region.box,
               annotatable: canRegion,
               fallbackWidth: source.width,
-              fallbackHeight: source.height
+              fallbackHeight: source.height,
+              quality
             })
           }
         >

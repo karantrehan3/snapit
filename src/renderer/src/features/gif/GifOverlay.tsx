@@ -6,8 +6,10 @@ import { useRegionSelect } from '../record/useRegionSelect'
 import { SourceDropdown } from '../record/SourceDropdown'
 import { FpsControl } from '../record/FpsControl'
 import { ModeToggle } from '../record/ModeToggle'
+import { QualityControl } from '../record/QualityControl'
 import { RecordingChrome } from '../record/RecordingChrome'
 import { useGifRecorder, type SilentFormat } from './useGifRecorder'
+import { DEFAULT_QUALITY, type QualityPreset } from '../record/quality'
 import { FormatToggle } from './FormatToggle'
 import {
   barDivider,
@@ -46,6 +48,7 @@ export function GifOverlay({
 }): ReactElement {
   const [fps, setFps] = useState(DEFAULT_FPS)
   const [format, setFormat] = useState<SilentFormat>('mp4')
+  const [quality, setQuality] = useState<QualityPreset>(DEFAULT_QUALITY)
 
   // The live desktop shows through immediately; signal on mount so main reveals us.
   useEffect(() => {
@@ -125,6 +128,9 @@ export function GifOverlay({
         <FpsControl value={fps} onChange={setFps} />
 
         <div style={barDivider} />
+        <QualityControl value={quality} onChange={setQuality} />
+
+        <div style={barDivider} />
         <FormatToggle format={format} onChange={setFormat} />
 
         <div style={barDivider} />
@@ -156,7 +162,8 @@ export function GifOverlay({
               regionMode: region.regionMode,
               box: region.box,
               fallbackWidth: source.width,
-              format
+              format,
+              quality
             })
           }
         >

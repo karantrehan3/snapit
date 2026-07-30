@@ -15,22 +15,6 @@ const MAX_COLORS = 255
 /** Quantize the palette from every Nth pixel — 4× faster, and plenty for 256 colours. */
 const PALETTE_SAMPLE = 4
 
-/**
- * Max per-channel delta (0–255) for a pixel to count as unchanged vs what's already
- * displayed — small enough to catch real edits, large enough to ignore quantization noise.
- *
- * This is the strongest size lever in the encoder, because every pixel it lets through as
- * "unchanged" becomes transparent and compresses to nothing. Measured at 1024 wide against
- * a lossless reference, quality is flat across a wide range while size falls sharply:
- * tol 10 → 1915 KB @ SSIM 0.9657, tol 14 → 1028 KB @ 0.9542, tol 16 → 809 KB @ 0.9543,
- * tol 18 → 661 KB @ 0.9531, tol 20 → 589 KB @ 0.9474. Quality only starts to give way at
- * 20, so 18 sits at the knee.
- *
- * Raising it further risks stale pixels (ghosting); drift is bounded by this value, since
- * anything exceeding it gets redrawn.
- */
-const COLOR_TOLERANCE = 18
-
 /** Pack a palette entry [r,g,b] into an opaque little-endian RGBA uint32 (matches getImageData). */
 const packRgb = (p: number[]): number => ((255 << 24) | (p[2] << 16) | (p[1] << 8) | p[0]) >>> 0
 
@@ -60,8 +44,15 @@ export type GifWriter = {
  * pixel that has drifted from what a viewer is actually seeing gets redrawn, while genuinely
  * static pixels stay transparent. Diffing against the previous raw frame instead leaves
  * ghost trails on scrolling content, because quantization error accumulates unseen.
+ *
+ * @param tolerance Max per-channel drift (0-255) for a pixel to count as unchanged against
+ * what is already displayed, and so stay transparent. The strongest size lever in the
+ * encoder: measured at 1024 wide, quality is flat while size falls sharply — tol 10 gave
+ * 1915 KB @ SSIM 0.9657, tol 18 gave 661 KB @ 0.9531, and only by tol 20 does quality
+ * measurably give way. Comes from the quality preset (see quality.ts). Raising it risks stale
+ * pixels (ghosting); drift is bounded by it, since anything exceeding it gets redrawn.
  */
-export function createGifWriter(width: number, height: number): GifWriter {
+export function createGifWriter(width: number, height: number, tolerance: number): GifWriter {
   const gif = GIFEncoder()
   // The canvas as it will actually be *displayed*: accumulated, post-quantization.
   const shown = new Uint32Array(width * height)
@@ -92,7 +83,7 @@ export function createGifWriter(width: number, height: number): GifWriter {
           const dr = Math.abs((c & 255) - (s & 255))
           const dg = Math.abs(((c >> 8) & 255) - ((s >> 8) & 255))
           const db = Math.abs(((c >> 16) & 255) - ((s >> 16) & 255))
-          if (dr <= COLOR_TOLERANCE && dg <= COLOR_TOLERANCE && db <= COLOR_TOLERANCE) d32[i] = 0
+          if (dr <= tolerance && dg <= tolerance && db <= tolerance) d32[i] = 0
         }
         const index = applyPalette(delta, palette, 'rgba4444')
         gif.writeFrame(index, width, height, {

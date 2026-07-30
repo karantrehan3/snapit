@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type R
 import type { AnnotationOptions, Phase, Pt, Rect, RecordParams } from './types'
 import { useRecordingPointer } from './useRecordingPointer'
 import { encodeSize } from './encodeSize'
+import { DEFAULT_QUALITY, qualitySettings } from './quality'
 import { createMp4Encoder, type Mp4Encoder } from './mp4Encoder'
 import { drawAnnotations } from '../annotate-live/composite'
 import { useLatestRef } from '@renderer/lib/useLatestRef'
@@ -234,6 +235,8 @@ export function useRecorder({ drawMode, getAnnotationCanvas }: AnnotationOptions
   const start = async (params: RecordParams): Promise<void> => {
     setError(null)
     const { selectedId, systemAudio, mic, fps, regionMode, box, fallbackWidth, fallbackHeight } = params
+    const quality = params.quality ?? DEFAULT_QUALITY
+    const { videoLongEdge } = qualitySettings(quality)
     if (regionMode && (!box || box.w < MIN_REGION || box.h < MIN_REGION)) {
       setError('Drag to select a region first.')
       return
@@ -252,7 +255,7 @@ export function useRecorder({ drawMode, getAnnotationCanvas }: AnnotationOptions
       // Encode at logical size, not the Retina device pixels the capture arrives in —
       // see encodeSize for why that costs so much.
       const source = regionMode && box ? { w: box.w * scale, h: box.h * scale } : frame
-      const out = encodeSize(source.w, source.h, scale)
+      const out = encodeSize(source.w, source.h, scale, videoLongEdge)
       const { canvas, drawNow } = buildCanvas(display, regionMode && box ? box : null, scale, frame, out)
 
       const audioTracks: MediaStreamAudioTrack[] = []
@@ -273,7 +276,8 @@ export function useRecorder({ drawMode, getAnnotationCanvas }: AnnotationOptions
         width: out.w,
         height: out.h,
         fps,
-        audioTrack: audio
+        audioTrack: audio,
+        quality
       })
       // Stop pressed while we were setting up: unwind instead of starting a recording
       // nobody is waiting for.

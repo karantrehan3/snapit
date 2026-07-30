@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type RefObject } from 'react'
 import type { AnnotationOptions, Phase, Pt, Rect } from '../record/types'
+import type { QualityPreset } from '../record/quality'
 import { useRecordingPointer } from '../record/useRecordingPointer'
 import { encodeSize } from '../record/encodeSize'
+import { DEFAULT_QUALITY, qualitySettings } from '../record/quality'
 import { createMp4Encoder, type Mp4Encoder } from '../record/mp4Encoder'
 import { drawAnnotations } from '../annotate-live/composite'
 import { gifEncodeSize } from './gifSize'
@@ -30,6 +32,7 @@ export type GifParams = {
   box: Rect | null
   fallbackWidth: number
   format: SilentFormat
+  quality?: QualityPreset
 }
 
 export type GifRecorder = {
@@ -167,6 +170,8 @@ export function useGifRecorder({ drawMode, getAnnotationCanvas }: AnnotationOpti
   const start = async (params: GifParams): Promise<void> => {
     setError(null)
     const { selectedId, fps, regionMode, box, fallbackWidth, format } = params
+    const quality = params.quality ?? DEFAULT_QUALITY
+    const { videoLongEdge, gifLongEdge, gifTolerance } = qualitySettings(quality)
     if (regionMode && (!box || box.w < MIN_REGION || box.h < MIN_REGION)) {
       setError('Drag to select a region first.')
       return
@@ -195,7 +200,10 @@ export function useGifRecorder({ drawMode, getAnnotationCanvas }: AnnotationOpti
       // Neither format encodes the 2x Retina device buffer — that is 4x the pixels. MP4 uses
       // the video path's sizing; GIF is capped harder, since its size tracks pixel count
       // almost linearly (see gifEncodeSize).
-      const { w: outW, h: outH } = format === 'gif' ? gifEncodeSize(sw, sh, scale) : encodeSize(sw, sh, scale)
+      const { w: outW, h: outH } =
+        format === 'gif'
+          ? gifEncodeSize(sw, sh, scale, gifLongEdge)
+          : encodeSize(sw, sh, scale, videoLongEdge)
 
       const canvas = document.createElement('canvas')
       canvas.width = outW
@@ -206,9 +214,16 @@ export function useGifRecorder({ drawMode, getAnnotationCanvas }: AnnotationOpti
       ctx.imageSmoothingEnabled = true
       ctx.imageSmoothingQuality = 'high'
 
-      if (format === 'gif') gifRef.current = createGifWriter(outW, outH)
+      if (format === 'gif') gifRef.current = createGifWriter(outW, outH, gifTolerance)
       else
-        mp4Ref.current = await createMp4Encoder({ canvas, width: outW, height: outH, fps, audioTrack: null })
+        mp4Ref.current = await createMp4Encoder({
+          canvas,
+          width: outW,
+          height: outH,
+          fps,
+          audioTrack: null,
+          quality
+        })
 
       /** Draw the current video frame, with annotations burnt in, into the canvas. */
       const drawNow = (): void => {

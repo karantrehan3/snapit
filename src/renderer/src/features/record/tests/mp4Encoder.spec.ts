@@ -111,14 +111,15 @@ class FakeVideoFrame {
 
 const canvas = { width: 1920, height: 1246 } as unknown as HTMLCanvasElement
 
-async function makeEncoder(audioTrack: unknown = null) {
+async function makeEncoder(audioTrack: unknown = null, quality?: 'high' | 'balanced' | 'small') {
   const { createMp4Encoder } = await import('../mp4Encoder')
   return createMp4Encoder({
     canvas,
     width: 1920,
     height: 1246,
     fps: 30,
-    audioTrack: audioTrack as never
+    audioTrack: audioTrack as never,
+    ...(quality ? { quality } : {})
   })
 }
 
@@ -306,5 +307,47 @@ describe('createMp4Encoder — teardown and audio', () => {
     await makeEncoder()
     expect(state.videoTracks).toHaveLength(1)
     expect((state.videoTracks[0] as { meta: { frameRate: number } }).meta.frameRate).toBe(30)
+  })
+})
+
+describe('createMp4Encoder — quality presets', () => {
+  it('encodes with the requested preset’s quantizer', async () => {
+    const { QUALITY_PRESETS } = await import('../quality')
+    const enc = await makeEncoder(null, 'small')
+    await enc.addFrame(0)
+    expect((state.encodeCalls[0].options.avc as { quantizer: number }).quantizer).toBe(
+      QUALITY_PRESETS.small.quantizer
+    )
+  })
+
+  it('uses a coarser quantizer for a smaller preset than a higher one', async () => {
+    const high = await makeEncoder(null, 'high')
+    await high.addFrame(0)
+    const highQp = (state.encodeCalls[0].options.avc as { quantizer: number }).quantizer
+    state.encodeCalls = []
+    const small = await makeEncoder(null, 'small')
+    await small.addFrame(0)
+    const smallQp = (state.encodeCalls[0].options.avc as { quantizer: number }).quantizer
+    expect(smallQp).toBeGreaterThan(highQp)
+  })
+
+  it('defaults to the balanced preset when none is given', async () => {
+    const { QUALITY_PRESETS } = await import('../quality')
+    const enc = await makeEncoder()
+    await enc.addFrame(0)
+    expect((state.encodeCalls[0].options.avc as { quantizer: number }).quantizer).toBe(
+      QUALITY_PRESETS.balanced.quantizer
+    )
+  })
+
+  it('carries the preset into the bitrate fallback too', async () => {
+    state.supports = (c) => c.bitrateMode !== 'quantizer'
+    const high = await makeEncoder(null, 'high')
+    const highRate = state.configured[0].bitrate as number
+    state.configured = []
+    await makeEncoder(null, 'small')
+    const smallRate = state.configured[0].bitrate as number
+    expect(highRate).toBeGreaterThan(smallRate)
+    void high
   })
 })

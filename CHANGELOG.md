@@ -20,6 +20,14 @@ a static screen costs almost nothing while a fast scroll gets what it needs.
   pixels for detail you cannot see — but never drop below 1080p-class either.
 - **Frame rate holds up.** Full-screen capture was falling well short of its target; it now tracks it.
 
+### Quality dropdown
+
+Both recorders now have a **High / Balanced / Small** control in the command bar, with the
+trade-off spelled out on each option. It sets the resolution and the encoder's quality target
+together, so the presets are meaningfully far apart rather than cosmetic — on 2.4s of real
+screen content a GIF ranges from 2022 KB down to 314 KB across them. **Balanced** is the
+default and targets the size and clarity OBS achieves on the same footage.
+
 ### Silent recording: MP4 by default, GIF still there
 
 The GIF mode is now a **silent recorder with a format toggle**, defaulting to MP4.

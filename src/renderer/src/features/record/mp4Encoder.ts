@@ -7,6 +7,7 @@ import {
   Output
 } from 'mediabunny'
 import { AUDIO_BITRATE, KEY_FRAME_INTERVAL_SEC, encoderPlans, type EncoderPlan } from './encoderConfig'
+import { DEFAULT_QUALITY, type QualityPreset } from './quality'
 import { errorMessage } from '@renderer/lib/errorMessage'
 
 /** How many frames may sit in the encoder before we stop handing it more. */
@@ -28,6 +29,8 @@ export type Mp4EncoderOptions = {
   fps: number
   /** Mixed mic/system audio, or null for a silent recording. */
   audioTrack: MediaStreamAudioTrack | null
+  /** Quality preset driving the quantizer and the bitrate fallback. */
+  quality?: QualityPreset
 }
 
 /**
@@ -37,8 +40,13 @@ export type Mp4EncoderOptions = {
  * needs the GPU-backed encoder, and a partial probe reports it supported on the software
  * path where it is not — after which configure() fails asynchronously and closes the codec.
  */
-async function pickPlan(width: number, height: number, fps: number): Promise<EncoderPlan> {
-  for (const plan of encoderPlans(width, height, fps)) {
+async function pickPlan(
+  width: number,
+  height: number,
+  fps: number,
+  quality: QualityPreset
+): Promise<EncoderPlan> {
+  for (const plan of encoderPlans(width, height, fps, quality)) {
     try {
       const support = await VideoEncoder.isConfigSupported(plan.config)
       if (support.supported) return plan
@@ -62,10 +70,10 @@ async function pickPlan(width: number, height: number, fps: number): Promise<Enc
  * to AAC itself, so there is no second encoder to keep in sync here.
  */
 export async function createMp4Encoder(opts: Mp4EncoderOptions): Promise<Mp4Encoder> {
-  const { canvas, width, height, fps, audioTrack } = opts
+  const { canvas, width, height, fps, audioTrack, quality = DEFAULT_QUALITY } = opts
   if (typeof VideoEncoder === 'undefined') throw new Error('WebCodecs VideoEncoder unavailable')
 
-  const plan = await pickPlan(width, height, fps)
+  const plan = await pickPlan(width, height, fps, quality)
   const output = new Output({ format: new Mp4OutputFormat(), target: new BufferTarget() })
   const videoSource = new EncodedVideoPacketSource('avc')
   output.addVideoTrack(videoSource, { frameRate: fps })

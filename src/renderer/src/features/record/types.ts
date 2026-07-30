@@ -1,4 +1,5 @@
 import type { MouseEvent as ReactMouseEvent, RefObject } from 'react'
+import type { QualityPreset } from './quality'
 
 export type Phase = 'setup' | 'recording'
 export type Mode = 'full' | 'region'
@@ -36,16 +37,14 @@ export type RecordParams = {
   regionMode: boolean
   box: Rect | null
   /**
-   * Whether this source *can* be annotated — true when it's the display the overlay
-   * covers, false for a window or second-display capture (screen-space annotations
-   * wouldn't map onto those frames).
-   *
-   * When true, full-screen routes through the canvas from the start so the pencil is
-   * available at any point during the recording: MediaRecorder can't swap its video
-   * track after start(), so the route can't be added on demand. When false, the cheaper
-   * zero-copy track path is used, since no annotation will be offered anyway.
+   * Whether this source *can* be annotated — true when it's the display the overlay covers,
+   * false for a window or second-display capture (screen-space annotations wouldn't map onto
+   * those frames). Only affects whether the pencil is offered: every capture routes through a
+   * canvas now, since that is where both the encoder's frames and the downscale come from.
    */
   annotatable: boolean
   fallbackWidth: number
   fallbackHeight: number
+  /** Quality preset; defaults to DEFAULT_QUALITY when omitted (see quality.ts). */
+  quality?: QualityPreset
 }

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { avcCodecCandidates, encoderPlans, VIDEO_QUANTIZER, KEY_FRAME_INTERVAL_SEC } from '../encoderConfig'
+import { avcCodecCandidates, encoderPlans, KEY_FRAME_INTERVAL_SEC } from '../encoderConfig'
+import { QUALITY_PRESETS } from '../quality'
 
 describe('avcCodecCandidates', () => {
   it('offers level 4.0 first for a frame that fits it', () => {
@@ -44,11 +45,11 @@ describe('avcCodecCandidates', () => {
 })
 
 describe('encoderPlans', () => {
-  const plans = encoderPlans(1920, 1246, 30)
+  const plans = encoderPlans(1920, 1246, 30, 'balanced')
 
   it('prefers constant quality, then falls back to a bitrate target', () => {
     expect(plans[0].config.bitrateMode).toBe('quantizer')
-    expect(plans[0].quantizer).toBe(VIDEO_QUANTIZER)
+    expect(plans[0].quantizer).toBe(QUALITY_PRESETS.balanced.quantizer)
     const fallback = plans.find((p) => p.config.bitrateMode === 'variable')
     expect(fallback).toBeDefined()
     expect(fallback?.quantizer).toBeNull()
@@ -85,12 +86,35 @@ describe('encoderPlans', () => {
   })
 })
 
-describe('encoder constants', () => {
-  it('keeps the quantizer in H.264 range and in the useful part of it', () => {
-    expect(VIDEO_QUANTIZER).toBeGreaterThanOrEqual(20)
-    expect(VIDEO_QUANTIZER).toBeLessThanOrEqual(45)
+describe('encoderPlans — quality presets drive it', () => {
+  it('carries each preset’s quantizer into the constant-quality plans', () => {
+    for (const preset of ['high', 'balanced', 'small'] as const) {
+      const plan = encoderPlans(1920, 1246, 30, preset).find((p) => p.config.bitrateMode === 'quantizer')
+      expect(plan?.quantizer).toBe(QUALITY_PRESETS[preset].quantizer)
+    }
   })
 
+  it('asks for a coarser quantizer at lower quality', () => {
+    const qp = (preset: 'high' | 'balanced' | 'small'): number =>
+      encoderPlans(1920, 1246, 30, preset)[0].quantizer as number
+    expect(qp('high')).toBeLessThan(qp('balanced'))
+    expect(qp('balanced')).toBeLessThan(qp('small'))
+  })
+
+  it('asks for a lower fallback bitrate at lower quality', () => {
+    const rate = (preset: 'high' | 'balanced' | 'small'): number =>
+      encoderPlans(1920, 1246, 30, preset).find((p) => p.quantizer === null)?.config.bitrate as number
+    expect(rate('high')).toBeGreaterThan(rate('balanced'))
+    expect(rate('balanced')).toBeGreaterThan(rate('small'))
+  })
+
+  it('falls back to the default preset for an unrecognised value', () => {
+    const odd = encoderPlans(1920, 1246, 30, 'nonsense' as 'balanced')
+    expect(odd[0].quantizer).toBe(QUALITY_PRESETS.balanced.quantizer)
+  })
+})
+
+describe('encoder constants', () => {
   it('matches OBS default key frame interval', () => {
     expect(KEY_FRAME_INTERVAL_SEC).toBe(2)
   })

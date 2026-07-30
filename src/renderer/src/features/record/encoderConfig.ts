@@ -1,19 +1,5 @@
 import { targetBitrate } from './bitrate'
-
-/**
- * Constant quantizer for the video encoder — H.264 QP, 0 (lossless) to 51 (worst).
- *
- * This is the CRF-style control OBS relies on and MediaRecorder never exposed: quality is
- * held constant and the bitrate floats, so a static screen costs almost nothing while a
- * fast scroll gets the bits it needs. Measured on 1920x1246/30fps screen content against a
- * lossless reference (SSIM): QP23 → 1271 kbps @ 0.9953, QP28 → 1032 @ 0.9948,
- * QP33 → 805 @ 0.9933, QP38 → 597 @ 0.9895. For contrast MediaRecorder could not beat
- * 0.9492 at *any* bitrate, saturating at 817 kbps.
- *
- * 36 targets OBS's own 460–660 kbps envelope while staying far above what MediaRecorder
- * could reach. Lower it for more quality, raise it for smaller files.
- */
-export const VIDEO_QUANTIZER = 36
+import { qualitySettings, type QualityPreset } from './quality'
 
 /** Seconds between key frames. Matches OBS's default; shorter seeks better but costs size. */
 export const KEY_FRAME_INTERVAL_SEC = 2
@@ -54,29 +40,33 @@ export function avcCodecCandidates(width: number, height: number): string[] {
 export type EncoderPlan = { config: VideoEncoderConfig; quantizer: number | null }
 
 /**
- * Encoder configurations to try, best first.
+ * Encoder configurations to try, best first, for a given quality preset.
  *
- * Constant-quality is preferred but **cannot be assumed**: `bitrateMode: 'quantizer'` is
- * only implemented by the GPU-backed encoder, and snapit disables hardware acceleration on
- * macOS 26 to keep the overlay appearing instantly. On that path `configure()` still
- * succeeds and then fails *asynchronously* with "Unsupported bitrate mode", closing the
- * codec so every subsequent encode throws — so callers must probe each of these with
+ * Constant-quality is preferred but **cannot be assumed**: `bitrateMode: 'quantizer'` is only
+ * implemented by the GPU-backed encoder. On the software path `configure()` still succeeds and
+ * then fails *asynchronously* with "Unsupported bitrate mode", closing the codec so every
+ * subsequent encode throws — so callers must probe each of these with
  * `VideoEncoder.isConfigSupported` passing the **whole** config. Checking only codec and
  * dimensions reports support that isn't there.
  *
- * Measured at 1920x1246/30fps against a lossless reference: quantizer QP36 gives 677 kbps
- * at SSIM 0.9949, while the software fallback bottoms out near 1012 kbps at 0.9812. Both
- * beat MediaRecorder, which needed 817 kbps for 0.9492 and could do no better at any
- * bitrate.
+ * Measured at 1920x1246/30fps against a lossless reference: quantizer QP36 gives 677 kbps at
+ * SSIM 0.9949, while the software fallback bottoms out near 1012 kbps at 0.9812. Both beat
+ * MediaRecorder, which needed 817 kbps for 0.9492 and could do no better at any bitrate.
  */
-export function encoderPlans(width: number, height: number, fps: number): EncoderPlan[] {
+export function encoderPlans(
+  width: number,
+  height: number,
+  fps: number,
+  preset: QualityPreset
+): EncoderPlan[] {
+  const { quantizer, bitsPerPixel } = qualitySettings(preset)
   const codecs = avcCodecCandidates(width, height)
   const base = { width, height, framerate: fps, avc: { format: 'avc' as const } }
   return [
     // Constant quality: bits follow the content, so a static screen costs almost nothing.
     ...codecs.map((codec) => ({
       config: { ...base, codec, latencyMode: 'quality' as const, bitrateMode: 'quantizer' as const },
-      quantizer: VIDEO_QUANTIZER
+      quantizer
     })),
     // Software fallback. Still 'quality' latency — that is what buys the headroom over
     // MediaRecorder, which is pinned to the realtime path.
@@ -86,7 +76,7 @@ export function encoderPlans(width: number, height: number, fps: number): Encode
         codec,
         latencyMode: 'quality' as const,
         bitrateMode: 'variable' as const,
-        bitrate: targetBitrate(width, height, fps)
+        bitrate: targetBitrate(width, height, fps, bitsPerPixel)
       },
       quantizer: null
     }))

@@ -61,6 +61,9 @@ uploaded anywhere.
 
 - Source picker for any screen or window; full-screen or **region** crop.
 - **30 / 60 fps**, with optional system audio and microphone (mixed when both are on).
+- **Quality** — `High` / `Balanced` / `Small`, setting the frame size and the encoder's quality
+  target together. **Balanced** (default) aims at the size and clarity OBS achieves on the same
+  footage.
 - Native **`.mp4`** (H.264 High profile / AAC), encoded with **WebCodecs at constant quality** — bits
   follow the content, so a static screen costs almost nothing and a fast scroll gets what it needs.
 - A **draggable Stop pill** floats over the screen; the rest of the overlay is click-through. The
@@ -74,9 +77,11 @@ uploaded anywhere.
   managed 110 KB and scored higher for fidelity. GIF has no lossy transform, no motion
   compensation and only 256 colours per frame, so no amount of tuning closes that gap. It stays
   available for the places that still insist on the format.
-- **Frame rate** — 15 / 30 / 60 presets or a custom value (5–60 fps, default 30). Neither format
-  encodes the 2× Retina buffer; GIF is capped harder (1024px long edge) because its size tracks
-  pixel count almost linearly.
+- **Frame rate** — 15 / 30 / 60 presets or a custom value (5–60 fps, default 30).
+- **Quality** — the same `High` / `Balanced` / `Small` control as video, and it matters far more
+  here: on 2.4s of real screen content a GIF ranges from **2022 KB** at High down to **314 KB** at
+  Small. Neither format encodes the 2× Retina buffer, and GIF is capped harder than MP4 at every
+  preset because its size tracks pixel count almost linearly.
 - GIF specifics: encoded on-device with [`gifenc`](https://github.com/mattdesl/gifenc) — no external
   tools — using **per-frame palettes** (accurate screen colours, no banding) plus **inter-frame
   differencing** against the accumulated _displayed_ canvas, which keeps files small without leaving

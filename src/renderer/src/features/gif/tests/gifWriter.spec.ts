@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { createGifWriter } from '../gifWriter'
+import { QUALITY_PRESETS } from '../../record/quality'
+
+const TOL = QUALITY_PRESETS.balanced.gifTolerance
 
 const W = 64
 const H = 48
@@ -30,7 +33,7 @@ function nudged(src: Uint8ClampedArray, d: number): Uint8ClampedArray {
 
 describe('createGifWriter', () => {
   it('encodes a single frame into a GIF', () => {
-    const w = createGifWriter(W, H)
+    const w = createGifWriter(W, H, TOL)
     w.addFrame(frame(200, 40, 40, 4), 40)
     const bytes = w.finish()
     expect(w.frameCount()).toBe(1)
@@ -40,7 +43,7 @@ describe('createGifWriter', () => {
   })
 
   it('counts every frame added', () => {
-    const w = createGifWriter(W, H)
+    const w = createGifWriter(W, H, TOL)
     for (let i = 0; i < 5; i++) w.addFrame(frame(10 + i * 20, 60, 90, 4), 40)
     expect(w.frameCount()).toBe(5)
     w.finish()
@@ -48,11 +51,11 @@ describe('createGifWriter', () => {
 
   it('spends almost nothing on a frame identical to the last', () => {
     const base = frame(120, 160, 200, 4)
-    const still = createGifWriter(W, H)
+    const still = createGifWriter(W, H, TOL)
     still.addFrame(base, 40)
     const afterFirst = still.finish().length
 
-    const repeated = createGifWriter(W, H)
+    const repeated = createGifWriter(W, H, TOL)
     repeated.addFrame(base, 40)
     repeated.addFrame(base, 40)
     const afterRepeat = repeated.finish().length
@@ -63,11 +66,11 @@ describe('createGifWriter', () => {
 
   it('costs more for a frame that changes completely than one that does not', () => {
     const base = frame(120, 160, 200, 4)
-    const same = createGifWriter(W, H)
+    const same = createGifWriter(W, H, TOL)
     same.addFrame(base, 40)
     same.addFrame(base, 40)
 
-    const changed = createGifWriter(W, H)
+    const changed = createGifWriter(W, H, TOL)
     changed.addFrame(base, 40)
     changed.addFrame(frame(20, 240, 60, 3), 40)
 
@@ -76,11 +79,11 @@ describe('createGifWriter', () => {
 
   it('treats a sub-tolerance shift as unchanged, so it stays cheap', () => {
     const base = frame(120, 160, 200, 4)
-    const tiny = createGifWriter(W, H)
+    const tiny = createGifWriter(W, H, TOL)
     tiny.addFrame(base, 40)
     tiny.addFrame(nudged(base, 4), 40)
 
-    const big = createGifWriter(W, H)
+    const big = createGifWriter(W, H, TOL)
     big.addFrame(base, 40)
     big.addFrame(nudged(base, 90), 40)
 
@@ -93,8 +96,33 @@ describe('createGifWriter', () => {
     const backing = new Uint8ClampedArray(W * H * 4 + 128)
     const view = backing.subarray(64, 64 + W * H * 4)
     view.set(frame(90, 90, 90, 6))
-    const w = createGifWriter(W, H)
+    const w = createGifWriter(W, H, TOL)
     expect(() => w.addFrame(view, 40)).not.toThrow()
+    expect(w.finish().length).toBeGreaterThan(0)
+  })
+
+  it('writes less when the tolerance is wider, which is the size lever presets use', () => {
+    const base = frame(120, 160, 200, 4)
+    // A shift of 16 counts as unchanged at the 'small' tolerance but not at 'high'.
+    const shifted = nudged(base, 16)
+
+    const strict = createGifWriter(W, H, QUALITY_PRESETS.high.gifTolerance)
+    strict.addFrame(base, 40)
+    strict.addFrame(shifted, 40)
+
+    const loose = createGifWriter(W, H, QUALITY_PRESETS.small.gifTolerance)
+    loose.addFrame(base, 40)
+    loose.addFrame(shifted, 40)
+
+    expect(loose.finish().length).toBeLessThan(strict.finish().length)
+  })
+
+  it('treats a zero tolerance as "any change counts", not as "ignore everything"', () => {
+    const base = frame(120, 160, 200, 4)
+    const w = createGifWriter(W, H, 0)
+    w.addFrame(base, 40)
+    w.addFrame(nudged(base, 30), 40)
+    expect(w.frameCount()).toBe(2)
     expect(w.finish().length).toBeGreaterThan(0)
   })
 })
