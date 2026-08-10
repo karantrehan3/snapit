@@ -3,6 +3,26 @@
 All notable changes to snapit are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [3.2.0] - 2026-08-10
+
+### Claude Code can use snapit directly, over MCP
+
+snapit now runs a local [MCP](https://modelcontextprotocol.io/) server, so Claude Code can request
+a screenshot, capture a specific display or region, or hand you the normal capture overlay and wait
+for you to select/annotate. Screenshots only — recording produces a file for a human to watch, not
+something an LLM can look at, so it isn't exposed.
+
+- **Five tools**: `list_displays`, `capture_screen`, `capture_region`, `pick_region`
+  (human-in-the-loop — opens the real overlay and waits for you), and `recent_captures`.
+- **Local-only, token-gated.** The server binds to `127.0.0.1` only; every request needs a bearer
+  token generated once per install; Host/Origin headers are checked so a malicious webpage can't
+  reach it via DNS rebinding. Tray → **Claude Code (MCP)** → **Copy setup command** to connect,
+  **Regenerate token…** if it ever leaks.
+- **Path by default, image on request.** Capture tools return a saved file's path; pass
+  `include_image` to also get a downscaled inline preview instead of a multi-MB base64 blob.
+
+See the [README](README.md#claude-code-mcp) for setup and the full security model.
+
 ## [3.1.0] - 2026-07-30
 
 ### Recordings are much smaller, and sharper
