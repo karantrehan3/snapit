@@ -23,12 +23,14 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "gifenc": "^1.0.3",
     "konva": "^10.3.0",
     "mediabunny": "^1.51.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "react-konva": "^19.2.5"
+    "react-konva": "^19.2.5",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^22.19.21",

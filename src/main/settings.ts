@@ -1,5 +1,6 @@
 import { join } from 'path'
 import { existsSync, readFileSync, writeFileSync } from 'fs'
+import { randomBytes } from 'crypto'
 import { app } from 'electron'
 
 export type Settings = {
@@ -7,14 +8,22 @@ export type Settings = {
   recordHotkey: string
   gifHotkey: string
   saveDir: string
+  /** Bearer token the local MCP server requires — generated once, never renderer-settable. */
+  mcpToken: string
+  /** Port the local MCP server listens on (127.0.0.1 only). */
+  mcpPort: number
 }
+
+const DEFAULT_MCP_PORT = 47317
 
 function defaults(): Settings {
   return {
     screenshotHotkey: 'CommandOrControl+Shift+9',
     recordHotkey: 'CommandOrControl+Shift+8',
     gifHotkey: 'CommandOrControl+Shift+7',
-    saveDir: join(app.getPath('pictures'), 'snapit')
+    saveDir: join(app.getPath('pictures'), 'snapit'),
+    mcpToken: randomBytes(24).toString('hex'),
+    mcpPort: DEFAULT_MCP_PORT
   }
 }
 
@@ -31,7 +40,9 @@ function coerce(raw: unknown): Settings {
     screenshotHotkey: typeof o.screenshotHotkey === 'string' ? o.screenshotHotkey : d.screenshotHotkey,
     recordHotkey: typeof o.recordHotkey === 'string' ? o.recordHotkey : d.recordHotkey,
     gifHotkey: typeof o.gifHotkey === 'string' ? o.gifHotkey : d.gifHotkey,
-    saveDir: typeof o.saveDir === 'string' ? o.saveDir : d.saveDir
+    saveDir: typeof o.saveDir === 'string' ? o.saveDir : d.saveDir,
+    mcpToken: typeof o.mcpToken === 'string' && o.mcpToken.length > 0 ? o.mcpToken : d.mcpToken,
+    mcpPort: typeof o.mcpPort === 'number' && Number.isInteger(o.mcpPort) ? o.mcpPort : d.mcpPort
   }
 }
 
@@ -46,25 +57,38 @@ function sanitize(partial: Partial<Settings>): Partial<Settings> {
   return out
 }
 
+function persist(settings: Settings): void {
+  try {
+    writeFileSync(file(), JSON.stringify(settings, null, 2))
+  } catch (err) {
+    console.error('[snapit] failed to write settings:', err)
+  }
+}
+
 export function getSettings(): Settings {
   if (cache) return cache
-  let loaded: Settings
   try {
-    loaded = existsSync(file()) ? coerce(JSON.parse(readFileSync(file(), 'utf-8'))) : defaults()
+    cache = existsSync(file()) ? coerce(JSON.parse(readFileSync(file(), 'utf-8'))) : defaults()
   } catch (err) {
     console.error('[snapit] failed to read settings, using defaults:', err)
-    loaded = defaults()
+    cache = defaults()
   }
-  cache = loaded
-  return loaded
+  // Persist once per process on first load — this is what makes a freshly-generated
+  // mcpToken (new install, or an old settings.json from before it existed) stable
+  // across restarts instead of silently regenerating until something else writes it.
+  persist(cache)
+  return cache
 }
 
 export function setSettings(partial: Partial<Settings>): Settings {
   cache = { ...getSettings(), ...sanitize(partial) }
-  try {
-    writeFileSync(file(), JSON.stringify(cache, null, 2))
-  } catch (err) {
-    console.error('[snapit] failed to write settings:', err)
-  }
+  persist(cache)
+  return cache
+}
+
+/** Replace the MCP bearer token — e.g. if it may have leaked. Not reachable via settings:set. */
+export function regenerateMcpToken(): Settings {
+  cache = { ...getSettings(), mcpToken: randomBytes(24).toString('hex') }
+  persist(cache)
   return cache
 }

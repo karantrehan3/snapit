@@ -20,8 +20,9 @@ import {
   type Display
 } from 'electron'
 import { captureDisplay, getDisplaySource, type DisplaySource } from './capture'
-import { getSettings, setSettings, type Settings } from './settings'
+import { getSettings, setSettings, regenerateMcpToken, type Settings } from './settings'
 import { checkForUpdate, type UpdateInfo } from './updater'
+import { captureFilePath } from './filename'
 import {
   EDITABLE_EXTENSIONS,
   bufferFromDataUrl,
@@ -30,6 +31,7 @@ import {
   normalizeExt
 } from './imageFile'
 import { TRAY_TEMPLATE_DATA_URL, TRAY_COLOUR_DATA_URL } from './trayIcon'
+import { startMcpServer, stopMcpServer, disconnectAllSessions, mcpSetupCommand } from './mcp/httpServer'
 
 // NOTE: app.disableHardwareAcceleration() used to be called here on macOS 26+, because
 // Tahoe presents transparent full-screen windows so slowly the overlay took 2-3s to appear
@@ -106,6 +108,9 @@ let recordSourceId: string | null = null
 let pendingCaptureMode: CaptureMode | null = null
 // Latest available update (from GitHub), or null when up to date / not yet checked.
 let availableUpdate: UpdateInfo | null = null
+// Set while an MCP `pick_region` call is waiting on the user to finish a screenshot
+// capture (copy/save/save-as resolves it; Esc/dismiss without acting rejects it).
+let pendingMcpCapture: { resolve: (dataUrl: string) => void; reject: (err: Error) => void } | null = null
 
 // Locks the packaged renderer to its own bundle: no remote script, no eval, no
 // plugins, no framing. data:/blob: cover the frozen-frame dataURL, source-picker
@@ -216,8 +221,44 @@ function showOverlay(display: Display): void {
   else push()
 }
 
+/** Resolve a pending MCP `pick_region` call with the finished capture's data URL. */
+function resolvePendingMcpCapture(dataUrl: string): void {
+  if (!pendingMcpCapture) return
+  const { resolve } = pendingMcpCapture
+  pendingMcpCapture = null
+  resolve(dataUrl)
+}
+
+/** Reject a pending MCP `pick_region` call (dismissed without copy/save, or failed to start). */
+function rejectPendingMcpCapture(message: string): void {
+  if (!pendingMcpCapture) return
+  const { reject } = pendingMcpCapture
+  pendingMcpCapture = null
+  reject(new Error(message))
+}
+
+/**
+ * Open the screenshot overlay on behalf of an MCP `pick_region` call and wait for
+ * the user to finish it. Rejects immediately if a capture is already in progress,
+ * or once `startCapture` returns without opening a session (e.g. permission denied).
+ */
+function requestInteractiveCapture(): Promise<string> {
+  if (session || pendingMcpCapture) {
+    return Promise.reject(new Error('snapit is busy with another capture — try again once it finishes.'))
+  }
+  return new Promise((resolve, reject) => {
+    pendingMcpCapture = { resolve, reject }
+    void startCapture('screenshot').then(() => {
+      if (!session && pendingMcpCapture) {
+        rejectPendingMcpCapture('Failed to start screen capture (check Screen Recording permission).')
+      }
+    })
+  })
+}
+
 /** Dismiss the current capture: clear the renderer, hide the overlay (kept alive). */
 function closeOverlayWindow(): void {
+  rejectPendingMcpCapture('Capture dismissed without saving.')
   session = null
   if (revealFallback) {
     clearTimeout(revealFallback)
@@ -418,6 +459,13 @@ function buildTray(): void {
     { type: 'separator' },
     { label: 'Settings…', click: openSettingsWindow },
     { label: 'Open save folder', click: () => void shell.openPath(getSettings().saveDir) },
+    {
+      label: 'Claude Code (MCP)',
+      submenu: [
+        { label: 'Copy setup command', click: () => clipboard.writeText(mcpSetupCommand()) },
+        { label: 'Regenerate token…', click: () => void regenerateMcpTokenWithConfirm() }
+      ]
+    },
     { label: 'About snapit', click: openAboutWindow },
     { type: 'separator' },
     { label: 'Quit snapit', click: () => app.quit() }
@@ -459,12 +507,6 @@ function createTray(): void {
   tray = new Tray(icon)
   tray.setToolTip('snapit — QA capture')
   buildTray()
-}
-
-function timestamp(): string {
-  const d = new Date()
-  const p = (n: number): string => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}-${p(d.getMinutes())}-${p(d.getSeconds())}`
 }
 
 function pngBuffer(dataUrl: string): Buffer {
@@ -573,6 +615,24 @@ async function openImageFromDialog(): Promise<void> {
   }
 }
 
+/** Regenerate the MCP bearer token (confirmed first) and disconnect anyone using the old one. */
+async function regenerateMcpTokenWithConfirm(): Promise<void> {
+  const { response } = await dialog.showMessageBox({
+    type: 'warning',
+    buttons: ['Regenerate', 'Cancel'],
+    defaultId: 0,
+    cancelId: 1,
+    message: 'Regenerate the Claude Code (MCP) token?',
+    detail:
+      'The old token stops working immediately and any connected Claude Code session is ' +
+      'disconnected. Re-run "Copy setup command" wherever you use it.'
+  })
+  if (response !== 0) return
+  regenerateMcpToken()
+  disconnectAllSessions()
+  clipboard.writeText(mcpSetupCommand())
+}
+
 /** Pick an editable image path out of a process argv list (Windows/Linux open-with). */
 function imagePathFromArgv(argv: string[]): string | null {
   // Scan from the end: the launched file is typically the last argument.
@@ -667,6 +727,7 @@ app.whenReady().then(() => {
   registerHotkeys()
   void refreshUpdate()
   setInterval(() => void refreshUpdate(), UPDATE_CHECK_INTERVAL_MS)
+  startMcpServer(app.getVersion(), { requestInteractiveCapture })
 
   ipcMain.handle('capture:get-session', () => session)
 
@@ -676,6 +737,7 @@ app.whenReady().then(() => {
   ipcMain.on('capture:copy', (_event, dataUrl: string) => {
     if (!isImageDataUrl(dataUrl)) return
     clipboard.writeImage(nativeImage.createFromDataURL(dataUrl))
+    resolvePendingMcpCapture(dataUrl)
     closeOverlayWindow()
   })
 
@@ -683,9 +745,10 @@ app.whenReady().then(() => {
     if (!isImageDataUrl(dataUrl)) return null
     const { saveDir } = getSettings()
     await mkdir(saveDir, { recursive: true })
-    const filePath = join(saveDir, `snapit-${timestamp()}.png`)
+    const filePath = captureFilePath(saveDir, 'png')
     await writeFile(filePath, pngBuffer(dataUrl))
     shell.showItemInFolder(filePath)
+    resolvePendingMcpCapture(dataUrl)
     closeOverlayWindow()
     return filePath
   })
@@ -694,7 +757,7 @@ app.whenReady().then(() => {
     if (!isImageDataUrl(dataUrl)) return null
     const { saveDir } = getSettings()
     const options = {
-      defaultPath: join(saveDir, `snapit-${timestamp()}.png`),
+      defaultPath: captureFilePath(saveDir, 'png'),
       filters: [{ name: 'PNG Image', extensions: ['png'] }]
     }
     // Parent the dialog to the overlay so it appears above the always-on-top window.
@@ -704,6 +767,7 @@ app.whenReady().then(() => {
     if (result.canceled || !result.filePath) return null
     await writeFile(result.filePath, pngBuffer(dataUrl))
     shell.showItemInFolder(result.filePath)
+    resolvePendingMcpCapture(dataUrl)
     closeOverlayWindow()
     return result.filePath
   })
@@ -728,7 +792,7 @@ app.whenReady().then(() => {
     const safeExt = ext === 'mp4' ? 'mp4' : 'webm'
     const { saveDir } = getSettings()
     await mkdir(saveDir, { recursive: true })
-    const filePath = join(saveDir, `snapit-${timestamp()}.${safeExt}`)
+    const filePath = captureFilePath(saveDir, safeExt)
     await writeFile(filePath, Buffer.from(data))
     shell.showItemInFolder(filePath)
     closeOverlayWindow()
@@ -740,7 +804,7 @@ app.whenReady().then(() => {
     if (!(data instanceof ArrayBuffer) || data.byteLength === 0) return null
     const { saveDir } = getSettings()
     await mkdir(saveDir, { recursive: true })
-    const filePath = join(saveDir, `snapit-${timestamp()}.gif`)
+    const filePath = captureFilePath(saveDir, 'gif')
     await writeFile(filePath, Buffer.from(data))
     shell.showItemInFolder(filePath)
     closeOverlayWindow()
@@ -869,4 +933,5 @@ app.on('window-all-closed', () => {
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll()
+  stopMcpServer()
 })

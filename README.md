@@ -121,6 +121,50 @@ uploaded anywhere.
 
 > Hotkeys use `Ctrl` instead of `⌘` on Windows and Linux.
 
+## Claude Code (MCP)
+
+snapit can expose its screenshot tools to [Claude Code](https://code.claude.com/) over MCP, so
+Claude can request a screenshot, capture a specific display or region, or hand you the normal
+capture overlay and wait for you to select/annotate — screenshots only; recording produces a file
+for a human to watch, not something an LLM can look at, so it isn't exposed.
+
+**Setup**
+
+1. Run snapit — it starts a local MCP server automatically, no config needed.
+2. Tray → **Claude Code (MCP)** → **Copy setup command**, then paste it into a terminal:
+   ```
+   claude mcp add --transport http snapit http://127.0.0.1:47317/mcp --header "Authorization: Bearer <token>"
+   ```
+3. Approve snapit's tool calls the way you'd approve any other MCP tool — Claude Code prompts per
+   call by default.
+
+**Tools**
+
+| Tool              | What it does                                                                                           |
+| ----------------- | ------------------------------------------------------------------------------------------------------ |
+| `list_displays`   | Lists connected displays with the ids/bounds the other tools need.                                     |
+| `capture_screen`  | Silently captures a full display. Saves a PNG, returns its path.                                       |
+| `capture_region`  | Silently captures a rectangle of a display.                                                            |
+| `pick_region`     | Opens the normal capture overlay so **you** select (and optionally annotate); waits for you to finish. |
+| `recent_captures` | Lists recent files in the save folder.                                                                 |
+
+Every capture tool takes an optional `include_image` flag to also return a downscaled inline
+preview (capped at 1400px wide) instead of just a path. It's off by default — a full-resolution
+screenshot is several MB of base64 and eats a large chunk of the conversation's context.
+
+**Security**
+
+- The server binds to **127.0.0.1 only**; nothing outside the machine can reach it, and Host /
+  Origin headers are checked so a malicious webpage in your browser can't reach it via DNS
+  rebinding either.
+- Every request needs a **bearer token**, generated once per install and never sent anywhere but
+  the local client you configure with it (Tray → **Claude Code (MCP)** → **Copy setup command**).
+- If the token ever leaks, Tray → **Claude Code (MCP)** → **Regenerate token…** invalidates it
+  immediately and disconnects any client still using the old one.
+- `capture_screen` / `capture_region` are silent by design — whatever's on your screen becomes
+  visible to Claude the moment it calls one. `pick_region` is the human-in-the-loop alternative if
+  you'd rather choose what's shared each time. Grant this to Claude Code with that in mind.
+
 ## Install
 
 Grab the latest build for your OS and run it:
@@ -221,8 +265,10 @@ handoff notes and the longer-term roadmap.
 ## Declaration
 
 snapit is an **independent, personal project**. It is **local-only**: screenshots and recordings
-are written to your clipboard or a folder you choose, and the app makes no network calls and sends
-no telemetry. It is provided **as-is**, with no warranty, under the MIT License.
+are written to your clipboard or a folder you choose, and the app makes no outbound network calls
+and sends no telemetry. The optional [Claude Code (MCP)](#claude-code-mcp) server is the one
+exception — a token-gated, `127.0.0.1`-only listener, off the network by construction. It is
+provided **as-is**, with no warranty, under the MIT License.
 
 ## License
 
