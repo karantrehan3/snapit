@@ -1255,12 +1255,12 @@
                   <div class="demo-toast" data-toast>&#10003; Saved snapit&hellip;.mp4</div>
                 </div>
 
-                <!-- Scene 3: Record GIF -->
+                <!-- Scene 3: Silent recording (MP4 by default, GIF is a toggle) -->
                 <div class="demo-scene" data-scene="gif">
                   <div class="rec-region"></div>
-                  <div class="rec-badge rec-badge--gif">GIF</div>
-                  <div class="gif-bar"><span class="rec-dot"></span> Recording &middot; 30 fps</div>
-                  <div class="demo-toast" data-toast>&#10003; Saved snapit&hellip;.gif</div>
+                  <div class="rec-badge rec-badge--gif">MP4</div>
+                  <div class="gif-bar"><span class="rec-dot"></span> Silent &middot; 30 fps</div>
+                  <div class="demo-toast" data-toast>&#10003; Saved snapit&hellip;.mp4</div>
                 </div>
 
                 <!-- Scene 4: Edit an existing image -->
@@ -1343,10 +1343,13 @@
               Recording
             </button>
             <button class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-gif" id="tab-gif">
-              GIF
+              Silent recording
             </button>
             <button class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-edit" id="tab-edit">
               Edit image
+            </button>
+            <button class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-mcp" id="tab-mcp">
+              Claude Code
             </button>
           </div>
 
@@ -1418,16 +1421,37 @@
                   the moment you stop.
                 </p>
               </div>
+              <div class="feat-card">
+                <h3><span>&#127919;</span> Quality: High / Balanced / Small</h3>
+                <p class="feat-desc">
+                  One control sets resolution and encoder quality together, via WebCodecs at constant quality
+                  &mdash; a static screen costs almost nothing, a fast scroll gets what it needs.
+                </p>
+              </div>
+              <div class="feat-card">
+                <h3><span>&#128394;</span> Annotate while recording</h3>
+                <p class="feat-desc">
+                  Draw directly on screen mid-recording, in both video and silent modes &mdash; annotations
+                  are burnt into the capture as you go.
+                </p>
+              </div>
             </div>
           </div>
 
           <div id="panel-gif" class="tab-panel" role="tabpanel" aria-labelledby="tab-gif">
             <div class="feat-grid">
               <div class="feat-card">
-                <h3><span>&#127916;</span> Screen &rarr; GIF</h3>
+                <h3><span>&#128263;</span> Silent by default, MP4 or GIF</h3>
                 <p class="feat-desc">
-                  Record any screen or window, full-screen or a region, straight to an animated GIF &mdash; no
-                  external tools or ffmpeg.
+                  Same source/region picker as video, minus audio. Saves a silent MP4 by default &mdash; flip
+                  a toggle for an animated GIF instead.
+                </p>
+              </div>
+              <div class="feat-card">
+                <h3><span>&#128202;</span> MP4 is ~8&times; smaller than GIF</h3>
+                <p class="feat-desc">
+                  Measured on identical frames at the same resolution: H.264 managed 110&nbsp;KB where GIF
+                  took 661&nbsp;KB &mdash; and scored higher on quality.
                 </p>
               </div>
               <div class="feat-card">
@@ -1438,17 +1462,10 @@
                 </p>
               </div>
               <div class="feat-card">
-                <h3><span>&#127912;</span> Accurate colors, small files</h3>
+                <h3><span>&#127919;</span> Quality: High / Balanced / Small</h3>
                 <p class="feat-desc">
-                  Per-frame 256-color palettes keep screen text crisp, and inter-frame differencing keeps the
-                  file size down.
-                </p>
-              </div>
-              <div class="feat-card">
-                <h3><span>&#128172;</span> Prefer video? One click</h3>
-                <p class="feat-desc">
-                  Slack, GitHub and Jira autoplay video &mdash; sharper and smaller than a GIF. A nudge
-                  switches you to the recorder instantly.
+                  The same three-way control as video &mdash; and it matters even more here: one 2.4s capture
+                  ranges from 2022&nbsp;KB down to 314&nbsp;KB across the presets.
                 </p>
               </div>
             </div>
@@ -1487,11 +1504,57 @@
             </div>
           </div>
 
+          <div id="panel-mcp" class="tab-panel" role="tabpanel" aria-labelledby="tab-mcp">
+            <div class="feat-grid">
+              <div class="feat-card">
+                <h3><span>&#129302;</span> Ask Claude for a screenshot</h3>
+                <p class="feat-desc">
+                  <code>capture_screen</code> and <code>capture_region</code> run silently and hand back a
+                  saved path &mdash; no overlay, no clicking through a picker.
+                </p>
+              </div>
+              <div class="feat-card">
+                <h3><span>&#128070;</span> Human-in-the-loop, too</h3>
+                <p class="feat-desc">
+                  <code>pick_region</code> opens the real capture overlay and waits for you to select and
+                  annotate &mdash; for when it's easier to point than to describe.
+                </p>
+              </div>
+              <div class="feat-card">
+                <h3><span>&#128274;</span> Local-only, token-gated</h3>
+                <p class="feat-desc">
+                  The server binds to 127.0.0.1 only. Every request needs a bearer token, and Host/Origin
+                  checks block DNS-rebinding attempts from a stray browser tab.
+                </p>
+              </div>
+              <div class="feat-card">
+                <h3><span>&#9889;</span> One command to connect</h3>
+                <p class="feat-desc">
+                  Tray &rarr; <strong>Claude Code (MCP)</strong> &rarr; <strong>Copy setup command</strong>,
+                  paste it into a terminal, and the tools are ready on Claude Code's next session.
+                </p>
+              </div>
+            </div>
+            <div class="code-block" style="margin-top: 1rem">
+              <div class="code-header">
+                <span class="code-label">Terminal</span>
+                <button class="copy-btn" aria-label="Copy claude mcp add command to clipboard">Copy</button>
+              </div>
+              <pre><code id="mcpCmd">claude mcp add --transport http snapit http://127.0.0.1:47317/mcp --header "Authorization: Bearer &lt;token-from-tray&gt;"</code></pre>
+            </div>
+            <p style="margin-top: 0.8rem; color: var(--text-secondary); font-size: 0.85rem">
+              Get the real command, with your own token already filled in, from the tray menu &mdash; the
+              token is generated once per install and never leaves your machine.
+            </p>
+          </div>
+
           <div class="privacy-banner">
             <div class="privacy-icon">&#128274;</div>
             <p>
-              <strong>Nothing leaves your machine.</strong> No accounts, no uploads, no telemetry. Captures go
-              to your clipboard or a folder you choose. Your screenshots are yours.
+              <strong>Nothing leaves your machine.</strong> No accounts, no uploads, no telemetry &mdash;
+              captures go to your clipboard or a folder you choose. The one exception is the optional Claude
+              Code (MCP) integration above: a token-gated server bound to 127.0.0.1, off the network by
+              construction.
             </p>
           </div>
         </div>
@@ -1532,8 +1595,8 @@
                 <span class="kbd">7</span>
               </div>
               <div class="shortcut-info">
-                <strong>Record GIF</strong>
-                <p>Start or stop a GIF recording</p>
+                <strong>Silent recording</strong>
+                <p>Start or stop a silent MP4 (or GIF) recording</p>
               </div>
             </div>
             <div class="shortcut-card">
@@ -1689,7 +1752,7 @@
         var SCENE_TITLE = {
           shot: 'Snap It — Screenshot',
           video: 'Snap It — Record',
-          gif: 'Snap It — GIF',
+          gif: 'Snap It — Silent recording',
           edit: 'Snap It — Edit image'
         }
         var shotSteps = [
