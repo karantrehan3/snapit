@@ -96,6 +96,8 @@ function EditorCanvas({ frame, mimeType }: { frame: Frame; mimeType?: string }):
         setTool={editor.setTool}
         color={editor.color}
         setColor={editor.setColor}
+        redactMode={editor.redactMode}
+        setRedactMode={editor.setRedactMode}
         canUndo={editor.canUndo}
         onUndo={editor.undo}
         canRedo={editor.canRedo}

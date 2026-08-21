@@ -131,6 +131,20 @@ export function sizePreviewCircle(size: number): CSSProperties {
   }
 }
 
+/** Font-size preview: a specimen glyph at the actual size, not a stroke circle. */
+export function sizePreviewGlyph(size: number): CSSProperties {
+  return {
+    display: 'grid',
+    placeItems: 'center',
+    minWidth: size,
+    height: size,
+    color: '#fff',
+    font: `600 ${size}px -apple-system, system-ui, sans-serif`,
+    lineHeight: 1,
+    textShadow: '0 0 3px rgba(0, 0, 0, 0.9)'
+  }
+}
+
 export const sizePreviewLabel: CSSProperties = {
   position: 'absolute',
   top: '100%',

@@ -1,5 +1,5 @@
 import { useState, type CSSProperties, type ReactElement, type RefObject } from 'react'
-import { COLORS, PALETTE, TOOLS, type Tool } from './types'
+import { COLORS, PALETTE, REDACT_MODES, TOOLS, type RedactMode, type Tool } from './types'
 import {
   palettePopover,
   paletteSwatch,
@@ -16,6 +16,8 @@ type Props = {
   setTool: (t: Tool) => void
   color: string
   setColor: (c: string) => void
+  redactMode: RedactMode
+  setRedactMode: (m: RedactMode) => void
   canUndo: boolean
   onUndo: () => void
   canRedo: boolean
@@ -43,6 +45,8 @@ export function Toolbar({
   setTool,
   color,
   setColor,
+  redactMode,
+  setRedactMode,
   canUndo,
   onUndo,
   canRedo,
@@ -65,17 +69,29 @@ export function Toolbar({
 
   return (
     <div ref={barRef} style={{ ...barStyle, ...style }}>
-      {/* TODO: re-enable the Text tool once text-annotation focus is fixed (see docs/STATUS.md). */}
-      {TOOLS.filter((t) => t.tool !== 'text').map((t) => (
+      {TOOLS.map((t) => (
         <button key={t.tool} title={t.title} onClick={() => setTool(t.tool)} style={btn(tool === t.tool)}>
           {t.tool === 'move' ? <MoveIcon /> : t.label}
         </button>
       ))}
       <span style={toolbarSep} />
-      {COLORS.map((c) => (
-        <button key={c} title={c} onClick={() => setColor(c)} style={swatch(c, color === c)} />
-      ))}
-      <div style={{ position: 'relative', display: 'inline-flex' }}>
+      {/* Redactions ignore the palette, so the mode toggle takes the colours' place. */}
+      {tool === 'redact' &&
+        REDACT_MODES.map((m) => (
+          <button
+            key={m.mode}
+            title={m.title}
+            onClick={() => setRedactMode(m.mode)}
+            style={btn(redactMode === m.mode)}
+          >
+            {m.label}
+          </button>
+        ))}
+      {tool !== 'redact' &&
+        COLORS.map((c) => (
+          <button key={c} title={c} onClick={() => setColor(c)} style={swatch(c, color === c)} />
+        ))}
+      <div style={{ position: 'relative', display: 'inline-flex', ...(tool === 'redact' && hidden) }}>
         <button
           title="More colors"
           onClick={() => setColorMenu((m) => !m)}
@@ -185,6 +201,9 @@ function menuStyle(placement: 'up' | 'down'): CSSProperties {
     zIndex: 10
   }
 }
+
+/** The custom-colour popover has no meaning for redactions. */
+const hidden: CSSProperties = { display: 'none' }
 
 const menuItemStyle: CSSProperties = {
   display: 'block',

@@ -1,11 +1,11 @@
-import type { Shape, TextShape } from '../annotate/types'
+import type { RedactShape, Shape, TextShape } from '../annotate/types'
 
 /**
- * A shape drawn during a recording, stamped so it can age out on its own. Text is
- * excluded at the type level — `LiveTool` can't produce one, and narrowing here keeps
- * an unreachable branch out of the draft geometry.
+ * A shape drawn during a recording, stamped so it can age out on its own. Text and
+ * redactions are excluded at the type level — `LiveTool` can't produce either, and
+ * narrowing here keeps unreachable branches out of the draft geometry.
  */
-export type LiveShape = Exclude<Shape, TextShape> & { bornAt: number }
+export type LiveShape = Exclude<Shape, TextShape | RedactShape> & { bornAt: number }
 
 /**
  * Tools available while recording. Deliberately narrower than the still-image

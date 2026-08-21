@@ -12,15 +12,20 @@ import { loadImage, type Box } from '@renderer/lib/image'
 import { isMeaningful, normalizeRect, type ShapeHandlers } from './shapes'
 import {
   COLORS,
+  DEFAULT_REDACT_MODE,
   DEFAULT_STROKE,
   MAX_STROKE,
   MIN_STROKE,
+  blockSizeFor,
   fontSizeFor,
+  nextFontSize,
   type Corner,
   type Drag,
   type Editing,
   type Pt,
+  type RedactMode,
   type Shape,
+  type SizePreviewKind,
   type SizePreview,
   type Tool
 } from './types'
@@ -31,10 +36,14 @@ const SIZE_PREVIEW_MS = 700
 export type AnnotationEditor = {
   box: Box | null
   bg: HTMLImageElement | null
+  /** The frame's device pixel ratio — redactions need it to sample `bg`. */
+  scaleFactor: number
   tool: Tool
   setTool: (t: Tool) => void
   color: string
   setColor: (c: string) => void
+  redactMode: RedactMode
+  setRedactMode: (m: RedactMode) => void
   selectedId: string | null
   editing: Editing | null
   sizePreview: SizePreview | null
@@ -88,6 +97,7 @@ export function useAnnotationEditor(frame: Frame, opts: EditorOptions = {}): Ann
   const [box, setBox] = useState<Box | null>(initialBox)
   const [tool, setTool] = useState<Tool>('move')
   const [color, setColor] = useState<string>(COLORS[0])
+  const [redactMode, setRedactMode] = useState<RedactMode>(DEFAULT_REDACT_MODE)
   const [strokeWidth, setStrokeWidth] = useState<number>(DEFAULT_STROKE)
   const [shapes, setShapes] = useState<Shape[]>([])
   const [draft, setDraft] = useState<Shape | null>(null)
@@ -136,7 +146,8 @@ export function useAnnotationEditor(frame: Frame, opts: EditorOptions = {}): Ann
     const stage = stageRef.current
     if (!tr || !stage) return
     const sel = shapes.find((s) => s.id === selectedId)
-    const node = selectedId && sel?.type === 'rect' ? stage.findOne<Konva.Node>(`#${selectedId}`) : null
+    const resizable = sel?.type === 'rect' || sel?.type === 'redact'
+    const node = selectedId && resizable ? stage.findOne<Konva.Node>(`#${selectedId}`) : null
     tr.nodes(node ? [node] : [])
     tr.getLayer()?.batchDraw()
   }, [selectedId, shapes, box])
@@ -187,35 +198,56 @@ export function useAnnotationEditor(frame: Frame, opts: EditorOptions = {}): Ann
     return () => window.removeEventListener('keydown', onKey)
   }, [shapes, undoStack, redoStack, selectedId, editing])
 
-  // Cmd/Ctrl+Scroll adjusts thickness (and the selected shape) + shows a size preview.
+  // Cmd/Ctrl+Scroll adjusts thickness — or font size, when the thing it would apply
+  // to is text — and flashes a badge showing the new value.
   useEffect(() => {
+    const showPreview = (e: WheelEvent, size: number, kind: SizePreviewKind): void => {
+      setSizePreview({ x: e.clientX, y: e.clientY, size, kind })
+      window.clearTimeout(previewTimer.current)
+      previewTimer.current = window.setTimeout(() => setSizePreview(null), SIZE_PREVIEW_MS)
+    }
+
     const onWheel = (e: WheelEvent): void => {
       if (!(e.metaKey || e.ctrlKey)) return
       e.preventDefault()
       const delta = e.deltaY > 0 ? -1 : 1
-      const next = clamp(strokeWidth + delta, MIN_STROKE, MAX_STROKE)
-      setStrokeWidth(next)
-      if (selectedId) {
+      setStrokeWidth(clamp(strokeWidth + delta, MIN_STROKE, MAX_STROKE))
+
+      const selected = selectedId ? shapes.find((sh) => sh.id === selectedId) : undefined
+      // An open text box wins over the selection: resizing type while still typing is
+      // the moment you actually reach for this, and the textarea follows editing.fontSize.
+      const textTarget = editing ?? (selected?.type === 'text' ? selected : null)
+
+      if (textTarget) {
+        const fontSize = nextFontSize(textTarget.fontSize, delta)
+        if (editing) setEditing({ ...editing, fontSize })
+        setShapes((s) =>
+          s.map((sh) => (sh.id === textTarget.id && sh.type === 'text' ? { ...sh, fontSize } : sh))
+        )
+        showPreview(e, fontSize, 'font')
+        return
+      }
+
+      if (selected) {
         setShapes((s) =>
           s.map((sh) => {
-            if (sh.id !== selectedId) return sh
-            if (sh.type === 'text') {
+            if (sh.id !== selected.id) return sh
+            if (sh.type === 'redact') {
               return {
                 ...sh,
-                fontSize: clamp(sh.fontSize + delta * 4, fontSizeFor(MIN_STROKE), fontSizeFor(MAX_STROKE))
+                blockSize: clamp(sh.blockSize + delta * 2, blockSizeFor(MIN_STROKE), blockSizeFor(MAX_STROKE))
               }
             }
+            if (sh.type === 'text') return sh
             return { ...sh, strokeWidth: clamp(sh.strokeWidth + delta, MIN_STROKE, MAX_STROKE) }
           })
         )
       }
-      setSizePreview({ x: e.clientX, y: e.clientY, size: next })
-      window.clearTimeout(previewTimer.current)
-      previewTimer.current = window.setTimeout(() => setSizePreview(null), SIZE_PREVIEW_MS)
+      showPreview(e, clamp(strokeWidth + delta, MIN_STROKE, MAX_STROKE), 'stroke')
     }
     window.addEventListener('wheel', onWheel, { passive: false })
     return () => window.removeEventListener('wheel', onWheel)
-  }, [strokeWidth, selectedId])
+  }, [strokeWidth, selectedId, shapes, editing])
 
   const pointer = (): Pt => stageRef.current?.getPointerPosition() ?? { x: 0, y: 0 }
 
@@ -242,11 +274,15 @@ export function useAnnotationEditor(frame: Frame, opts: EditorOptions = {}): Ann
     const local: Pt = { x: p.x - box.x, y: p.y - box.y }
 
     if (tool === 'text') {
+      // The canvas mousedown's default action moves focus to the canvas, which blurs
+      // the textarea in the same gesture that mounts it — and onBlur commits, deleting
+      // the still-empty shape. Preventing the default leaves focus where React put it.
+      e.evt.preventDefault()
       const id = crypto.randomUUID()
       const fontSize = fontSizeFor(strokeWidth)
       snapshot(shapes)
       setShapes((s) => [...s, { id, type: 'text', x: local.x, y: local.y, text: '', fill: color, fontSize }])
-      setEditing({ id, x: local.x, y: local.y, value: '', fontSize, fill: color })
+      setEditing({ id, x: local.x, y: local.y, value: '', fontSize, fill: color, isNew: true })
       return
     }
 
@@ -278,6 +314,17 @@ export function useAnnotationEditor(frame: Frame, opts: EditorOptions = {}): Ann
         height: 0,
         stroke: color,
         strokeWidth
+      })
+    } else if (tool === 'redact') {
+      setDraft({
+        id,
+        type: 'redact',
+        x: local.x,
+        y: local.y,
+        width: 0,
+        height: 0,
+        mode: redactMode,
+        blockSize: blockSizeFor(strokeWidth)
       })
     } else if (tool === 'pen') {
       setDraft({ id, type: 'pen', points: [local.x, local.y], stroke: color, strokeWidth })
@@ -313,7 +360,7 @@ export function useAnnotationEditor(frame: Frame, opts: EditorOptions = {}): Ann
     const local: Pt = { x: p.x - box.x, y: p.y - box.y }
     setDraft((prev) => {
       if (!prev) return prev
-      if (prev.type === 'rect' || prev.type === 'circle')
+      if (prev.type === 'rect' || prev.type === 'circle' || prev.type === 'redact')
         return { ...prev, width: local.x - prev.x, height: local.y - prev.y }
       if (prev.type === 'pen') return { ...prev, points: [...prev.points, local.x, local.y] }
       if (prev.type === 'text') return prev
@@ -351,6 +398,26 @@ export function useAnnotationEditor(frame: Frame, opts: EditorOptions = {}): Ann
     }
   }
 
+  // Double-click a label to edit it again. Only with the move tool: the text tool's
+  // own click already creates a new box, and stacking both on one gesture is confusing.
+  const startTextEdit = (id: string, e: Konva.KonvaEventObject<MouseEvent>): void => {
+    if (tool !== 'move') return
+    const shape = shapes.find((sh) => sh.id === id)
+    if (!shape || shape.type !== 'text') return
+    e.cancelBubble = true
+    snapshot(shapes)
+    setSelectedId(null)
+    setEditing({
+      id,
+      x: shape.x,
+      y: shape.y,
+      value: shape.text,
+      fontSize: shape.fontSize,
+      fill: shape.fill,
+      isNew: false
+    })
+  }
+
   const shapeHandlers: ShapeHandlers = {
     draggable: tool === 'move',
     onSelect: (id, e) => {
@@ -359,13 +426,15 @@ export function useAnnotationEditor(frame: Frame, opts: EditorOptions = {}): Ann
         setSelectedId(id)
       }
     },
+    onEditText: startTextEdit,
     onDragStart: () => snapshot(shapes),
     onDragEnd: (id, e) => {
       const node = e.target
       setShapes((s) =>
         s.map((sh) => {
           if (sh.id !== id) return sh
-          if (sh.type === 'rect' || sh.type === 'text') return { ...sh, x: node.x(), y: node.y() }
+          if (sh.type === 'rect' || sh.type === 'text' || sh.type === 'redact')
+            return { ...sh, x: node.x(), y: node.y() }
           if (sh.type === 'circle') return { ...sh, x: node.x() - sh.width / 2, y: node.y() - sh.height / 2 }
           const dx = node.x()
           const dy = node.y()
@@ -388,7 +457,7 @@ export function useAnnotationEditor(frame: Frame, opts: EditorOptions = {}): Ann
     const id = node.id()
     setShapes((s) =>
       s.map((sh) =>
-        sh.id === id && sh.type === 'rect'
+        sh.id === id && (sh.type === 'rect' || sh.type === 'redact')
           ? {
               ...sh,
               x: node.x(),
@@ -405,8 +474,13 @@ export function useAnnotationEditor(frame: Frame, opts: EditorOptions = {}): Ann
     if (!editing) return
     if (editing.value.trim() === '') {
       setShapes((s) => s.filter((sh) => sh.id !== editing.id))
-      setUndoStack((u) => u.slice(0, -1))
+      // Only a box that was never filled in is a no-op round trip; clearing an
+      // existing label is a deletion the user may well want back.
+      if (editing.isNew) setUndoStack((u) => u.slice(0, -1))
     }
+    // Committing deliberately leaves the tool and the selection alone: the text tool
+    // stays active so labels can be typed one after another, and nothing becomes
+    // selected until the user picks the move tool and clicks it.
     setEditing(null)
   }
 
@@ -490,10 +564,13 @@ export function useAnnotationEditor(frame: Frame, opts: EditorOptions = {}): Ann
   return {
     box,
     bg,
+    scaleFactor: frame.scaleFactor,
     tool,
     setTool,
     color,
     setColor,
+    redactMode,
+    setRedactMode,
     selectedId,
     editing,
     sizePreview,

@@ -10,7 +10,9 @@ const INERT: ShapeHandlers = {
   draggable: false,
   onSelect: () => {},
   onDragStart: () => {},
-  onDragEnd: () => {}
+  onDragEnd: () => {},
+  // Unreachable: LiveShape excludes TextShape, so there is no label to re-open.
+  onEditText: () => {}
 }
 
 type Props = {

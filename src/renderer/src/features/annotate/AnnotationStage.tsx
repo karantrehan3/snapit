@@ -33,7 +33,11 @@ export function AnnotationStage({ editor, width, height }: Props): ReactElement 
         <Layer>
           <Group x={box.x} y={box.y} clipX={0} clipY={0} clipWidth={box.w} clipHeight={box.h}>
             {editor.all.map((shape) =>
-              renderShape(shape, editor.selectedId, editor.editing?.id, editor.shapeHandlers)
+              renderShape(shape, editor.selectedId, editor.editing?.id, editor.shapeHandlers, {
+                bg: editor.bg,
+                box,
+                scaleFactor: editor.scaleFactor
+              })
             )}
           </Group>
           <Transformer
