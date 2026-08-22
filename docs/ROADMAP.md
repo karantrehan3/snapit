@@ -153,6 +153,24 @@ entitlements, and Apple discourages `--deep`. That conflict is the trap, not the
 - ~~Verify tracing fidelity over `connectOverCDP`~~ — done, see the spike table. Screenshots are
   present, so the trace can stand alongside snapit's own video rather than replacing it.
 
+**Built (2026-08-22).** Tray → "Start browser session…" launches Chrome under snapit's control;
+stopping it writes a bundle with `console.json`, `network.har`, `actions.json`, `meta.json` and a
+report showing steps to reproduce, failed requests and the console. Verified end-to-end against real
+Chrome by driving the collector's own browser with Playwright.
+
+Two leaks the live runs caught that reasoning had not:
+
+- Passing the target URL at launch lost every request the first page load made, because Chrome
+  starts fetching the moment it has a URL and `Network.enable` is per-session. Launch blank, attach,
+  then navigate.
+- `ariaSnapshot()` includes input values, so a snapshot taken after someone types into a login form
+  carried their password in plain text — a second route entirely from the action trail, which
+  redacts properly. All typed values are now stripped from snapshots.
+
+**Still open:** response bodies are absent from the HAR (`chrome-har` does not fetch them; it needs
+`Network.getResponseBody`, worth doing for `status >= 400` only), and a recording and a session still
+write separate bundles rather than one.
+
 ### M1.4 — MCP surface
 
 - `start_session` / `stop_session` / `mark`
