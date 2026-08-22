@@ -1,5 +1,6 @@
 import { join, parse } from 'path'
 import { existsSync } from 'fs'
+import { release } from 'os'
 import { mkdir, readFile, writeFile } from 'fs/promises'
 import {
   app,
@@ -22,7 +23,9 @@ import {
 import { captureDisplay, getDisplaySource, type DisplaySource } from './capture'
 import { getSettings, setSettings, regenerateMcpToken, type Settings } from './settings'
 import { checkForUpdate, type UpdateInfo } from './updater'
-import { captureFilePath } from './filename'
+import { captureBaseName, captureFilePath } from './filename'
+import { bundleLayout, buildMeta, type CaptureSource, type DisplayInfo } from './bundle'
+import { renderReport } from './report'
 import {
   EDITABLE_EXTENSIONS,
   bufferFromDataUrl,
@@ -104,6 +107,10 @@ let editSession: EditSession | null = null
 const pendingOpenPaths: string[] = []
 let recordWantsSystemAudio = false
 let recordSourceId: string | null = null
+/** Set when a recording is prepared, so the bundle can report how long it ran. */
+let recordStartedAt: number | null = null
+/** Resolved asynchronously at prepare time — the window/screen the recording captured. */
+let recordSource: CaptureSource = null
 // Start this mode once the current overlay is dismissed (the GIF → video switch).
 let pendingCaptureMode: CaptureMode | null = null
 // Latest available update (from GitHub), or null when up to date / not yet checked.
@@ -131,6 +138,76 @@ const CSP = [
 
 /** A renderer-supplied value is only accepted as image bytes if it's an image dataURL. */
 const isImageDataUrl = (v: unknown): v is string => typeof v === 'string' && v.startsWith('data:image/')
+
+/** Every connected display, in the shape bundle metadata records them. */
+function currentDisplays(): DisplayInfo[] {
+  const primaryId = screen.getPrimaryDisplay().id
+  return screen.getAllDisplays().map((d) => ({
+    id: d.id,
+    label: d.label || `Display ${d.id}`,
+    bounds: d.bounds,
+    scaleFactor: d.scaleFactor,
+    isPrimary: d.id === primaryId
+  }))
+}
+
+/**
+ * Write a finished recording: a bundle folder (media + meta.json + report.html) when
+ * enabled, a loose file when not. Reveals the media and closes the overlay either
+ * way, and returns the media path — which is the same path in both shapes, one
+ * directory deeper.
+ */
+async function persistRecording(data: ArrayBuffer, ext: string): Promise<string> {
+  const { saveDir, bundleRecordings } = getSettings()
+  await mkdir(saveDir, { recursive: true })
+  const bytes = Buffer.from(data)
+
+  const finish = (mediaPath: string): string => {
+    shell.showItemInFolder(mediaPath)
+    closeOverlayWindow()
+    recordStartedAt = null
+    recordSource = null
+    return mediaPath
+  }
+
+  if (!bundleRecordings) {
+    const filePath = captureFilePath(saveDir, ext)
+    await writeFile(filePath, bytes)
+    return finish(filePath)
+  }
+
+  const layout = bundleLayout(saveDir, captureBaseName(), ext)
+  await mkdir(layout.dir, { recursive: true })
+  await writeFile(layout.mediaPath, bytes)
+
+  // The recording is already safe on disk by this point. Failing to write the context
+  // around it is worth logging, but it is not a failed capture — never let it throw
+  // back to the renderer, which would report the recording as lost.
+  try {
+    const meta = buildMeta({
+      capturedAt: new Date(),
+      appVersion: app.getVersion(),
+      platform: process.platform,
+      release: release(),
+      arch: process.arch,
+      locale: app.getLocale(),
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      displays: currentDisplays(),
+      durationMs: recordStartedAt === null ? null : Date.now() - recordStartedAt,
+      hasSystemAudio: recordWantsSystemAudio,
+      source: recordSource,
+      mediaName: layout.mediaName,
+      mediaBytes: bytes.byteLength,
+      ext
+    })
+    await writeFile(layout.metaPath, JSON.stringify(meta, null, 2))
+    await writeFile(layout.reportPath, renderReport(meta))
+  } catch (err) {
+    console.error('[snapit] recording saved, but its report could not be written:', err)
+  }
+
+  return finish(layout.mediaPath)
+}
 
 /**
  * Create the overlay window once and reuse it. macOS takes 1-3s to present a freshly
@@ -789,26 +866,13 @@ app.whenReady().then(() => {
 
   ipcMain.handle('record:save', async (_event, data: ArrayBuffer, ext: string) => {
     if (!(data instanceof ArrayBuffer) || data.byteLength === 0) return null
-    const safeExt = ext === 'mp4' ? 'mp4' : 'webm'
-    const { saveDir } = getSettings()
-    await mkdir(saveDir, { recursive: true })
-    const filePath = captureFilePath(saveDir, safeExt)
-    await writeFile(filePath, Buffer.from(data))
-    shell.showItemInFolder(filePath)
-    closeOverlayWindow()
-    return filePath
+    return persistRecording(data, ext === 'mp4' ? 'mp4' : 'webm')
   })
 
   // Persist a client-side-encoded GIF (bytes from gifenc); closes the overlay.
   ipcMain.handle('gif:save', async (_event, data: ArrayBuffer) => {
     if (!(data instanceof ArrayBuffer) || data.byteLength === 0) return null
-    const { saveDir } = getSettings()
-    await mkdir(saveDir, { recursive: true })
-    const filePath = captureFilePath(saveDir, 'gif')
-    await writeFile(filePath, Buffer.from(data))
-    shell.showItemInFolder(filePath)
-    closeOverlayWindow()
-    return filePath
+    return persistRecording(data, 'gif')
   })
 
   // The image currently open for editing (renderer-safe subset — no disk path).
@@ -882,6 +946,23 @@ app.whenReady().then(() => {
   ipcMain.handle('record:prepare', (_event, opts: { systemAudio: boolean; sourceId: string }) => {
     recordWantsSystemAudio = opts.systemAudio
     recordSourceId = opts.sourceId
+    recordStartedAt = Date.now()
+    recordSource = null
+    // Deliberately not awaited: this sits on the path to getDisplayMedia, and a
+    // recording lasts orders of magnitude longer than the lookup. The name is only
+    // read when the capture is saved, by which time this has long since resolved.
+    void desktopCapturer
+      .getSources({ types: ['screen', 'window'], thumbnailSize: { width: 0, height: 0 } })
+      .then((sources) => {
+        const match = sources.find((s) => s.id === opts.sourceId)
+        if (!match) return
+        recordSource = {
+          id: match.id,
+          name: match.name,
+          type: match.id.startsWith('screen') ? ('screen' as const) : ('window' as const)
+        }
+      })
+      .catch((err) => console.warn('[snapit] could not resolve the capture source name:', err))
     overlayWindow?.setContentProtection(true)
   })
 

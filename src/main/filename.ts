@@ -12,7 +12,12 @@ export function timestamp(): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}-${p(d.getMinutes())}-${p(d.getSeconds())}`
 }
 
+/** `snapit-<timestamp>` — the stem every capture's file (and bundle folder) is named after. */
+export function captureBaseName(at: string = timestamp()): string {
+  return `snapit-${at}`
+}
+
 /** A timestamped `snapit-<timestamp>.<ext>` path inside the given save folder. */
 export function captureFilePath(saveDir: string, ext: string): string {
-  return join(saveDir, `snapit-${timestamp()}.${ext}`)
+  return join(saveDir, `${captureBaseName()}.${ext}`)
 }

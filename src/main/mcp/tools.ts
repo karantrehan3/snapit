@@ -1,5 +1,5 @@
-import { mkdir, readdir, stat, writeFile } from 'fs/promises'
-import { extname, join } from 'path'
+import { mkdir, readFile, readdir, stat, writeFile } from 'fs/promises'
+import { basename, join } from 'path'
 import { nativeImage, screen, type Display } from 'electron'
 import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
@@ -9,6 +9,7 @@ import { captureFilePath } from '../filename'
 import { getSettings } from '../settings'
 import { toNativeCropRect } from './region'
 import { previewSize } from './inlinePreview'
+import { isCaptureFile, pickBundleMedia } from './captures'
 
 /**
  * MCP tool handlers for snapit's screenshot capabilities. Screenshots only —
@@ -170,7 +171,9 @@ export function registerCaptureTools(server: McpServer, hooks: CaptureHooks): vo
     {
       title: 'List recent captures',
       description:
-        "List the most recent files in the user's snapit save folder (screenshots and recordings).",
+        "List the most recent captures in the user's snapit save folder. Recordings saved as a " +
+        'report bundle are listed by their media file, with the bundle folder and its report.html ' +
+        'alongside — open the report to see the capture with its environment metadata.',
       inputSchema: { limit: z.number().int().positive().max(100).optional().describe('Default 10, max 100.') }
     },
     async ({ limit }) => {
@@ -181,35 +184,95 @@ export function registerCaptureTools(server: McpServer, hooks: CaptureHooks): vo
   )
 }
 
-type CaptureEntry = { path: string; name: string; sizeBytes: number; modifiedAt: string }
+type CaptureEntry = {
+  path: string
+  name: string
+  sizeBytes: number
+  modifiedAt: string
+  /** A loose file, or the media inside a bundle folder. */
+  kind: 'file' | 'bundle'
+  /** Bundle only: the self-contained page describing the capture. */
+  reportPath?: string
+}
 
-// The only extensions snapit itself ever writes into saveDir (screenshots, video, gif) —
-// filters out unrelated files a user may keep in the same folder, e.g. macOS's .DS_Store.
-const CAPTURE_EXTENSIONS = ['.png', '.mp4', '.webm', '.gif']
+type Dated = CaptureEntry & { mtimeMs: number }
 
-async function listRecentCaptures(saveDir: string, limit: number): Promise<CaptureEntry[]> {
+/** Read `media.file` out of a bundle's meta.json, or null if it isn't readable. */
+async function bundleMediaName(dir: string): Promise<string | null> {
+  try {
+    const raw = JSON.parse(await readFile(join(dir, 'meta.json'), 'utf-8')) as unknown
+    const media = (raw as { media?: { file?: unknown } })?.media?.file
+    return typeof media === 'string' ? media : null
+  } catch {
+    // Missing or malformed metadata is not fatal — pickBundleMedia falls back to
+    // scanning, so a bundle whose report failed to write still lists its recording.
+    return null
+  }
+}
+
+async function describeBundle(dir: string): Promise<Dated | null> {
   let names: string[]
   try {
-    names = await readdir(saveDir)
+    names = await readdir(dir)
+  } catch {
+    return null
+  }
+  const mediaName = pickBundleMedia(names, await bundleMediaName(dir))
+  if (!mediaName) return null
+  const mediaPath = join(dir, mediaName)
+  try {
+    const info = await stat(mediaPath)
+    if (!info.isFile()) return null
+    return {
+      path: mediaPath,
+      name: basename(dir),
+      sizeBytes: info.size,
+      modifiedAt: new Date(info.mtimeMs).toISOString(),
+      mtimeMs: info.mtimeMs,
+      kind: 'bundle',
+      ...(names.includes('report.html') ? { reportPath: join(dir, 'report.html') } : {})
+    }
+  } catch {
+    return null
+  }
+}
+
+async function describeFile(saveDir: string, name: string): Promise<Dated | null> {
+  const path = join(saveDir, name)
+  try {
+    const info = await stat(path)
+    if (!info.isFile()) return null
+    return {
+      path,
+      name,
+      sizeBytes: info.size,
+      modifiedAt: new Date(info.mtimeMs).toISOString(),
+      mtimeMs: info.mtimeMs,
+      kind: 'file'
+    }
+  } catch {
+    return null
+  }
+}
+
+async function listRecentCaptures(saveDir: string, limit: number): Promise<CaptureEntry[]> {
+  let entries: import('fs').Dirent[]
+  try {
+    entries = await readdir(saveDir, { withFileTypes: true })
   } catch {
     return []
   }
-  const candidates = names.filter((name) => CAPTURE_EXTENSIONS.includes(extname(name).toLowerCase()))
-  const stats = await Promise.all(
-    candidates.map(async (name) => {
-      const path = join(saveDir, name)
-      const info = await stat(path)
-      return { path, name, sizeBytes: info.size, mtimeMs: info.mtimeMs, isFile: info.isFile() }
+
+  const found = await Promise.all(
+    entries.map((entry) => {
+      if (entry.isDirectory()) return describeBundle(join(saveDir, entry.name))
+      return isCaptureFile(entry.name) ? describeFile(saveDir, entry.name) : Promise.resolve(null)
     })
   )
-  return stats
-    .filter((entry) => entry.isFile)
+
+  return found
+    .filter((e): e is Dated => e !== null)
     .sort((a, b) => b.mtimeMs - a.mtimeMs)
     .slice(0, limit)
-    .map(({ path, name, sizeBytes, mtimeMs }) => ({
-      path,
-      name,
-      sizeBytes,
-      modifiedAt: new Date(mtimeMs).toISOString()
-    }))
+    .map(({ mtimeMs: _mtimeMs, ...entry }) => entry)
 }

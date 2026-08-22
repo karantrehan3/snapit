@@ -32,6 +32,7 @@ export type Settings = {
   recordHotkey: string
   gifHotkey: string
   saveDir: string
+  bundleRecordings: boolean
 }
 
 /** A newer release available on GitHub (from the About window's update check). */

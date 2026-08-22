@@ -8,6 +8,11 @@ export type Settings = {
   recordHotkey: string
   gifHotkey: string
   saveDir: string
+  /**
+   * Write recordings as a bundle folder (media + meta.json + report.html) instead of
+   * a loose file. The media keeps the name it would have had either way.
+   */
+  bundleRecordings: boolean
   /** Bearer token the local MCP server requires — generated once, never renderer-settable. */
   mcpToken: string
   /** Port the local MCP server listens on (127.0.0.1 only). */
@@ -22,6 +27,7 @@ function defaults(): Settings {
     recordHotkey: 'CommandOrControl+Shift+8',
     gifHotkey: 'CommandOrControl+Shift+7',
     saveDir: join(app.getPath('pictures'), 'snapit'),
+    bundleRecordings: true,
     mcpToken: randomBytes(24).toString('hex'),
     mcpPort: DEFAULT_MCP_PORT
   }
@@ -41,12 +47,13 @@ function coerce(raw: unknown): Settings {
     recordHotkey: typeof o.recordHotkey === 'string' ? o.recordHotkey : d.recordHotkey,
     gifHotkey: typeof o.gifHotkey === 'string' ? o.gifHotkey : d.gifHotkey,
     saveDir: typeof o.saveDir === 'string' ? o.saveDir : d.saveDir,
+    bundleRecordings: typeof o.bundleRecordings === 'boolean' ? o.bundleRecordings : d.bundleRecordings,
     mcpToken: typeof o.mcpToken === 'string' && o.mcpToken.length > 0 ? o.mcpToken : d.mcpToken,
     mcpPort: typeof o.mcpPort === 'number' && Number.isInteger(o.mcpPort) ? o.mcpPort : d.mcpPort
   }
 }
 
-/** Keep only known string fields from an untrusted partial. */
+/** Keep only known, correctly-typed fields from an untrusted partial. */
 function sanitize(partial: Partial<Settings>): Partial<Settings> {
   const o = (partial ?? {}) as Record<string, unknown>
   const out: Partial<Settings> = {}
@@ -54,6 +61,7 @@ function sanitize(partial: Partial<Settings>): Partial<Settings> {
   if (typeof o.recordHotkey === 'string') out.recordHotkey = o.recordHotkey
   if (typeof o.gifHotkey === 'string') out.gifHotkey = o.gifHotkey
   if (typeof o.saveDir === 'string') out.saveDir = o.saveDir
+  if (typeof o.bundleRecordings === 'boolean') out.bundleRecordings = o.bundleRecordings
   return out
 }
 
