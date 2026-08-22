@@ -102,7 +102,18 @@ entitlements, and Apple discourages `--deep`. That conflict is the trap, not the
     can be buffered too, or video starts N seconds back while audio starts at zero and the two
     desync.
 
-  Splitting the milestone accordingly: markers shipped, retro-buffer scoped but not built.
+  **Built (2026-08-22).** `createRetroEncoder` defers all muxing to `finish()`, holding encoded
+  video packets and raw PCM in a ring pruned at each keyframe. Audio moved off
+  `MediaStreamAudioTrackSource` onto `MediaStreamTrackProcessor` + `AudioSampleSource`, so mediabunny
+  still does the AAC encoding but only over the retained window. `createMp4Encoder` is untouched and
+  still handles every untrimmed recording. Trimming also rebases the reported duration and the
+  markers, which would otherwise both point past the end of the file.
+
+  **Still open: arming it in the background.** What shipped trims a recording you started — you must
+  still have pressed record. The ShadowPlay reading of "bugs are noticed after they happen" needs
+  snapit buffering continuously with no active session, which is a posture change (always-capturing
+  tray state, a visible armed indicator, battery cost) rather than an encoder problem. The encoder
+  is ready for it; the product decision is not made.
 
 ### M1.3 — The browser collector
 
