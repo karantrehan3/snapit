@@ -41,6 +41,11 @@ healing ground truth in Phase 2.
 console error, the failed request and the repro steps — without typing a description. A human opens
 `report.html` and sees the same thing.
 
+**Met, 2026-08-22.** M1.0 through M1.5 are built. What is not yet done inside Phase 1: response
+bodies are absent from the HAR (`Network.getResponseBody`, worth doing for `status >= 400`), a
+recording and a browser session still write separate bundles rather than one, and the retro buffer
+cannot be armed in the background.
+
 ### M1.0 — Hygiene
 
 No new features.
@@ -192,9 +197,18 @@ wrong bundle and look like it worked.
 
 ### M1.5 — Handoff
 
-- "Copy as Markdown" report for pasting anywhere.
-- No Jira/Linear/Slack integrations. snapit writes a bundle; the agent that is already authenticated
-  files the ticket. Zero OAuth, zero server, zero integration surface to maintain.
+**Built (2026-08-22).** Tray → "Copy last report as Markdown" puts the newest bundle on the clipboard
+as a paste-ready report: repro steps, failed requests, console with repeat counts, markers, and the
+environment. Console output is fenced because it is arbitrary text from someone else's application,
+and URLs go in inline code with backticks swapped out — an unbalanced one would end the span early
+and spill raw text into whatever it was pasted into.
+
+Tray only, no MCP tool: an agent already has `get_steps`, `get_console_errors` and
+`get_failed_requests` and can compose a better ticket than a fixed template, and every tool costs
+context in every session that connects.
+
+No Jira/Linear/Slack integrations, as planned. Whoever files the ticket is already signed in to it,
+and a paste costs them one keystroke against an OAuth flow and a token to keep alive here.
 
 ---
 

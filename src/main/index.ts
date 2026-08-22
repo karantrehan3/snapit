@@ -1,4 +1,4 @@
-import { join, parse } from 'path'
+import { basename, join, parse } from 'path'
 import { existsSync } from 'fs'
 import { release } from 'os'
 import { mkdir, readFile, writeFile } from 'fs/promises'
@@ -26,6 +26,12 @@ import { checkForUpdate, type UpdateInfo } from './updater'
 import { captureBaseName, captureFilePath } from './filename'
 import { bundleLayout, buildMeta, resolveDurationMs, sanitizeMarkers, type CaptureSource } from './bundle'
 import { currentDisplays } from './displays'
+import { BUNDLE_FILES, type CaptureMeta } from './bundle'
+import { bundleMarkdown } from './markdown'
+import { readBundleJson, targetBundle } from './mcp/bundles'
+import { summariseConsole, summariseFailedRequests, summariseSteps } from './mcp/summarise'
+import type { ActionRecord } from './collector/actions'
+import type { ConsoleEntry } from './collector/session'
 import { isBrowserSessionActive, startBrowserSession, stopBrowserSession } from './browserSession'
 import { renderReport } from './report'
 import {
@@ -525,6 +531,44 @@ function registerHotkeys(): void {
 }
 
 /**
+ * Put the most recent bundle on the clipboard as Markdown, ready to paste into a
+ * ticket, a pull request or a chat.
+ *
+ * This is the whole integration story on purpose. snapit does not talk to Jira, Linear
+ * or Slack: whoever files the ticket is already signed in to it, and a paste costs them
+ * one keystroke against an OAuth flow and a token to keep alive here.
+ */
+async function copyLatestReportAsMarkdown(): Promise<void> {
+  try {
+    const { saveDir } = getSettings()
+    const dir = await targetBundle(saveDir)
+    const meta = await readBundleJson<CaptureMeta>(dir, BUNDLE_FILES.meta)
+    if (!meta) throw new Error(`${basename(dir)} has no readable metadata.`)
+
+    const consoleEntries = (await readBundleJson<ConsoleEntry[]>(dir, BUNDLE_FILES.console)) ?? []
+    const har = await readBundleJson<unknown>(dir, BUNDLE_FILES.har)
+    const actionFile = await readBundleJson<{ actions?: ActionRecord[] }>(dir, BUNDLE_FILES.actions)
+
+    clipboard.writeText(
+      bundleMarkdown({
+        bundleName: basename(dir),
+        meta,
+        steps: summariseSteps(actionFile?.actions ?? []),
+        failedRequests: har ? summariseFailedRequests(har, 50) : [],
+        console: summariseConsole(consoleEntries, { limit: 50 })
+      })
+    )
+    new Notification({ title: 'Report copied as Markdown', body: basename(dir) }).show()
+  } catch (err) {
+    void dialog.showMessageBox({
+      type: 'error',
+      message: 'Could not copy the report',
+      detail: err instanceof Error ? err.message : String(err)
+    })
+  }
+}
+
+/**
  * Open Chrome under snapit's control. The tray is rebuilt so the item flips to Stop —
  * a session that is running with no visible sign of it would be a surprise, given it
  * records everything the browser does.
@@ -588,6 +632,7 @@ function buildTray(): void {
     { type: 'separator' },
     { label: 'Settings…', click: openSettingsWindow },
     { label: 'Open save folder', click: () => void shell.openPath(getSettings().saveDir) },
+    { label: 'Copy last report as Markdown', click: () => void copyLatestReportAsMarkdown() },
     {
       label: 'Claude Code (MCP)',
       submenu: [
