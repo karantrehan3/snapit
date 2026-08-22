@@ -193,6 +193,8 @@ type CaptureEntry = {
   kind: 'file' | 'bundle'
   /** Bundle only: the self-contained page describing the capture. */
   reportPath?: string
+  /** Present and false for a browser session, which collects context rather than pixels. */
+  hasMedia?: boolean
 }
 
 type Dated = CaptureEntry & { mtimeMs: number }
@@ -218,19 +220,23 @@ async function describeBundle(dir: string): Promise<Dated | null> {
     return null
   }
   const mediaName = pickBundleMedia(names, await bundleMediaName(dir))
-  if (!mediaName) return null
-  const mediaPath = join(dir, mediaName)
+  // A browser session bundle has no media at all — console, network and actions only.
+  // Falling back to the report keeps it listed rather than invisible.
+  const anchor = mediaName ?? (names.includes('report.html') ? 'report.html' : null)
+  if (!anchor) return null
+  const anchorPath = join(dir, anchor)
   try {
-    const info = await stat(mediaPath)
+    const info = await stat(anchorPath)
     if (!info.isFile()) return null
     return {
-      path: mediaPath,
+      path: anchorPath,
       name: basename(dir),
       sizeBytes: info.size,
       modifiedAt: new Date(info.mtimeMs).toISOString(),
       mtimeMs: info.mtimeMs,
       kind: 'bundle',
-      ...(names.includes('report.html') ? { reportPath: join(dir, 'report.html') } : {})
+      ...(names.includes('report.html') ? { reportPath: join(dir, 'report.html') } : {}),
+      ...(mediaName ? {} : { hasMedia: false })
     }
   } catch {
     return null

@@ -24,14 +24,9 @@ import { captureDisplay, getDisplaySource, type DisplaySource } from './capture'
 import { getSettings, setSettings, regenerateMcpToken, type Settings } from './settings'
 import { checkForUpdate, type UpdateInfo } from './updater'
 import { captureBaseName, captureFilePath } from './filename'
-import {
-  bundleLayout,
-  buildMeta,
-  resolveDurationMs,
-  sanitizeMarkers,
-  type CaptureSource,
-  type DisplayInfo
-} from './bundle'
+import { bundleLayout, buildMeta, resolveDurationMs, sanitizeMarkers, type CaptureSource } from './bundle'
+import { currentDisplays } from './displays'
+import { isBrowserSessionActive, startBrowserSession, stopBrowserSession } from './browserSession'
 import { renderReport } from './report'
 import {
   EDITABLE_EXTENSIONS,
@@ -163,18 +158,6 @@ const CSP = [
 
 /** A renderer-supplied value is only accepted as image bytes if it's an image dataURL. */
 const isImageDataUrl = (v: unknown): v is string => typeof v === 'string' && v.startsWith('data:image/')
-
-/** Every connected display, in the shape bundle metadata records them. */
-function currentDisplays(): DisplayInfo[] {
-  const primaryId = screen.getPrimaryDisplay().id
-  return screen.getAllDisplays().map((d) => ({
-    id: d.id,
-    label: d.label || `Display ${d.id}`,
-    bounds: d.bounds,
-    scaleFactor: d.scaleFactor,
-    isPrimary: d.id === primaryId
-  }))
-}
 
 /**
  * Write a finished recording: a bundle folder (media + meta.json + report.html) when
@@ -541,6 +524,39 @@ function registerHotkeys(): void {
   }
 }
 
+/**
+ * Open Chrome under snapit's control. The tray is rebuilt so the item flips to Stop —
+ * a session that is running with no visible sign of it would be a surprise, given it
+ * records everything the browser does.
+ */
+async function beginBrowserSession(): Promise<void> {
+  try {
+    await startBrowserSession()
+    buildTray()
+  } catch (err) {
+    dialog.showMessageBox({
+      type: 'error',
+      message: 'Could not start a browser session',
+      detail: err instanceof Error ? err.message : String(err)
+    })
+  }
+}
+
+async function endBrowserSession(): Promise<void> {
+  try {
+    await stopBrowserSession()
+  } catch (err) {
+    console.error('[snapit] failed to finish the browser session:', err)
+    dialog.showMessageBox({
+      type: 'error',
+      message: 'The browser session did not save cleanly',
+      detail: err instanceof Error ? err.message : String(err)
+    })
+  } finally {
+    buildTray()
+  }
+}
+
 function buildTray(): void {
   const { screenshotHotkey, recordHotkey, gifHotkey } = getSettings()
   const template: Electron.MenuItemConstructorOptions[] = [
@@ -565,6 +581,10 @@ function buildTray(): void {
       click: () => void startCapture('gif')
     },
     { label: 'Open image…', click: () => void openImageFromDialog() },
+    { type: 'separator' },
+    isBrowserSessionActive()
+      ? { label: '⏹  Stop browser session', click: () => void endBrowserSession() }
+      : { label: 'Start browser session…', click: () => void beginBrowserSession() },
     { type: 'separator' },
     { label: 'Settings…', click: openSettingsWindow },
     { label: 'Open save folder', click: () => void shell.openPath(getSettings().saveDir) },

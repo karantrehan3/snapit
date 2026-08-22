@@ -123,6 +123,32 @@ export function appendAction(actions: ActionRecord[], action: ActionRecord): Act
 }
 
 /**
+ * A one-line description of an action, for repro steps. Prefers the selector a human
+ * would recognise — what the thing is called — over the one a machine would pick.
+ */
+export function actionLabel(action: ActionRecord): string {
+  const byKind = (kind: SelectorCandidate['kind']): SelectorCandidate | undefined =>
+    action.selectors.find((s) => s.kind === kind)
+  const role = byKind('role')
+  const named =
+    (role && role.kind === 'role' && `${role.role} “${role.name}”`) ||
+    (byKind('label') as { value: string } | undefined)?.value ||
+    (byKind('text') as { value: string } | undefined)?.value ||
+    (byKind('testid') as { value: string } | undefined)?.value ||
+    action.tag
+  const verb =
+    action.type === 'fill'
+      ? 'Fill'
+      : action.type === 'submit'
+        ? 'Submit'
+        : action.type === 'click'
+          ? 'Click'
+          : 'Change'
+  const value = action.value !== undefined ? ` with “${action.value}”` : ''
+  return `${verb} ${named}${value}`
+}
+
+/**
  * The listener injected into every document. Capture-phase so it sees events a page
  * stops from bubbling, and wrapped throughout so a failure here can never break the
  * application under test — this runs in the tester's real session.

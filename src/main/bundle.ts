@@ -9,6 +9,21 @@ import { join } from 'path'
  * can be unit-tested in isolation (mirrors filename.ts / region.ts).
  */
 
+/**
+ * Every file a bundle may contain. Readers and writers share this so a rename cannot
+ * quietly desynchronise them — `recent_captures` looks for these names too.
+ */
+export const BUNDLE_FILES = {
+  meta: 'meta.json',
+  report: 'report.html',
+  console: 'console.json',
+  har: 'network.har',
+  actions: 'actions.json'
+} as const
+
+/** The folder a bundle lives in. A browser session has one but no media inside it. */
+export const bundleDir = (saveDir: string, base: string): string => join(saveDir, base)
+
 export type BundleLayout = {
   dir: string
   /** Absolute path of the media file inside the bundle. */
@@ -20,14 +35,14 @@ export type BundleLayout = {
 }
 
 export function bundleLayout(saveDir: string, base: string, ext: string): BundleLayout {
-  const dir = join(saveDir, base)
+  const dir = bundleDir(saveDir, base)
   const mediaName = `${base}.${ext}`
   return {
     dir,
     mediaPath: join(dir, mediaName),
     mediaName,
-    metaPath: join(dir, 'meta.json'),
-    reportPath: join(dir, 'report.html')
+    metaPath: join(dir, BUNDLE_FILES.meta),
+    reportPath: join(dir, BUNDLE_FILES.report)
   }
 }
 
@@ -72,6 +87,19 @@ export function resolveDurationMs(reported: unknown, wallClockMs: number | null)
   return wallClockMs !== null && wallClockMs >= 0 ? wallClockMs : null
 }
 
+/** What a bundle holds. A browser session has no video; a recording has no HAR. */
+export type CaptureKind = 'recording' | 'browser-session'
+
+/** Counts for the report's summary, so a reader knows what is in the sibling files. */
+export type CollectedSummary = {
+  console: number
+  consoleErrors: number
+  requests: number
+  failedRequests: number
+  actions: number
+  navigations: number
+}
+
 export type CaptureMeta = {
   /** Schema version, so a later reader can tell what it is looking at. */
   schema: 1
@@ -80,17 +108,21 @@ export type CaptureMeta = {
   system: { platform: string; release: string; arch: string; locale: string; timeZone: string }
   displays: DisplayInfo[]
   capture: {
-    kind: 'recording'
+    kind: CaptureKind
     /** Null when the recording was stopped without a known start (prepare never ran). */
     durationMs: number | null
     hasSystemAudio: boolean
     source: CaptureSource
     markers: Marker[]
   }
-  media: { file: string; bytes: number; ext: string }
+  /** Null for a browser session, which captures context rather than pixels. */
+  media: { file: string; bytes: number; ext: string } | null
+  /** Present when a browser session contributed console, network and action files. */
+  collected?: CollectedSummary
 }
 
 export type MetaInput = {
+  kind?: CaptureKind
   capturedAt: Date
   appVersion: string
   platform: string
@@ -103,9 +135,11 @@ export type MetaInput = {
   hasSystemAudio: boolean
   source: CaptureSource
   markers: Marker[]
-  mediaName: string
-  mediaBytes: number
-  ext: string
+  /** Omit all three for a browser session, which has no media file. */
+  mediaName?: string
+  mediaBytes?: number
+  ext?: string
+  collected?: CollectedSummary
 }
 
 export function buildMeta(input: MetaInput): CaptureMeta {
@@ -122,14 +156,18 @@ export function buildMeta(input: MetaInput): CaptureMeta {
     },
     displays: input.displays,
     capture: {
-      kind: 'recording',
+      kind: input.kind ?? 'recording',
       // A negative span means the clock moved (sleep, DST); report unknown rather than nonsense.
       durationMs: input.durationMs !== null && input.durationMs >= 0 ? input.durationMs : null,
       hasSystemAudio: input.hasSystemAudio,
       source: input.source,
       markers: input.markers
     },
-    media: { file: input.mediaName, bytes: input.mediaBytes, ext: input.ext }
+    media:
+      input.mediaName !== undefined && input.ext !== undefined
+        ? { file: input.mediaName, bytes: input.mediaBytes ?? 0, ext: input.ext }
+        : null,
+    ...(input.collected ? { collected: input.collected } : {})
   }
 }
 

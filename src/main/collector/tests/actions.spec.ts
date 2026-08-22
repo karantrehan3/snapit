@@ -5,6 +5,7 @@ import {
   INJECTED_SCRIPT,
   MAX_ACTIONS,
   MAX_SNAPSHOT_CHARS,
+  actionLabel,
   appendAction,
   normalizeAction,
   redactActionValue,
@@ -156,5 +157,48 @@ describe('INJECTED_SCRIPT', () => {
     const listeners = INJECTED_SCRIPT.match(/addEventListener\([^)]*/g) ?? []
     expect(listeners.length).toBeGreaterThanOrEqual(3)
     expect(INJECTED_SCRIPT.match(/}, true\)/g)?.length).toBeGreaterThanOrEqual(3)
+  })
+})
+
+describe('actionLabel', () => {
+  const make = (over: Partial<ActionRecord>): ActionRecord => ({
+    atMs: 0,
+    type: 'click',
+    tag: 'button',
+    selectors: [],
+    ...over
+  })
+
+  it('names the target the way a person would, not the way a machine would', () => {
+    const label = actionLabel(
+      make({
+        selectors: [
+          { kind: 'css', value: 'div > form > button:nth-of-type(2)' },
+          { kind: 'role', role: 'button', name: 'Place order' }
+        ]
+      })
+    )
+    expect(label).toBe('Click button “Place order”')
+  })
+
+  it('includes what was typed', () => {
+    const label = actionLabel(
+      make({
+        type: 'fill',
+        tag: 'input',
+        value: 'ada@example.com',
+        selectors: [{ kind: 'label', value: 'Email' }]
+      })
+    )
+    expect(label).toBe('Fill Email with “ada@example.com”')
+  })
+
+  it('shows the redaction rather than pretending nothing was typed', () => {
+    const label = actionLabel(make({ type: 'fill', tag: 'input', value: REDACTED, selectors: [] }))
+    expect(label).toContain(REDACTED)
+  })
+
+  it('falls back to the tag when nothing identifies the element', () => {
+    expect(actionLabel(make({ type: 'submit', tag: 'form' }))).toBe('Submit form')
   })
 })
