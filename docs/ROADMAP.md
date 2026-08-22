@@ -129,18 +129,29 @@ entitlements, and Apple discourages `--deep`. That conflict is the trap, not the
   has no notion of: a **timestamp per action**, so every step correlates to a video frame, a network
   window and a marker. That correlation is what makes assertions inferable, and codegen cannot
   supply it.
-- **Spike before committing.** Playwright exposes no supported API for "hand me the recorded actions
-  as data." The two routes are `context._enableRecorder()` (internal, underscore-prefixed) or
-  shelling out to `playwright codegen` and reading the spec it emits. Verify which works over
-  `connectOverCDP` against the user's _installed_ Chrome — Playwright's own browser download is
-  ~150 MB and this app is already fighting its bundle size. Pin `playwright-core` to an exact
-  version and add a smoke test that fails loudly on upgrade.
+- **Spike run 2026-08-22 — every question came back yes.** Against installed Chrome 151 with
+  `playwright-core` 1.62.1 and a throwaway profile:
+
+  | Question                                      | Result                                                    |
+  | --------------------------------------------- | --------------------------------------------------------- |
+  | `connectOverCDP` without `playwright install` | Works. `playwright-core` downloads no browser at all      |
+  | `context.tracing` fidelity over CDP           | Full trace: 7 screenshots, `trace.network`, DOM snapshots |
+  | `locator.ariaSnapshot()`                      | Works, and reflects post-action state                     |
+  | `context._enableRecorder()` (internal)        | Present and callable                                      |
+  | Raw CDP console / network                     | Both captured                                             |
+  | `Runtime.addBinding` action trail             | Fires with our payload                                    |
+
+  **The important consequence: `_enableRecorder` is optional.** Raw CDP plus `addBinding` plus
+  `ariaSnapshot` already covers everything the collector needs, all on supported APIs. And an ARIA
+  snapshot yields role and accessible name, which is most of a good selector — `getByRole('button',
+{ name: 'Add item' })` — so selector generation does not have to depend on the unsupported
+  internal either. Reach for `_enableRecorder` only for disambiguation, pinned, behind a smoke test.
+
 - **ARIA snapshot before and after each action** via `locator.ariaSnapshot()` — public, stable API.
   This is the assertion engine in Phase 2. See the build-once rule.
 - **Redaction pass** before anything is written: strip auth headers, cookies and tokens from the HAR.
-- Verify tracing fidelity over `connectOverCDP` early — it has documented limitations versus a
-  Playwright-launched browser. If screenshots are degraded, keep snapit's own video and take only
-  snapshots from the trace.
+- ~~Verify tracing fidelity over `connectOverCDP`~~ — done, see the spike table. Screenshots are
+  present, so the trace can stand alongside snapit's own video rather than replacing it.
 
 ### M1.4 — MCP surface
 
