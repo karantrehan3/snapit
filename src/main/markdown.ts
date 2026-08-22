@@ -44,7 +44,10 @@ function requestsBlock(requests: FailedRequest[] | undefined): string {
     .map((r) => {
       const status = code(`${r.method} ${r.status || 'failed'}`)
       const detail = r.statusText ? ` — ${flat(r.statusText)}` : ''
-      return `- ${status} ${code(flat(r.url))}${detail}`
+      // Indented under the bullet rather than inline: a body is often long enough to
+      // swamp the status it belongs to.
+      const body = r.body ? `\n  - ${code(flat(r.body))}` : ''
+      return `- ${status} ${code(flat(r.url))}${detail}${body}`
     })
     .join('\n')
 }

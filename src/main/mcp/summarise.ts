@@ -68,12 +68,22 @@ export function summariseConsole(
   return [...byMessage.values()].sort((a, b) => rank(a) - rank(b)).slice(0, limit)
 }
 
-export type FailedRequest = { method: string; status: number; url: string; statusText?: string }
+export type FailedRequest = {
+  method: string
+  status: number
+  url: string
+  statusText?: string
+  /** The start of the response body, when one was captured. Usually the actual reason. */
+  body?: string
+}
 
 type HarEntry = {
   request?: { method?: string; url?: string }
-  response?: { status?: number; statusText?: string }
+  response?: { status?: number; statusText?: string; content?: { text?: string } }
 }
+
+/** A body is for identifying the failure, not for reading in full — that is the HAR's job. */
+const BODY_PREVIEW = 600
 
 /** Server errors and outright failures. A 404 for a favicon is noise; a 500 is the bug. */
 export function summariseFailedRequests(har: unknown, limit = DEFAULT_LIMIT): FailedRequest[] {
@@ -89,7 +99,10 @@ export function summariseFailedRequests(har: unknown, limit = DEFAULT_LIMIT): Fa
       method: e.request?.method ?? 'GET',
       status: e.response?.status ?? 0,
       url: clip(e.request?.url ?? '', 300),
-      ...(e.response?.statusText ? { statusText: e.response.statusText } : {})
+      ...(e.response?.statusText ? { statusText: e.response.statusText } : {}),
+      ...(e.response?.content?.text
+        ? { body: clip(e.response.content.text.replace(/\s+/g, ' ').trim(), BODY_PREVIEW) }
+        : {})
     }))
 }
 

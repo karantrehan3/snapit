@@ -5,6 +5,7 @@ import { chromium, type Browser, type BrowserContext, type CDPSession, type Page
 import { harFromMessages } from 'chrome-har'
 import { cdpEndpoint, chromeCandidates, launchArgs } from './chrome'
 import { redactHar } from './redact'
+import { MAX_BODIES, attachResponseBodies, isFailedStatus, type ResponseBody } from './bodies'
 import {
   BINDING_NAME,
   INJECTED_SCRIPT,
@@ -149,6 +150,10 @@ export async function startCollector(opts: CollectorOptions): Promise<CollectorH
   const consoleEntries: ConsoleEntry[] = []
   const navigations: NavigationEntry[] = []
   let actions: ActionRecord[] = []
+  // Bodies for failed requests only, fetched separately because CDP events never carry
+  // them. Keyed by request id, which is what chrome-har puts on each HAR entry.
+  const bodies: Record<string, ResponseBody> = {}
+  const failedRequestIds = new Set<string>()
   const attached = new WeakSet<Page>()
   // ariaSnapshot is a round trip to the page; serialise them so a burst of clicks
   // cannot pile up concurrent calls on a page that is still navigating.
@@ -177,6 +182,27 @@ export async function startCollector(opts: CollectorOptions): Promise<CollectorH
     for (const event of [...NETWORK_EVENTS, ...PAGE_EVENTS]) {
       cdp.on(event as never, (params: unknown) => messages.push({ method: event, params }))
     }
+
+    // Note which requests failed as their responses arrive, then fetch the body once
+    // loading has finished — asking earlier can return a partial body or nothing.
+    cdp.on('Network.responseReceived', (e) => {
+      if (isFailedStatus(e.response?.status) && failedRequestIds.size < MAX_BODIES) {
+        failedRequestIds.add(e.requestId)
+      }
+    })
+
+    cdp.on('Network.loadingFinished', (e) => {
+      if (!failedRequestIds.has(e.requestId) || bodies[e.requestId]) return
+      void cdp
+        .send('Network.getResponseBody', { requestId: e.requestId })
+        .then((r) => {
+          bodies[e.requestId] = { text: r.body, base64Encoded: r.base64Encoded }
+        })
+        .catch(() => {
+          // Chrome evicts bodies aggressively, and a navigation drops them all. A
+          // missing body is not worth failing a capture over.
+        })
+    })
 
     cdp.on('Runtime.consoleAPICalled', (e) => {
       pushConsole({
@@ -292,7 +318,12 @@ export async function startCollector(opts: CollectorOptions): Promise<CollectorH
 
     let har: unknown = { log: { version: '1.2', entries: [] } }
     try {
-      har = harFromMessages(messages, { includeTextFromResponseBody: false })
+      har = attachResponseBodies(
+        harFromMessages(messages, { includeTextFromResponseBody: false }) as {
+          log?: { entries?: [] }
+        },
+        bodies
+      )
     } catch (err) {
       // A malformed event stream must not lose the console and navigation trail too.
       console.error('[snapit] could not build a HAR from the collected events:', err)

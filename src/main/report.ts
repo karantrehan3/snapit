@@ -30,7 +30,7 @@ const MAX_ROWS = 200
 
 export type ReportConsoleLine = { atMs: number; level: string; text: string }
 export type ReportAction = { atMs: number; label: string }
-export type ReportRequest = { method: string; status: number; url: string }
+export type ReportRequest = { method: string; status: number; url: string; body?: string }
 
 export type ReportData = {
   console?: ReportConsoleLine[]
@@ -130,7 +130,11 @@ function requestsSection(requests: ReportRequest[] | undefined): string {
   const items = requests.map(
     (r) =>
       `<li><span class="lvl">${escapeHtml(String(r.status || 'failed'))}</span>` +
-      `<span class="at">${escapeHtml(r.method)}</span><span class="url">${escapeHtml(r.url)}</span></li>`
+      `<span class="at">${escapeHtml(r.method)}</span>` +
+      `<span class="url">${escapeHtml(r.url)}` +
+      // The body of a 500 is usually the actual reason; a URL alone rarely is.
+      (r.body ? `<span class="body">${escapeHtml(r.body)}</span>` : '') +
+      `</span></li>`
   )
   return listSection('Failed requests', items, 'requests')
 }
@@ -215,6 +219,7 @@ export function renderReport(meta: CaptureMeta, data: ReportData = {}): string {
   .lvl-warning .lvl { color: var(--warn); }
   .requests .lvl { color: var(--accent); }
   .url { word-break: break-all; }
+  .body { display: block; margin-top: .25rem; color: var(--ink-2); font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
   .marks button, .marks .at {
     color: var(--accent); background: none; border: 1px solid var(--edge);
     border-radius: 3px; padding: .1rem .4rem; cursor: pointer;

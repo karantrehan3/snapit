@@ -5,10 +5,11 @@ import { app, shell } from 'electron'
 import { BUNDLE_FILES, buildMeta, bundleDir, type CollectedSummary } from './bundle'
 import { captureBaseName } from './filename'
 import { currentDisplays } from './displays'
-import { renderReport, type ReportAction, type ReportConsoleLine, type ReportRequest } from './report'
+import { renderReport, type ReportAction, type ReportConsoleLine } from './report'
 import { getSettings } from './settings'
 import { actionLabel } from './collector/actions'
 import { startCollector, type CollectedSession, type CollectorHandle } from './collector/session'
+import { summariseFailedRequests } from './mcp/summarise'
 
 /**
  * A browser session: Chrome opened under snapit's control, everything it does recorded,
@@ -23,27 +24,6 @@ let active: CollectorHandle | null = null
 let startedAt: Date | null = null
 
 export const isBrowserSessionActive = (): boolean => active !== null
-
-type HarEntry = {
-  request?: { method?: string; url?: string }
-  response?: { status?: number }
-}
-
-/** Requests worth putting in front of a reader: server errors and outright failures. */
-function failedRequests(har: unknown): ReportRequest[] {
-  const entries = (har as { log?: { entries?: HarEntry[] } })?.log?.entries
-  if (!Array.isArray(entries)) return []
-  return entries
-    .filter((e) => {
-      const status = e.response?.status
-      return typeof status === 'number' && (status === 0 || status >= 400)
-    })
-    .map((e) => ({
-      method: e.request?.method ?? 'GET',
-      status: e.response?.status ?? 0,
-      url: e.request?.url ?? ''
-    }))
-}
 
 const countRequests = (har: unknown): number =>
   ((har as { log?: { entries?: unknown[] } })?.log?.entries ?? []).length
@@ -95,7 +75,7 @@ export async function stopBrowserSession(): Promise<string | null> {
     )
   ])
 
-  const failed = failedRequests(collected.har)
+  const failed = summariseFailedRequests(collected.har, 100)
   const meta = buildMeta({
     kind: 'browser-session',
     capturedAt: startedAt ?? new Date(),

@@ -165,3 +165,44 @@ describe('summariseSteps and stepDetail', () => {
     expect(stepDetail([], 1)).toBeNull()
   })
 })
+
+describe('summariseFailedRequests — response bodies', () => {
+  const har = {
+    log: {
+      entries: [
+        {
+          request: { method: 'POST', url: 'https://api.test/orders' },
+          response: { status: 500, content: { text: '{\n  "error": "kaboom",\n  "trace": "..."\n}' } }
+        },
+        { request: { method: 'GET', url: 'https://api.test/gone' }, response: { status: 404 } }
+      ]
+    }
+  }
+
+  it('carries the body, which is usually the actual reason', () => {
+    const [failed] = summariseFailedRequests(har)
+    expect(failed.body).toContain('kaboom')
+  })
+
+  it('flattens it to one line, since a body arrives with whatever formatting it had', () => {
+    expect(summariseFailedRequests(har)[0].body).not.toContain('\n')
+  })
+
+  it('omits the field entirely when no body was captured', () => {
+    expect(summariseFailedRequests(har)[1]).not.toHaveProperty('body')
+  })
+
+  it('previews rather than repeats the whole body — the HAR holds that', () => {
+    const huge = {
+      log: {
+        entries: [
+          {
+            request: { method: 'GET', url: 'u' },
+            response: { status: 500, content: { text: 'x'.repeat(9000) } }
+          }
+        ]
+      }
+    }
+    expect(summariseFailedRequests(huge)[0].body!.length).toBeLessThan(700)
+  })
+})

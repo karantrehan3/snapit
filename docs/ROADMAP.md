@@ -41,10 +41,18 @@ healing ground truth in Phase 2.
 console error, the failed request and the repro steps — without typing a description. A human opens
 `report.html` and sees the same thing.
 
-**Met, 2026-08-22.** M1.0 through M1.5 are built. What is not yet done inside Phase 1: response
-bodies are absent from the HAR (`Network.getResponseBody`, worth doing for `status >= 400`), a
-recording and a browser session still write separate bundles rather than one, and the retro buffer
-cannot be armed in the background.
+**Met, 2026-08-22.** M1.0 through M1.5 are built, and failed responses carry their bodies as of
+2026-08-23.
+
+Two gaps remain, both deliberate rather than forgotten:
+
+- **A recording and a browser session write separate bundles.** Survivable for Phase 1, where most
+  bugs need one or the other. Load-bearing for Phase 2: the build-once table exists to correlate
+  each step to a frame, a network window and a marker, and a step cannot reach a frame that lives in
+  another folder on another clock. Fix this before M2.1.
+- **The retro buffer cannot be armed in the background.** What shipped trims a recording you
+  started; instant replay means buffering with no session at all. A posture change, not an encoder
+  problem — the encoder is ready.
 
 ### M1.0 — Hygiene
 
