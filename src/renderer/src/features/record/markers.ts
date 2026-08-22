@@ -23,6 +23,16 @@ export function addMarker(markers: Marker[], atMs: number, note = ''): Marker[] 
   return [...markers, { atMs: Math.round(atMs), note }]
 }
 
+/**
+ * Shift markers onto a trimmed recording's clock, dropping the ones that fall before
+ * it starts. A marker at 5:00 of a recording whose last 30 seconds were kept does not
+ * point at anything in the file.
+ */
+export function rebaseMarkers(markers: readonly Marker[], offsetMs: number): Marker[] {
+  if (offsetMs <= 0) return markers.slice()
+  return markers.filter((m) => m.atMs >= offsetMs).map((m) => ({ ...m, atMs: m.atMs - offsetMs }))
+}
+
 /** `0:07` / `12:07` — how a marker reads on the pill and in the report. */
 export function markerTimeLabel(atMs: number): string {
   const total = Math.max(0, Math.floor(atMs / 1000))

@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { addMarker, markerTimeLabel, MAX_MARKERS, MIN_MARKER_GAP_MS, type Marker } from '../markers'
+import {
+  addMarker,
+  markerTimeLabel,
+  rebaseMarkers,
+  MAX_MARKERS,
+  MIN_MARKER_GAP_MS,
+  type Marker
+} from '../markers'
 
 describe('addMarker', () => {
   it('appends without mutating the list it was given', () => {
@@ -41,5 +48,30 @@ describe('markerTimeLabel', () => {
     expect(markerTimeLabel(0)).toBe('0:00')
     expect(markerTimeLabel(7_400)).toBe('0:07')
     expect(markerTimeLabel(727_000)).toBe('12:07')
+  })
+})
+
+describe('rebaseMarkers', () => {
+  const marks = [
+    { atMs: 1_000, note: 'a' },
+    { atMs: 40_000, note: 'b' },
+    { atMs: 55_000, note: 'c' }
+  ]
+
+  it('drops markers that fall before the kept window', () => {
+    // A marker at 0:01 of a recording whose last 30s were kept points at nothing.
+    expect(rebaseMarkers(marks, 30_000).map((m) => m.note)).toEqual(['b', 'c'])
+  })
+
+  it('shifts the survivors onto the file clock', () => {
+    expect(rebaseMarkers(marks, 30_000)[0].atMs).toBe(10_000)
+  })
+
+  it('leaves an untrimmed recording alone', () => {
+    expect(rebaseMarkers(marks, 0)).toEqual(marks)
+  })
+
+  it('keeps a marker landing exactly on the cut', () => {
+    expect(rebaseMarkers([{ atMs: 30_000, note: 'x' }], 30_000)).toEqual([{ atMs: 0, note: 'x' }])
   })
 })

@@ -83,6 +83,7 @@ export async function createRetroEncoder(opts: RetroEncoderOptions): Promise<Mp4
   let closed = false
   let framesEncoded = 0
   let latestSec = 0
+  let trimOffsetSec = 0
 
   const encoder = new VideoEncoder({
     output: (chunk, meta) => {
@@ -218,6 +219,7 @@ export async function createRetroEncoder(opts: RetroEncoderOptions): Promise<Mp4
       if (framesEncoded === 0) throw new Error('no frames were captured')
 
       const trimmed = trimForSave(videoPackets, audioSamples, retroWindow, latestSec)
+      trimOffsetSec = trimmed.startSec
       if (trimmed.video.length === 0) throw new Error('nothing left in the buffer to save')
       if (!videoMeta) throw new Error('encoder never produced a decoder configuration')
 
@@ -264,6 +266,8 @@ export async function createRetroEncoder(opts: RetroEncoderOptions): Promise<Mp4
       void stopAudio()
       videoPackets = []
       audioSamples = []
-    }
+    },
+
+    trimOffsetSec: () => trimOffsetSec
   }
 }

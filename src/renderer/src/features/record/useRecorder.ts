@@ -1,10 +1,14 @@
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type RefObject } from 'react'
 import type { AnnotationOptions, Phase, Pt, Rect, RecordParams } from './types'
 import { useMarkers } from './useMarkers'
+import { rebaseMarkers } from './markers'
 import { useRecordingPointer } from './useRecordingPointer'
 import { encodeSize } from './encodeSize'
 import { DEFAULT_QUALITY, qualitySettings } from './quality'
 import { createMp4Encoder, type Mp4Encoder } from './mp4Encoder'
+import { createRetroEncoder } from './retroEncoder'
+import { KEEP_EVERYTHING } from './retroBuffer'
+import { DEFAULT_RETRO } from './retroWindow'
 import { drawAnnotations } from '../annotate-live/composite'
 import { useLatestRef } from '@renderer/lib/useLatestRef'
 import { errorMessage as msg } from '@renderer/lib/errorMessage'
@@ -49,6 +53,7 @@ export function useRecorder({ drawMode, getAnnotationCanvas }: AnnotationOptions
   const audioCtxRef = useRef<AudioContext | null>(null)
   const rafRef = useRef<number | undefined>(undefined)
   const timerRef = useRef<number | undefined>(undefined)
+  const startedAtRef = useRef<number>(0)
   const savingRef = useRef(false)
   const stopRequestedRef = useRef(false)
 
@@ -93,7 +98,11 @@ export function useRecorder({ drawMode, getAnnotationCanvas }: AnnotationOptions
       const mp4 = await encoder.finish()
       cleanupStreams()
       // Copy out of the (possibly larger) backing store so only the MP4 crosses the IPC.
-      await window.snapit.saveRecording(mp4.slice().buffer, 'mp4', markers.read())
+      const offsetMs = encoder.trimOffsetSec() * 1000
+      await window.snapit.saveRecording(mp4.slice().buffer, 'mp4', {
+        markers: rebaseMarkers(markers.read(), offsetMs),
+        durationMs: Math.max(0, Date.now() - startedAtRef.current - offsetMs)
+      })
     } catch (e) {
       console.error('[snapit] save failed:', e)
       cleanupStreams()
@@ -244,6 +253,7 @@ export function useRecorder({ drawMode, getAnnotationCanvas }: AnnotationOptions
     setError(null)
     const { selectedId, systemAudio, mic, fps, regionMode, box, fallbackWidth, fallbackHeight } = params
     const quality = params.quality ?? DEFAULT_QUALITY
+    const retroWindow = params.retroWindow ?? DEFAULT_RETRO
     const { videoLongEdge } = qualitySettings(quality)
     if (regionMode && (!box || box.w < MIN_REGION || box.h < MIN_REGION)) {
       setError('Drag to select a region first.')
@@ -279,14 +289,23 @@ export function useRecorder({ drawMode, getAnnotationCanvas }: AnnotationOptions
       }
       const audio = mixAudio(audioTracks)
 
-      const encoder = await createMp4Encoder({
-        canvas,
-        width: out.w,
-        height: out.h,
-        fps,
-        audioTrack: audio,
-        quality
-      })
+      const startPerfMs = performance.now()
+      // The buffered encoder defers muxing so the front of the recording can be
+      // dropped; the tuned single-shot path stays in charge whenever nothing is
+      // being discarded, which is the common case.
+      const encoder =
+        retroWindow === KEEP_EVERYTHING
+          ? await createMp4Encoder({ canvas, width: out.w, height: out.h, fps, audioTrack: audio, quality })
+          : await createRetroEncoder({
+              canvas,
+              width: out.w,
+              height: out.h,
+              fps,
+              audioTrack: audio,
+              quality,
+              window: retroWindow,
+              startPerfMs
+            })
       // Stop pressed while we were setting up: unwind instead of starting a recording
       // nobody is waiting for.
       if (stopRequestedRef.current) {
@@ -298,6 +317,7 @@ export function useRecorder({ drawMode, getAnnotationCanvas }: AnnotationOptions
       encoderRef.current = encoder
 
       const t0 = Date.now()
+      startedAtRef.current = t0
       markers.begin(t0)
       runEncodeLoop(drawNow, encoder, fps, performance.now())
       setElapsed(0)

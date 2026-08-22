@@ -38,6 +38,16 @@ export type Settings = {
 /** A moment marked while a recording ran, in milliseconds from its first frame. */
 export type Marker = { atMs: number; note: string }
 
+/** What the renderer knows about a finished capture that the main process cannot derive. */
+export type CaptureDetails = {
+  markers: Marker[]
+  /**
+   * Length of the saved file. Only the wall clock is visible to main, which is wrong
+   * whenever the front of the recording was discarded.
+   */
+  durationMs: number
+}
+
 /** A newer release available on GitHub (from the About window's update check). */
 export type UpdateInfo = { version: string; notesUrl: string; downloadUrl: string }
 
@@ -71,11 +81,11 @@ const api = {
   prepareRecording: (systemAudio: boolean, sourceId: string): Promise<void> =>
     ipcRenderer.invoke('record:prepare', { systemAudio, sourceId }),
   /** Persist a finished recording (bytes + container ext + markers); closes the overlay. Returns the path. */
-  saveRecording: (data: ArrayBuffer, ext: string, markers: Marker[] = []): Promise<string> =>
-    ipcRenderer.invoke('record:save', data, ext, markers),
-  /** Persist a finished GIF (encoded bytes + markers); closes the overlay. Returns the path. */
-  saveGif: (data: ArrayBuffer, markers: Marker[] = []): Promise<string> =>
-    ipcRenderer.invoke('gif:save', data, markers),
+  saveRecording: (data: ArrayBuffer, ext: string, details?: CaptureDetails): Promise<string> =>
+    ipcRenderer.invoke('record:save', data, ext, details ?? null),
+  /** Persist a finished GIF (encoded bytes + details); closes the overlay. Returns the path. */
+  saveGif: (data: ArrayBuffer, details?: CaptureDetails): Promise<string> =>
+    ipcRenderer.invoke('gif:save', data, details ?? null),
   /** The image currently open for editing (data URL + display name + format). */
   getEditSession: (): Promise<EditImage | null> => ipcRenderer.invoke('edit:get'),
   /** Overwrite the original file (confirmed in main); returns the path or null. Closes the editor. */

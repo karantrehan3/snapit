@@ -76,6 +76,7 @@ export function useGifRecorder({ drawMode, getAnnotationCanvas }: AnnotationOpti
   const mp4Ref = useRef<Mp4Encoder | null>(null)
   const rafRef = useRef<number | undefined>(undefined)
   const timerRef = useRef<number | undefined>(undefined)
+  const startedAtRef = useRef<number>(0)
   const savingRef = useRef(false)
 
   const { pillPos, pillRef, onPillMouseDown } = useRecordingPointer(phase, drawMode)
@@ -116,7 +117,10 @@ export function useGifRecorder({ drawMode, getAnnotationCanvas }: AnnotationOpti
       if (mp4) {
         const bytes = await mp4.finish()
         cleanupStreams()
-        await window.snapit.saveRecording(bytes.slice().buffer, 'mp4', markers.read())
+        await window.snapit.saveRecording(bytes.slice().buffer, 'mp4', {
+          markers: markers.read(),
+          durationMs: Math.max(0, Date.now() - startedAtRef.current)
+        })
         return
       }
       if (gif && gif.frameCount() > 0) {
@@ -124,7 +128,10 @@ export function useGifRecorder({ drawMode, getAnnotationCanvas }: AnnotationOpti
         cleanupStreams()
         // Copy into a tightly-bounded ArrayBuffer so the main process's
         // `instanceof ArrayBuffer` guard accepts it over IPC.
-        await window.snapit.saveGif(bytes.slice().buffer, markers.read())
+        await window.snapit.saveGif(bytes.slice().buffer, {
+          markers: markers.read(),
+          durationMs: Math.max(0, Date.now() - startedAtRef.current)
+        })
         return
       }
       cleanupStreams()
@@ -278,6 +285,7 @@ export function useGifRecorder({ drawMode, getAnnotationCanvas }: AnnotationOpti
       rafRef.current = requestAnimationFrame(draw)
 
       const t0 = Date.now()
+      startedAtRef.current = t0
       markers.begin(t0)
       setElapsed(0)
       timerRef.current = window.setInterval(() => setElapsed(Math.floor((Date.now() - t0) / 1000)), 250)

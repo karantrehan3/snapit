@@ -1,5 +1,6 @@
 import type { MouseEvent as ReactMouseEvent, RefObject } from 'react'
 import type { QualityPreset } from './quality'
+import type { RetroWindow } from './retroBuffer'
 
 export type Phase = 'setup' | 'recording'
 export type Mode = 'full' | 'region'
@@ -51,4 +52,6 @@ export type RecordParams = {
   fallbackHeight: number
   /** Quality preset; defaults to DEFAULT_QUALITY when omitted (see quality.ts). */
   quality?: QualityPreset
+  /** How much of the recording to keep; defaults to everything (see retroWindow.ts). */
+  retroWindow?: RetroWindow
 }

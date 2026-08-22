@@ -24,7 +24,14 @@ import { captureDisplay, getDisplaySource, type DisplaySource } from './capture'
 import { getSettings, setSettings, regenerateMcpToken, type Settings } from './settings'
 import { checkForUpdate, type UpdateInfo } from './updater'
 import { captureBaseName, captureFilePath } from './filename'
-import { bundleLayout, buildMeta, sanitizeMarkers, type CaptureSource, type DisplayInfo } from './bundle'
+import {
+  bundleLayout,
+  buildMeta,
+  resolveDurationMs,
+  sanitizeMarkers,
+  type CaptureSource,
+  type DisplayInfo
+} from './bundle'
 import { renderReport } from './report'
 import {
   EDITABLE_EXTENSIONS,
@@ -175,7 +182,7 @@ function currentDisplays(): DisplayInfo[] {
  * way, and returns the media path — which is the same path in both shapes, one
  * directory deeper.
  */
-async function persistRecording(data: ArrayBuffer, ext: string, rawMarkers: unknown): Promise<string> {
+async function persistRecording(data: ArrayBuffer, ext: string, details: unknown): Promise<string> {
   const { saveDir, bundleRecordings } = getSettings()
   await mkdir(saveDir, { recursive: true })
   const bytes = Buffer.from(data)
@@ -197,7 +204,11 @@ async function persistRecording(data: ArrayBuffer, ext: string, rawMarkers: unkn
   const layout = bundleLayout(saveDir, captureBaseName(), ext)
   await mkdir(layout.dir, { recursive: true })
   await writeFile(layout.mediaPath, bytes)
-  const durationMs = recordStartedAt === null ? null : Date.now() - recordStartedAt
+  const reported = (details as { durationMs?: unknown } | null)?.durationMs
+  const durationMs = resolveDurationMs(
+    reported,
+    recordStartedAt === null ? null : Date.now() - recordStartedAt
+  )
 
   // The recording is already safe on disk by this point. Failing to write the context
   // around it is worth logging, but it is not a failed capture — never let it throw
@@ -215,7 +226,7 @@ async function persistRecording(data: ArrayBuffer, ext: string, rawMarkers: unkn
       durationMs,
       hasSystemAudio: recordWantsSystemAudio,
       source: recordSource,
-      markers: sanitizeMarkers(rawMarkers, durationMs),
+      markers: sanitizeMarkers((details as { markers?: unknown } | null)?.markers, durationMs),
       mediaName: layout.mediaName,
       mediaBytes: bytes.byteLength,
       ext
@@ -885,15 +896,15 @@ app.whenReady().then(() => {
     closeOverlayWindow()
   })
 
-  ipcMain.handle('record:save', async (_event, data: ArrayBuffer, ext: string, markers: unknown) => {
+  ipcMain.handle('record:save', async (_event, data: ArrayBuffer, ext: string, details: unknown) => {
     if (!(data instanceof ArrayBuffer) || data.byteLength === 0) return null
-    return persistRecording(data, ext === 'mp4' ? 'mp4' : 'webm', markers)
+    return persistRecording(data, ext === 'mp4' ? 'mp4' : 'webm', details)
   })
 
   // Persist a client-side-encoded GIF (bytes from gifenc); closes the overlay.
-  ipcMain.handle('gif:save', async (_event, data: ArrayBuffer, markers: unknown) => {
+  ipcMain.handle('gif:save', async (_event, data: ArrayBuffer, details: unknown) => {
     if (!(data instanceof ArrayBuffer) || data.byteLength === 0) return null
-    return persistRecording(data, 'gif', markers)
+    return persistRecording(data, 'gif', details)
   })
 
   // The image currently open for editing (renderer-safe subset — no disk path).

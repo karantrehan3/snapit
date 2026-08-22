@@ -8,6 +8,9 @@ import { SourceDropdown } from './SourceDropdown'
 import { FpsControl } from './FpsControl'
 import { ModeToggle } from './ModeToggle'
 import { QualityControl } from './QualityControl'
+import { RetroControl } from './RetroControl'
+import { DEFAULT_RETRO } from './retroWindow'
+import type { RetroWindow } from './retroBuffer'
 import { DEFAULT_QUALITY, type QualityPreset } from './quality'
 import { RecordingChrome } from './RecordingChrome'
 import {
@@ -46,6 +49,7 @@ export function RecordOverlay({
   const [mic, setMic] = useState(true)
   const [fps, setFps] = useState(60)
   const [quality, setQuality] = useState<QualityPreset>(DEFAULT_QUALITY)
+  const [retroWindow, setRetroWindow] = useState<RetroWindow>(DEFAULT_RETRO)
 
   // The live desktop shows through immediately; signal on mount so main reveals us.
   useEffect(() => {
@@ -122,6 +126,7 @@ export function RecordOverlay({
 
         <div style={barDivider} />
         <QualityControl value={quality} onChange={setQuality} />
+        <RetroControl value={retroWindow} onChange={setRetroWindow} />
 
         <div style={barDivider} />
         <button
@@ -158,7 +163,8 @@ export function RecordOverlay({
               annotatable: canRegion,
               fallbackWidth: source.width,
               fallbackHeight: source.height,
-              quality
+              quality,
+              retroWindow
             })
           }
         >

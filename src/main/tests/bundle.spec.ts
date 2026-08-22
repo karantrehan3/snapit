@@ -4,6 +4,7 @@ import {
   buildMeta,
   humanBytes,
   humanDuration,
+  resolveDurationMs,
   sanitizeMarkers,
   type MetaInput
 } from '../bundle'
@@ -148,5 +149,22 @@ describe('sanitizeMarkers', () => {
 
   it('defaults a missing note rather than dropping the marker', () => {
     expect(sanitizeMarkers([{ atMs: 10 }], null)).toEqual([{ atMs: 10, note: '' }])
+  })
+})
+
+describe('resolveDurationMs', () => {
+  it('prefers the renderer, which is the only side that knows what was trimmed', () => {
+    expect(resolveDurationMs(30_000, 720_000)).toBe(30_000)
+  })
+
+  it('falls back to the wall clock when the renderer reports nothing usable', () => {
+    expect(resolveDurationMs(undefined, 64_000)).toBe(64_000)
+    expect(resolveDurationMs('30s', 64_000)).toBe(64_000)
+    expect(resolveDurationMs(-1, 64_000)).toBe(64_000)
+    expect(resolveDurationMs(Number.NaN, 64_000)).toBe(64_000)
+  })
+
+  it('reports unknown when neither side has an answer', () => {
+    expect(resolveDurationMs(undefined, null)).toBeNull()
   })
 })

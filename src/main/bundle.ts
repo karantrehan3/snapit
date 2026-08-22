@@ -62,6 +62,16 @@ export function sanitizeMarkers(raw: unknown, durationMs: number | null): Marker
     .sort((a, b) => a.atMs - b.atMs)
 }
 
+/**
+ * How long the saved file runs. The renderer's figure wins because main only sees the
+ * wall clock, which is wrong whenever the front of the recording was discarded — but it
+ * crosses IPC, so it is checked like any other untrusted value.
+ */
+export function resolveDurationMs(reported: unknown, wallClockMs: number | null): number | null {
+  if (typeof reported === 'number' && Number.isFinite(reported) && reported >= 0) return Math.round(reported)
+  return wallClockMs !== null && wallClockMs >= 0 ? wallClockMs : null
+}
+
 export type CaptureMeta = {
   /** Schema version, so a later reader can tell what it is looking at. */
   schema: 1

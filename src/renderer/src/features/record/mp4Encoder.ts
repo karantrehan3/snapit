@@ -20,6 +20,11 @@ export type Mp4Encoder = {
   finish: () => Promise<Uint8Array>
   /** Tear down without producing a file. */
   abort: () => void
+  /**
+   * Seconds discarded from the front of the recording. Always 0 here; the buffered
+   * encoder trims, and callers need it to rebase durations and markers onto the file.
+   */
+  trimOffsetSec: () => number
 }
 
 export type Mp4EncoderOptions = {
@@ -176,6 +181,8 @@ export async function createMp4Encoder(opts: Mp4EncoderOptions): Promise<Mp4Enco
       closed = true
       if (encoder.state !== 'closed') encoder.close()
       void output.cancel().catch(() => {})
-    }
+    },
+
+    trimOffsetSec: () => 0
   }
 }
