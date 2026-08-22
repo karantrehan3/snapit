@@ -1,3 +1,5 @@
+import { isAbsolute, resolve, sep } from 'path'
+
 /**
  * Pure helpers for listing captures, kept free of electron and fs imports so they
  * can be unit-tested in isolation (mirrors region.ts / inlinePreview.ts).
@@ -25,4 +27,22 @@ export function pickBundleMedia(names: string[], metaMediaFile: string | null): 
   if (metaMediaFile && names.includes(metaMediaFile) && isCaptureFile(metaMediaFile)) return metaMediaFile
   const candidates = names.filter(isCaptureFile).sort()
   return candidates[0] ?? null
+}
+
+/**
+ * Resolve a bundle name to a directory inside the save folder.
+ *
+ * The name arrives from a model, so it is untrusted: `../../.ssh` must not resolve to
+ * anything readable. Anything that escapes the save folder is refused rather than
+ * clamped, because a silently rewritten path would read the wrong bundle and look like
+ * it worked.
+ */
+export function resolveBundleDir(saveDir: string, given: string): string {
+  const root = resolve(saveDir)
+  const target = isAbsolute(given) ? resolve(given) : resolve(root, given)
+  if (target !== root && !target.startsWith(root + sep)) {
+    throw new Error(`Bundle must be inside the snapit save folder. Refusing: ${given}`)
+  }
+  if (target === root) throw new Error('Expected a bundle name, not the save folder itself.')
+  return target
 }

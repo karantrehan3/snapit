@@ -173,12 +173,22 @@ write separate bundles rather than one.
 
 ### M1.4 — MCP surface
 
-- `start_session` / `stop_session` / `mark`
-- `get_console_errors`, `get_failed_requests` — filtered and summarised, never raw
-- `get_bundle_summary`, `get_step_detail`
-- **Token discipline is the design constraint.** A 40-action session with full ARIA snapshots is
-  hundreds of KB. Compact by default, zoom on request — the same call `include_image` already gets
-  right.
+**Built (2026-08-22).** Six tools: `start_browser_session`, `stop_browser_session`,
+`get_session_summary`, `get_console_errors`, `get_failed_requests`, `get_steps`. `bundle` is optional
+everywhere and defaults to the most recent, since that is almost always the one being asked about.
+
+Token discipline drove every shape: `get_steps` lists one line per action with no selectors and no
+snapshots, and the same tool with a `step` returns that step's detail — the progressive disclosure
+`include_image` already applies to screenshots. Console output collapses identical messages into one
+line with a count, because a loop logging the same failure four hundred times is one problem.
+
+`mark` was deliberately dropped. Every tool costs context in every session that connects, and an
+agent marking a moment in a recording it is not watching earns less than it costs — the ⌘⇧M hotkey
+covers the case that matters.
+
+A bundle name arriving from a model is untrusted: `resolveBundleDir` refuses anything resolving
+outside the save folder rather than clamping it, since a silently rewritten path would read the
+wrong bundle and look like it worked.
 
 ### M1.5 — Handoff
 

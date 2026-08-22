@@ -856,7 +856,23 @@ app.whenReady().then(() => {
   registerHotkeys()
   void refreshUpdate()
   setInterval(() => void refreshUpdate(), UPDATE_CHECK_INTERVAL_MS)
-  startMcpServer(app.getVersion(), { requestInteractiveCapture })
+  startMcpServer(app.getVersion(), {
+    requestInteractiveCapture,
+    // The tray reflects session state, so it has to be rebuilt when an agent is the one
+    // starting or stopping — otherwise the menu offers Start while a session is running.
+    startBrowserSession: async (url) => {
+      await startBrowserSession(url)
+      buildTray()
+    },
+    stopBrowserSession: async () => {
+      try {
+        return await stopBrowserSession()
+      } finally {
+        buildTray()
+      }
+    },
+    isBrowserSessionActive
+  })
 
   ipcMain.handle('capture:get-session', () => session)
 

@@ -123,10 +123,13 @@ uploaded anywhere.
 
 ## Claude Code (MCP)
 
-snapit can expose its screenshot tools to [Claude Code](https://code.claude.com/) over MCP, so
-Claude can request a screenshot, capture a specific display or region, or hand you the normal
-capture overlay and wait for you to select/annotate — screenshots only; recording produces a file
-for a human to watch, not something an LLM can look at, so it isn't exposed.
+snapit exposes two kinds of tool to [Claude Code](https://code.claude.com/) over MCP. Screenshots,
+so Claude can capture a display or region or hand you the normal overlay and wait while you
+select — recording is not exposed, because it produces a file for a human to watch rather than
+something an LLM can look at. And **browser sessions**, which are the more useful half: Chrome
+running under snapit's control, with its console, network, navigations and every click and form
+fill collected, so Claude can be handed the frame, the console error, the failed request and the
+repro steps instead of your prose description of them.
 
 **Setup**
 
@@ -140,13 +143,32 @@ for a human to watch, not something an LLM can look at, so it isn't exposed.
 
 **Tools**
 
+_Screen capture_
+
 | Tool              | What it does                                                                                           |
 | ----------------- | ------------------------------------------------------------------------------------------------------ |
 | `list_displays`   | Lists connected displays with the ids/bounds the other tools need.                                     |
 | `capture_screen`  | Silently captures a full display. Saves a PNG, returns its path.                                       |
 | `capture_region`  | Silently captures a rectangle of a display.                                                            |
 | `pick_region`     | Opens the normal capture overlay so **you** select (and optionally annotate); waits for you to finish. |
-| `recent_captures` | Lists recent files in the save folder.                                                                 |
+| `recent_captures` | Lists recent captures in the save folder, bundles included.                                            |
+
+_Browser sessions_ — for when the question is why something fails, not what it looks like.
+
+| Tool                    | What it does                                                                                 |
+| ----------------------- | -------------------------------------------------------------------------------------------- |
+| `start_browser_session` | Opens Chrome under snapit's control and starts collecting.                                   |
+| `stop_browser_session`  | Stops it and writes the bundle; returns what was collected.                                  |
+| `get_session_summary`   | What a bundle holds — kind, duration, environment, and the counts worth drilling into.       |
+| `get_console_errors`    | Errors and warnings, identical messages collapsed with a count. Info-level chatter left out. |
+| `get_failed_requests`   | Requests that returned 4xx/5xx or failed outright. Method, status and URL only.              |
+| `get_steps`             | The repro steps, one line each. Pass a step number for its selectors and an ARIA snapshot.   |
+
+Every one of these is **compact by default**. A real session is hundreds of console lines and an ARIA
+snapshot per action; returning that raw would spend a context window on noise. `get_steps` lists what
+happened with no selectors and no snapshots, and `get_steps` _with_ a step number is how the detail
+is fetched — the same discipline `include_image` applies to screenshots. `bundle` is optional
+everywhere and defaults to the most recent.
 
 Every capture tool takes an optional `include_image` flag to also return a downscaled inline
 preview (capped at 1400px wide) instead of just a path. It's off by default — a full-resolution

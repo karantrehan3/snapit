@@ -5,6 +5,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { getSettings } from '../settings'
 import { extractBearerToken, tokensMatch, isAllowedHost, isAllowedOrigin } from './auth'
 import { registerCaptureTools, type CaptureHooks } from './tools'
+import { registerSessionTools, type SessionHooks } from './sessionTools'
 
 /**
  * Local-only MCP server exposing snapit's screenshot tools to an MCP client
@@ -24,6 +25,9 @@ const mcpUrl = (port: number): string => `http://${LOOPBACK_HOST}:${port}${MCP_P
 
 type Session = { server: McpServer; transport: StreamableHTTPServerTransport }
 
+/** Everything the MCP tools need from the main process. */
+export type McpHooks = CaptureHooks & SessionHooks
+
 let httpServer: Server | null = null
 const sessions = new Map<string, Session>()
 
@@ -42,9 +46,10 @@ function sendJsonRpcError(res: ServerResponse, status: number, message: string):
   res.end(JSON.stringify({ jsonrpc: '2.0', error: { code: -32000, message }, id: null }))
 }
 
-function createSession(appVersion: string, hooks: CaptureHooks): Session {
+function createSession(appVersion: string, hooks: McpHooks): Session {
   const server = new McpServer({ name: 'snapit', version: appVersion })
   registerCaptureTools(server, hooks)
+  registerSessionTools(server, hooks)
   const transport: StreamableHTTPServerTransport = new StreamableHTTPServerTransport({
     sessionIdGenerator: randomUUID,
     onsessioninitialized: (id) => {
@@ -62,7 +67,7 @@ async function handleMcpRequest(
   req: IncomingMessage,
   res: ServerResponse,
   appVersion: string,
-  hooks: CaptureHooks
+  hooks: McpHooks
 ): Promise<void> {
   const headerSessionId = req.headers['mcp-session-id']
   const sessionId = typeof headerSessionId === 'string' ? headerSessionId : undefined
@@ -82,7 +87,7 @@ async function handleMcpRequest(
 }
 
 /** Start the local MCP server (no-op if already running). */
-export function startMcpServer(appVersion: string, hooks: CaptureHooks): void {
+export function startMcpServer(appVersion: string, hooks: McpHooks): void {
   if (httpServer) return
   const { mcpPort } = getSettings()
   httpServer = createServer((req, res) => {
