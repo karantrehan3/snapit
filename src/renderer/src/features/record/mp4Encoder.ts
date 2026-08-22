@@ -40,7 +40,7 @@ export type Mp4EncoderOptions = {
  * needs the GPU-backed encoder, and a partial probe reports it supported on the software
  * path where it is not — after which configure() fails asynchronously and closes the codec.
  */
-async function pickPlan(
+export async function pickPlan(
   width: number,
   height: number,
   fps: number,
