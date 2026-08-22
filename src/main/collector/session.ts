@@ -1,0 +1,256 @@
+import { spawn, type ChildProcess } from 'child_process'
+import { existsSync } from 'fs'
+import { mkdir } from 'fs/promises'
+import { chromium, type Browser, type BrowserContext, type CDPSession, type Page } from 'playwright-core'
+import { harFromMessages } from 'chrome-har'
+import { cdpEndpoint, chromeCandidates, launchArgs } from './chrome'
+import { redactHar } from './redact'
+
+/**
+ * The browser-side collector: launches Chrome with a debugging port, attaches over CDP,
+ * and records what a screenshot cannot show — the console, the network, and where the
+ * tester went.
+ *
+ * Chrome is launched rather than attached to, because Chrome refuses remote debugging on
+ * the default profile. The profile it does use is persisted, so logging in to the app
+ * under test is a once-per-machine cost rather than once-per-session.
+ */
+
+const DEFAULT_PORT = 47334
+const READY_TIMEOUT_MS = 15_000
+const READY_POLL_MS = 200
+/** Console output is unbounded in principle; a chatty page must not exhaust memory. */
+const MAX_CONSOLE_ENTRIES = 5000
+
+/** The CDP events chrome-har needs to reconstruct a HAR. */
+const NETWORK_EVENTS = [
+  'Network.requestWillBeSent',
+  'Network.requestWillBeSentExtraInfo',
+  'Network.responseReceived',
+  'Network.responseReceivedExtraInfo',
+  'Network.dataReceived',
+  'Network.loadingFinished',
+  'Network.loadingFailed',
+  'Network.requestServedFromCache',
+  'Network.resourceChangedPriority'
+] as const
+
+const PAGE_EVENTS = [
+  'Page.frameAttached',
+  'Page.frameStartedLoading',
+  'Page.frameScheduledNavigation',
+  'Page.navigatedWithinDocument',
+  'Page.domContentEventFired',
+  'Page.loadEventFired'
+] as const
+
+export type ConsoleEntry = {
+  atMs: number
+  level: string
+  text: string
+  url?: string
+  line?: number
+}
+
+export type NavigationEntry = { atMs: number; url: string }
+
+export type CollectedSession = {
+  startedAt: string
+  durationMs: number
+  console: ConsoleEntry[]
+  navigations: NavigationEntry[]
+  /** HAR 1.2, with credentials already stripped. */
+  har: unknown
+}
+
+export type CollectorHandle = {
+  endpoint: string
+  stop: () => Promise<CollectedSession>
+}
+
+export type CollectorOptions = {
+  /**
+   * Persisted between sessions so a tester logs in once. Supplied by the caller rather
+   * than read from electron here, which keeps this module runnable outside the app.
+   */
+  profileDir: string
+  startUrl?: string
+  port?: number
+}
+
+export function resolveChromePath(): string {
+  const found = chromeCandidates(process.platform, process.env).find((p) => existsSync(p))
+  if (!found) {
+    throw new Error(
+      'No Chrome, Chromium or Edge installation found. The collector attaches to a browser you already have; it does not download one.'
+    )
+  }
+  return found
+}
+
+async function waitForCdp(endpoint: string, signal: { killed: boolean }): Promise<void> {
+  const deadline = Date.now() + READY_TIMEOUT_MS
+  while (Date.now() < deadline) {
+    if (signal.killed) throw new Error('Chrome exited before its debugging port came up')
+    try {
+      const res = await fetch(`${endpoint}/json/version`)
+      if (res.ok) return
+    } catch {
+      // Not listening yet.
+    }
+    await new Promise((r) => setTimeout(r, READY_POLL_MS))
+  }
+  throw new Error(`Chrome's debugging port did not come up within ${READY_TIMEOUT_MS}ms`)
+}
+
+/** Best-effort readable text for a console argument, without evaluating anything in the page. */
+function describeArg(arg: { value?: unknown; description?: string; type?: string }): string {
+  if (arg.description) return arg.description
+  if (arg.value === undefined) return arg.type ?? 'undefined'
+  return typeof arg.value === 'string' ? arg.value : JSON.stringify(arg.value)
+}
+
+export async function startCollector(opts: CollectorOptions): Promise<CollectorHandle> {
+  const port = opts.port ?? DEFAULT_PORT
+  const endpoint = cdpEndpoint(port)
+  const chromePath = resolveChromePath()
+  const { profileDir } = opts
+  await mkdir(profileDir, { recursive: true })
+
+  // Launch blank and navigate only once CDP is attached. Chrome starts fetching the
+  // moment it has a URL, and Network.enable is per-session — handing it the target URL
+  // up front loses every request the first page load makes, which is most of them.
+  const child: ChildProcess = spawn(chromePath, launchArgs({ port, profileDir, startUrl: 'about:blank' }), {
+    stdio: 'ignore',
+    detached: false
+  })
+  const state = { killed: false }
+  child.on('exit', () => {
+    state.killed = true
+  })
+
+  const startedAt = new Date()
+  const startedPerf = Date.now()
+  const messages: { method: string; params: unknown }[] = []
+  const consoleEntries: ConsoleEntry[] = []
+  const navigations: NavigationEntry[] = []
+  const attached = new WeakSet<Page>()
+  let browser: Browser | null = null
+
+  const since = (): number => Date.now() - startedPerf
+
+  const pushConsole = (entry: ConsoleEntry): void => {
+    // Drop the oldest rather than the newest: the tail is what the bug is in.
+    if (consoleEntries.length >= MAX_CONSOLE_ENTRIES) consoleEntries.shift()
+    consoleEntries.push(entry)
+  }
+
+  const attachPage = async (page: Page): Promise<void> => {
+    if (attached.has(page)) return
+    attached.add(page)
+    let cdp: CDPSession
+    try {
+      cdp = await page.context().newCDPSession(page)
+    } catch (err) {
+      console.warn('[snapit] could not attach CDP to a page:', err)
+      return
+    }
+
+    for (const event of [...NETWORK_EVENTS, ...PAGE_EVENTS]) {
+      cdp.on(event as never, (params: unknown) => messages.push({ method: event, params }))
+    }
+
+    cdp.on('Runtime.consoleAPICalled', (e) => {
+      pushConsole({
+        atMs: since(),
+        level: e.type,
+        text: (e.args ?? []).map(describeArg).join(' '),
+        url: e.stackTrace?.callFrames?.[0]?.url,
+        line: e.stackTrace?.callFrames?.[0]?.lineNumber
+      })
+    })
+
+    cdp.on('Runtime.exceptionThrown', (e) => {
+      const d = e.exceptionDetails
+      pushConsole({
+        atMs: since(),
+        level: 'uncaught',
+        text: d.exception?.description ?? d.text,
+        url: d.url,
+        line: d.lineNumber
+      })
+    })
+
+    // Browser-level problems the page's own console never sees: blocked mixed content,
+    // CSP violations, failed subresource loads.
+    cdp.on('Log.entryAdded', (e) => {
+      pushConsole({ atMs: since(), level: e.entry.level, text: e.entry.text, url: e.entry.url })
+    })
+
+    cdp.on('Page.frameNavigated', (e) => {
+      if (e.frame.parentId) return // Sub-frames are noise in a navigation trail.
+      navigations.push({ atMs: since(), url: e.frame.url })
+    })
+
+    try {
+      await Promise.all([
+        cdp.send('Runtime.enable'),
+        cdp.send('Network.enable'),
+        cdp.send('Page.enable'),
+        cdp.send('Log.enable')
+      ])
+    } catch (err) {
+      console.warn('[snapit] could not enable CDP domains on a page:', err)
+    }
+  }
+
+  const attachContext = async (context: BrowserContext): Promise<void> => {
+    context.on('page', (page) => void attachPage(page))
+    await Promise.all(context.pages().map((page) => attachPage(page)))
+  }
+
+  try {
+    await waitForCdp(endpoint, state)
+    browser = await chromium.connectOverCDP(endpoint)
+    await Promise.all(browser.contexts().map((c) => attachContext(c)))
+
+    if (opts.startUrl) {
+      const page = browser.contexts()[0]?.pages()[0]
+      // 'commit' rather than 'load': this resolves as soon as navigation begins, so
+      // starting a session does not block on however slow the app under test is.
+      await page?.goto(opts.startUrl, { waitUntil: 'commit' })
+    }
+  } catch (err) {
+    child.kill()
+    throw err
+  }
+
+  const stop = async (): Promise<CollectedSession> => {
+    const durationMs = since()
+    try {
+      // Disconnects the CDP client; it does not close a browser we spawned ourselves.
+      await browser?.close()
+    } catch {
+      // Already gone.
+    }
+    child.kill()
+
+    let har: unknown = { log: { version: '1.2', entries: [] } }
+    try {
+      har = harFromMessages(messages, { includeTextFromResponseBody: false })
+    } catch (err) {
+      // A malformed event stream must not lose the console and navigation trail too.
+      console.error('[snapit] could not build a HAR from the collected events:', err)
+    }
+
+    return {
+      startedAt: startedAt.toISOString(),
+      durationMs,
+      console: consoleEntries,
+      navigations,
+      har: redactHar(har as { log?: { entries?: [] } })
+    }
+  }
+
+  return { endpoint, stop }
+}
