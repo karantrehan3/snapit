@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type RefObject } from 'react'
 import type { AnnotationOptions, Phase, Pt, Rect } from '../record/types'
 import type { QualityPreset } from '../record/quality'
+import { useMarkers } from '../record/useMarkers'
 import { useRecordingPointer } from '../record/useRecordingPointer'
 import { encodeSize } from '../record/encodeSize'
 import { DEFAULT_QUALITY, qualitySettings } from '../record/quality'
@@ -38,6 +39,8 @@ export type GifParams = {
 export type GifRecorder = {
   phase: Phase
   elapsed: number
+  markerCount: number
+  onMark: () => void
   saving: boolean
   error: string | null
   pillPos: Pt | null
@@ -63,6 +66,7 @@ export type GifRecorder = {
 export function useGifRecorder({ drawMode, getAnnotationCanvas }: AnnotationOptions): GifRecorder {
   const [phase, setPhase] = useState<Phase>('setup')
   const [elapsed, setElapsed] = useState(0)
+  const markers = useMarkers()
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -112,7 +116,7 @@ export function useGifRecorder({ drawMode, getAnnotationCanvas }: AnnotationOpti
       if (mp4) {
         const bytes = await mp4.finish()
         cleanupStreams()
-        await window.snapit.saveRecording(bytes.slice().buffer, 'mp4')
+        await window.snapit.saveRecording(bytes.slice().buffer, 'mp4', markers.read())
         return
       }
       if (gif && gif.frameCount() > 0) {
@@ -120,7 +124,7 @@ export function useGifRecorder({ drawMode, getAnnotationCanvas }: AnnotationOpti
         cleanupStreams()
         // Copy into a tightly-bounded ArrayBuffer so the main process's
         // `instanceof ArrayBuffer` guard accepts it over IPC.
-        await window.snapit.saveGif(bytes.slice().buffer)
+        await window.snapit.saveGif(bytes.slice().buffer, markers.read())
         return
       }
       cleanupStreams()
@@ -142,6 +146,9 @@ export function useGifRecorder({ drawMode, getAnnotationCanvas }: AnnotationOpti
   // The gif hotkey (pressed again) or Esc stops & saves; in setup it cancels.
   useEffect(() => {
     const off = window.snapit.onStopRecording(() => stop())
+    const offMark = window.snapit.onMarkRequest(() => {
+      if (phaseRef.current === 'recording') markers.mark()
+    })
     const onKey = (e: KeyboardEvent): void => {
       // Draw mode owns Escape (clear, then exit) — see useRecorder for the rationale.
       if (e.key === 'Escape' && !drawModeRef.current) stop()
@@ -149,6 +156,7 @@ export function useGifRecorder({ drawMode, getAnnotationCanvas }: AnnotationOpti
     window.addEventListener('keydown', onKey)
     return () => {
       off()
+      offMark()
       window.removeEventListener('keydown', onKey)
     }
   }, [])
@@ -270,6 +278,7 @@ export function useGifRecorder({ drawMode, getAnnotationCanvas }: AnnotationOpti
       rafRef.current = requestAnimationFrame(draw)
 
       const t0 = Date.now()
+      markers.begin(t0)
       setElapsed(0)
       timerRef.current = window.setInterval(() => setElapsed(Math.floor((Date.now() - t0) / 1000)), 250)
     } catch (e) {
@@ -278,5 +287,17 @@ export function useGifRecorder({ drawMode, getAnnotationCanvas }: AnnotationOpti
     }
   }
 
-  return { phase, elapsed, saving, error, pillPos, pillRef, onPillMouseDown, start, stop }
+  return {
+    phase,
+    elapsed,
+    markerCount: markers.markers.length,
+    onMark: markers.mark,
+    saving,
+    error,
+    pillPos,
+    pillRef,
+    onPillMouseDown,
+    start,
+    stop
+  }
 }

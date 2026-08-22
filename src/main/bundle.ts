@@ -41,6 +41,27 @@ export type DisplayInfo = {
 
 export type CaptureSource = { id: string; name: string; type: 'screen' | 'window' } | null
 
+/** A moment the person recording chose to point at. `note` is reserved for M1.2's text. */
+export type Marker = { atMs: number; note: string }
+
+/**
+ * Accept only well-formed markers from the renderer, and only those that fall inside
+ * the recording — a marker past the end would seek the report's player nowhere.
+ */
+export function sanitizeMarkers(raw: unknown, durationMs: number | null): Marker[] {
+  if (!Array.isArray(raw)) return []
+  const limit = durationMs === null ? Number.POSITIVE_INFINITY : durationMs
+  return raw
+    .filter((m): m is Marker => {
+      if (!m || typeof m !== 'object') return false
+      const o = m as Record<string, unknown>
+      return typeof o.atMs === 'number' && Number.isFinite(o.atMs) && o.atMs >= 0 && o.atMs <= limit
+    })
+    .slice(0, 100)
+    .map((m) => ({ atMs: Math.round(m.atMs), note: typeof m.note === 'string' ? m.note.slice(0, 500) : '' }))
+    .sort((a, b) => a.atMs - b.atMs)
+}
+
 export type CaptureMeta = {
   /** Schema version, so a later reader can tell what it is looking at. */
   schema: 1
@@ -54,6 +75,7 @@ export type CaptureMeta = {
     durationMs: number | null
     hasSystemAudio: boolean
     source: CaptureSource
+    markers: Marker[]
   }
   media: { file: string; bytes: number; ext: string }
 }
@@ -70,6 +92,7 @@ export type MetaInput = {
   durationMs: number | null
   hasSystemAudio: boolean
   source: CaptureSource
+  markers: Marker[]
   mediaName: string
   mediaBytes: number
   ext: string
@@ -93,7 +116,8 @@ export function buildMeta(input: MetaInput): CaptureMeta {
       // A negative span means the clock moved (sleep, DST); report unknown rather than nonsense.
       durationMs: input.durationMs !== null && input.durationMs >= 0 ? input.durationMs : null,
       hasSystemAudio: input.hasSystemAudio,
-      source: input.source
+      source: input.source,
+      markers: input.markers
     },
     media: { file: input.mediaName, bytes: input.mediaBytes, ext: input.ext }
   }

@@ -21,6 +21,10 @@ export type AnnotationOptions = {
  */
 export type RecordingChromeSource = {
   elapsed: number
+  /** How many moments have been marked so far — shown on the pill. */
+  markerCount: number
+  /** Drop a marker at the current moment. */
+  onMark: () => void
   saving: boolean
   pillPos: Pt | null
   pillRef: RefObject<HTMLDivElement | null>

@@ -21,6 +21,7 @@ const base = (over: Partial<MetaInput> = {}): MetaInput => ({
   ],
   durationMs: 64_000,
   hasSystemAudio: false,
+  markers: [],
   source: { id: 'window:42:0', name: 'Checkout — Chrome', type: 'window' },
   mediaName: 'snapit-2026-08-22_14-31-07.mp4',
   mediaBytes: 1_572_864,
@@ -36,11 +37,13 @@ describe('renderReport', () => {
 
   it('fetches nothing from the network', () => {
     // The whole point of the bundle: it has to open on a machine with no network
-    // and no trust. Any external reference breaks that, silently.
-    const html = renderReport(buildMeta(base()))
+    // and no trust. Any external reference breaks that, silently. Inline script is
+    // fine — marker seeking needs it — but a script with a src is not.
+    const html = renderReport(buildMeta(base({ markers: [{ atMs: 7400, note: 'checkout 500s' }] })))
     expect(html).not.toMatch(/https?:\/\//)
     expect(html).not.toMatch(/(src|href)\s*=\s*"\/\//)
-    expect(html).not.toContain('<script')
+    expect(html).not.toMatch(/<script[^>]+src=/)
+    expect(html).not.toMatch(/<link[^>]+href=/)
   })
 
   it('plays video but shows a gif as an image', () => {

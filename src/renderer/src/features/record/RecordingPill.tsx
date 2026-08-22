@@ -8,6 +8,8 @@ const TOP_MARGIN = 16
 
 type Props = {
   elapsed: number
+  markerCount: number
+  onMark: () => void
   saving: boolean
   pillPos: Pt | null
   pillRef: RefObject<HTMLDivElement | null>
@@ -27,6 +29,8 @@ const fmt = (s: number): string => `${Math.floor(s / 60)}:${String(s % 60).padSt
  */
 export function RecordingPill({
   elapsed,
+  markerCount,
+  onMark,
   saving,
   pillPos,
   pillRef,
@@ -51,6 +55,15 @@ export function RecordingPill({
             </span>
             <span style={recDot} />
             <span style={{ fontVariantNumeric: 'tabular-nums', minWidth: 44 }}>{fmt(elapsed)}</span>
+            <button
+              type="button"
+              onClick={onMark}
+              style={pillToggle(false)}
+              title={`Mark this moment (⌘⇧M)${markerCount > 0 ? ` — ${markerCount} so far` : ''}`}
+              aria-label="Mark this moment"
+            >
+              ⚑{markerCount > 0 ? ` ${markerCount}` : ''}
+            </button>
             {onToggleDraw && (
               <button
                 type="button"

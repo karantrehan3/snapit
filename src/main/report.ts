@@ -34,6 +34,39 @@ function mediaTag(meta: CaptureMeta): string {
   return `<img src="${src}" alt="Screen capture" />`
 }
 
+/**
+ * The marker list, and the only script this page carries: clicking a marker seeks
+ * the player. Inline and dependency-free — the self-containment rule is about not
+ * reaching the network, which this does not.
+ */
+function markerSection(meta: CaptureMeta): string {
+  const markers = meta.capture.markers
+  if (markers.length === 0) return ''
+  const seekable = VIDEO_EXTS.includes(meta.media.ext)
+  const items = markers
+    .map((m) => {
+      const label = escapeHtml(humanDuration(m.atMs))
+      const note = m.note ? `<span class="note">${escapeHtml(m.note)}</span>` : ''
+      return seekable
+        ? `<li><button type="button" data-at="${(m.atMs / 1000).toFixed(3)}">${label}</button>${note}</li>`
+        : `<li><span class="at">${label}</span>${note}</li>`
+    })
+    .join('')
+  const script = seekable
+    ? `<script>
+document.querySelectorAll('button[data-at]').forEach(function (b) {
+  b.addEventListener('click', function () {
+    var v = document.querySelector('video')
+    if (!v) return
+    v.currentTime = Number(b.getAttribute('data-at'))
+    v.play()
+  })
+})
+</script>`
+    : ''
+  return `<section class="panel marks"><h2>Markers</h2><ol>${items}</ol></section>${script}`
+}
+
 function row(label: string, value: string): string {
   return `<tr><th scope="row">${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`
 }
@@ -55,6 +88,7 @@ export function renderReport(meta: CaptureMeta): string {
     row('Duration', humanDuration(meta.capture.durationMs)),
     source ? row('Source', `${source.name} (${source.type})`) : '',
     row('System audio', meta.capture.hasSystemAudio ? 'recorded' : 'not recorded'),
+    meta.capture.markers.length > 0 ? row('Markers', String(meta.capture.markers.length)) : '',
     row('File', `${meta.media.file} · ${humanBytes(meta.media.bytes)}`),
     row('Platform', `${meta.system.platform} ${meta.system.release} (${meta.system.arch})`),
     row('Locale', `${meta.system.locale} · ${meta.system.timeZone}`),
@@ -103,6 +137,19 @@ export function renderReport(meta: CaptureMeta): string {
   th { font-weight: 500; color: var(--ink-2); white-space: nowrap; width: 1%; }
   td { font-variant-numeric: tabular-nums; }
   footer { color: var(--ink-2); font-size: 12px; }
+  .marks { padding: .9rem; }
+  .marks h2 { margin: 0 0 .6rem; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
+  .marks ol { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: .3rem; }
+  .marks li { display: flex; align-items: baseline; gap: .6rem; }
+  .marks button, .marks .at {
+    font: 500 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+    color: var(--accent); background: none; border: 1px solid var(--edge);
+    border-radius: 3px; padding: .1rem .4rem; cursor: pointer;
+  }
+  .marks .at { cursor: default; }
+  .marks button:hover { border-color: var(--accent); }
+  .marks .note { color: var(--ink-2); }
 </style>
 </head>
 <body>
@@ -113,6 +160,7 @@ export function renderReport(meta: CaptureMeta): string {
   </header>
   <figure>${mediaTag(meta)}</figure>
   <div class="panel"><table><tbody>${rows}</tbody></table></div>
+  ${markerSection(meta)}
   <footer>Everything in this report came from this machine. The media file sits beside this page in the same folder.</footer>
 </main>
 </body>

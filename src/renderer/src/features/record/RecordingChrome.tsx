@@ -61,6 +61,8 @@ export function RecordingChrome({ recorder, surface, regionBox, workArea }: Prop
 
       <RecordingPill
         elapsed={recorder.elapsed}
+        markerCount={recorder.markerCount}
+        onMark={recorder.onMark}
         saving={recorder.saving}
         pillPos={recorder.pillPos}
         pillRef={recorder.pillRef}

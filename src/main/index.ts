@@ -24,7 +24,7 @@ import { captureDisplay, getDisplaySource, type DisplaySource } from './capture'
 import { getSettings, setSettings, regenerateMcpToken, type Settings } from './settings'
 import { checkForUpdate, type UpdateInfo } from './updater'
 import { captureBaseName, captureFilePath } from './filename'
-import { bundleLayout, buildMeta, type CaptureSource, type DisplayInfo } from './bundle'
+import { bundleLayout, buildMeta, sanitizeMarkers, type CaptureSource, type DisplayInfo } from './bundle'
 import { renderReport } from './report'
 import {
   EDITABLE_EXTENSIONS,
@@ -111,6 +111,24 @@ let recordSourceId: string | null = null
 let recordStartedAt: number | null = null
 /** Resolved asynchronously at prepare time — the window/screen the recording captured. */
 let recordSource: CaptureSource = null
+
+/**
+ * Drops a marker on the running recording. Registered only while one is in progress:
+ * holding a global shortcut permanently for something that does nothing the rest of
+ * the time would take it away from every other app.
+ */
+const MARKER_HOTKEY = 'CommandOrControl+Shift+M'
+
+function setMarkerHotkey(active: boolean): void {
+  if (!active) {
+    globalShortcut.unregister(MARKER_HOTKEY)
+    return
+  }
+  if (globalShortcut.isRegistered(MARKER_HOTKEY)) return
+  if (!globalShortcut.register(MARKER_HOTKEY, () => overlayWindow?.webContents.send('record:marker'))) {
+    console.error(`[snapit] Failed to register marker hotkey: ${MARKER_HOTKEY}`)
+  }
+}
 // Start this mode once the current overlay is dismissed (the GIF → video switch).
 let pendingCaptureMode: CaptureMode | null = null
 // Latest available update (from GitHub), or null when up to date / not yet checked.
@@ -157,7 +175,7 @@ function currentDisplays(): DisplayInfo[] {
  * way, and returns the media path — which is the same path in both shapes, one
  * directory deeper.
  */
-async function persistRecording(data: ArrayBuffer, ext: string): Promise<string> {
+async function persistRecording(data: ArrayBuffer, ext: string, rawMarkers: unknown): Promise<string> {
   const { saveDir, bundleRecordings } = getSettings()
   await mkdir(saveDir, { recursive: true })
   const bytes = Buffer.from(data)
@@ -179,6 +197,7 @@ async function persistRecording(data: ArrayBuffer, ext: string): Promise<string>
   const layout = bundleLayout(saveDir, captureBaseName(), ext)
   await mkdir(layout.dir, { recursive: true })
   await writeFile(layout.mediaPath, bytes)
+  const durationMs = recordStartedAt === null ? null : Date.now() - recordStartedAt
 
   // The recording is already safe on disk by this point. Failing to write the context
   // around it is worth logging, but it is not a failed capture — never let it throw
@@ -193,9 +212,10 @@ async function persistRecording(data: ArrayBuffer, ext: string): Promise<string>
       locale: app.getLocale(),
       timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       displays: currentDisplays(),
-      durationMs: recordStartedAt === null ? null : Date.now() - recordStartedAt,
+      durationMs,
       hasSystemAudio: recordWantsSystemAudio,
       source: recordSource,
+      markers: sanitizeMarkers(rawMarkers, durationMs),
       mediaName: layout.mediaName,
       mediaBytes: bytes.byteLength,
       ext
@@ -336,6 +356,7 @@ function requestInteractiveCapture(): Promise<string> {
 /** Dismiss the current capture: clear the renderer, hide the overlay (kept alive). */
 function closeOverlayWindow(): void {
   rejectPendingMcpCapture('Capture dismissed without saving.')
+  setMarkerHotkey(false)
   session = null
   if (revealFallback) {
     clearTimeout(revealFallback)
@@ -864,15 +885,15 @@ app.whenReady().then(() => {
     closeOverlayWindow()
   })
 
-  ipcMain.handle('record:save', async (_event, data: ArrayBuffer, ext: string) => {
+  ipcMain.handle('record:save', async (_event, data: ArrayBuffer, ext: string, markers: unknown) => {
     if (!(data instanceof ArrayBuffer) || data.byteLength === 0) return null
-    return persistRecording(data, ext === 'mp4' ? 'mp4' : 'webm')
+    return persistRecording(data, ext === 'mp4' ? 'mp4' : 'webm', markers)
   })
 
   // Persist a client-side-encoded GIF (bytes from gifenc); closes the overlay.
-  ipcMain.handle('gif:save', async (_event, data: ArrayBuffer) => {
+  ipcMain.handle('gif:save', async (_event, data: ArrayBuffer, markers: unknown) => {
     if (!(data instanceof ArrayBuffer) || data.byteLength === 0) return null
-    return persistRecording(data, 'gif')
+    return persistRecording(data, 'gif', markers)
   })
 
   // The image currently open for editing (renderer-safe subset — no disk path).
@@ -948,6 +969,7 @@ app.whenReady().then(() => {
     recordSourceId = opts.sourceId
     recordStartedAt = Date.now()
     recordSource = null
+    setMarkerHotkey(true)
     // Deliberately not awaited: this sits on the path to getDisplayMedia, and a
     // recording lasts orders of magnitude longer than the lookup. The name is only
     // read when the capture is saved, by which time this has long since resolved.

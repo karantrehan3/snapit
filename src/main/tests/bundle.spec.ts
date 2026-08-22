@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { bundleLayout, buildMeta, humanBytes, humanDuration, type MetaInput } from '../bundle'
+import {
+  bundleLayout,
+  buildMeta,
+  humanBytes,
+  humanDuration,
+  sanitizeMarkers,
+  type MetaInput
+} from '../bundle'
 import { captureBaseName } from '../filename'
 
 const SAVE_DIR = '/Users/x/Pictures/snapit'
@@ -16,6 +23,7 @@ const input: MetaInput = {
   displays: [],
   durationMs: 64_000,
   hasSystemAudio: true,
+  markers: [],
   source: { id: 'window:42:0', name: 'Checkout — Chrome', type: 'window' },
   mediaName: `${BASE}.mp4`,
   mediaBytes: 1_572_864,
@@ -88,5 +96,57 @@ describe('humanDuration', () => {
 
   it('says so when the duration could not be determined', () => {
     expect(humanDuration(null)).toBe('unknown')
+  })
+})
+
+describe('sanitizeMarkers', () => {
+  it('keeps well-formed markers, sorted by time', () => {
+    const out = sanitizeMarkers(
+      [
+        { atMs: 900, note: 'b' },
+        { atMs: 100, note: 'a' }
+      ],
+      64_000
+    )
+    expect(out).toEqual([
+      { atMs: 100, note: 'a' },
+      { atMs: 900, note: 'b' }
+    ])
+  })
+
+  it('rejects anything that is not an array of markers', () => {
+    // This crosses IPC from the renderer, so it is untrusted input like any other.
+    expect(sanitizeMarkers(null, 1000)).toEqual([])
+    expect(sanitizeMarkers('markers', 1000)).toEqual([])
+    expect(sanitizeMarkers([{ atMs: 'x' }, {}, null, 7], 1000)).toEqual([])
+  })
+
+  it('drops markers that fall outside the recording', () => {
+    // A marker past the end would seek the report's player nowhere.
+    expect(
+      sanitizeMarkers(
+        [
+          { atMs: -1, note: '' },
+          { atMs: 99_000, note: '' }
+        ],
+        64_000
+      )
+    ).toEqual([])
+    expect(sanitizeMarkers([{ atMs: 64_000, note: '' }], 64_000)).toHaveLength(1)
+  })
+
+  it('accepts any non-negative time when the duration is unknown', () => {
+    expect(sanitizeMarkers([{ atMs: 99_000, note: '' }], null)).toHaveLength(1)
+  })
+
+  it('bounds the count and the note length', () => {
+    const many = Array.from({ length: 250 }, (_, i) => ({ atMs: i, note: 'x'.repeat(900) }))
+    const out = sanitizeMarkers(many, null)
+    expect(out).toHaveLength(100)
+    expect(out[0].note).toHaveLength(500)
+  })
+
+  it('defaults a missing note rather than dropping the marker', () => {
+    expect(sanitizeMarkers([{ atMs: 10 }], null)).toEqual([{ atMs: 10, note: '' }])
   })
 })

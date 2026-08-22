@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type RefObject } from 'react'
 import type { AnnotationOptions, Phase, Pt, Rect, RecordParams } from './types'
+import { useMarkers } from './useMarkers'
 import { useRecordingPointer } from './useRecordingPointer'
 import { encodeSize } from './encodeSize'
 import { DEFAULT_QUALITY, qualitySettings } from './quality'
@@ -13,6 +14,8 @@ const MIN_REGION = 8
 export type Recorder = {
   phase: Phase
   elapsed: number
+  markerCount: number
+  onMark: () => void
   saving: boolean
   error: string | null
   pillPos: Pt | null
@@ -36,6 +39,7 @@ export type Recorder = {
 export function useRecorder({ drawMode, getAnnotationCanvas }: AnnotationOptions): Recorder {
   const [phase, setPhase] = useState<Phase>('setup')
   const [elapsed, setElapsed] = useState(0)
+  const markers = useMarkers()
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -89,7 +93,7 @@ export function useRecorder({ drawMode, getAnnotationCanvas }: AnnotationOptions
       const mp4 = await encoder.finish()
       cleanupStreams()
       // Copy out of the (possibly larger) backing store so only the MP4 crosses the IPC.
-      await window.snapit.saveRecording(mp4.slice().buffer, 'mp4')
+      await window.snapit.saveRecording(mp4.slice().buffer, 'mp4', markers.read())
     } catch (e) {
       console.error('[snapit] save failed:', e)
       cleanupStreams()
@@ -120,6 +124,9 @@ export function useRecorder({ drawMode, getAnnotationCanvas }: AnnotationOptions
       if (phaseRef.current === 'recording') stop()
       else window.snapit.closeOverlay()
     })
+    const offMark = window.snapit.onMarkRequest(() => {
+      if (phaseRef.current === 'recording') markers.mark()
+    })
     const onKey = (e: KeyboardEvent): void => {
       if (e.key !== 'Escape') return
       // Draw mode owns Escape (clear, then exit): stopping here would end the
@@ -132,6 +139,7 @@ export function useRecorder({ drawMode, getAnnotationCanvas }: AnnotationOptions
     window.addEventListener('keydown', onKey)
     return () => {
       off()
+      offMark()
       window.removeEventListener('keydown', onKey)
     }
   }, [])
@@ -290,6 +298,7 @@ export function useRecorder({ drawMode, getAnnotationCanvas }: AnnotationOptions
       encoderRef.current = encoder
 
       const t0 = Date.now()
+      markers.begin(t0)
       runEncodeLoop(drawNow, encoder, fps, performance.now())
       setElapsed(0)
       timerRef.current = window.setInterval(() => setElapsed(Math.floor((Date.now() - t0) / 1000)), 250)
@@ -300,5 +309,17 @@ export function useRecorder({ drawMode, getAnnotationCanvas }: AnnotationOptions
     }
   }
 
-  return { phase, elapsed, saving, error, pillPos, pillRef, onPillMouseDown, start, stop }
+  return {
+    phase,
+    elapsed,
+    markerCount: markers.markers.length,
+    onMark: markers.mark,
+    saving,
+    error,
+    pillPos,
+    pillRef,
+    onPillMouseDown,
+    start,
+    stop
+  }
 }
