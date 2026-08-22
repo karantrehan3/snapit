@@ -1,142 +1,93 @@
 # snapit — Status & Handoff
 
-> Living handoff doc. Read this + [`DESIGN.md`](DESIGN.md) to continue work in any session.
-> Last updated: 2026-06-16 (Phase 2 recording + feature-based renderer refactor).
+> Living handoff doc. Read this plus [`ROADMAP.md`](ROADMAP.md) to pick up work in any session.
+> [`DESIGN.md`](DESIGN.md) is kept for its stack rationale and locked decisions; its phase 3–4
+> roadmap is superseded by `ROADMAP.md`.
+>
+> Last updated: 2026-08-22.
 
 ## What this is
 
-A local macOS QA screenshot tool — a faithful Lightshot-style capture/annotate app,
-built to later grow into screen recording, live browser-session analysis (auto-planning
-Playwright tests), and assisted form-fill. See [`DESIGN.md`](DESIGN.md) for full vision,
-the four-phase roadmap, and locked decisions.
+A local-only macOS capture tool for QA — Lightshot-style screenshots with annotation, screen
+recording, and a local MCP server so Claude Code can see the screen. `ROADMAP.md` sets out where it
+goes next: a capture becomes a bug report with context (Phase 1), and that context becomes Playwright
+specs (Phase 2).
 
-- **Repo:** own git repo, default branch `master`, pushed to `github.com/karantrehan3/snapit` (SSH).
-- **Stack:** Electron 42 + TypeScript + electron-vite + React 19 + Konva 10. Volta-pinned **node 22**.
-- **Platform:** macOS Sequoia first (cross-OS via Electron later).
+- **Repo:** `github.com/karantrehan3/snapit`, default branch `master`.
+- **Stack:** Electron 42 + TypeScript + electron-vite + React 19 + Konva 10, Volta-pinned node 22.
+- **Platform:** developed and tested on macOS. Windows/Linux builds come from CI and are unverified
+  on real hardware.
 
-## How we started
-
-1. Grilled the idea (`/grill`) → resolved the core fault line: OS-level capture (screenshot/
-   video) vs browser-level observation (test-gen/form-fill) → **one Electron app, pluggable
-   modules**, with a companion Chrome extension for the browser parts (Phase 3+).
-2. Chose **Electron + TS** (cross-OS, one language, mature capture/clipboard APIs), local-only
-   (no cloud), Konva for annotation.
-3. Wrote `DESIGN.md`, scaffolded the project, then built Phase 1 milestone-by-milestone.
-
-## Build / dev commands
+## Commands
 
 ```bash
-cd ../snapit            # all commands run here
-npm run dev             # launch (tray app + global hotkeys)
-npm run typecheck       # tsc for main + renderer
-npm run build           # electron-vite build
-npm run format          # prettier --write .
+npm run dev          # tray app + global hotkeys
+npm run typecheck    # main + preload + renderer
+npm test             # vitest (pure logic only; no DOM environment)
+npm run build        # bundle into out/
+npm run format       # prettier --write .
 ```
 
-Run from the terminal; **grant Screen Recording permission to the terminal app** (the
-permission belongs to the parent process). macOS quirk notes are in "Known issues".
+Run `dev` from a terminal that has been granted **Screen Recording** — the permission belongs to the
+launching process. Black frames mean it doesn't.
 
-## What's built (Phase 1 capture + annotate, Phase 2 recording)
+## What's built
 
-The renderer is **feature-based**: `src/renderer/src/features/{screenshot,record,gif,settings}/`, each
-with its component(s) + hooks + `types.ts` + `styles.ts`. Cross-directory imports use the
-`@renderer` / `@preload` path aliases.
+**Capture and annotate** (`features/screenshot`, `features/annotate`, `features/edit`)
+Freeze-frame at native resolution, movable/resizable selection box, rect / ellipse / arrow / line /
+pen / **text** / **redact**, colour presets plus a custom popover, ⌘+scroll for stroke thickness —
+or font size when the target is text, or block size for a redaction. Undo/redo, copy, save, save-as.
+The same engine drives the image editor, where the whole image is the canvas.
 
-- **Shell** (`src/main/index.ts`): background tray app (dock hidden), three capture modes behind
-  **configurable global hotkeys** — screenshot (⌘⇧9), record (⌘⇧8), and GIF (⌘⇧7).
-- **Capture** (`src/main/capture.ts`): freeze-frame of the display under the cursor at native
-  (Retina) resolution via `desktopCapturer`; `getDisplaySource()` resolves a live source id for recording.
-- **Editor** (`features/screenshot/`, logic in `useAnnotationEditor`): full-screen Konva stage + DOM grey veil.
-  - Selection box = a window into the frozen screen; **movable** and **corner-resizable** (DOM handles).
-  - Annotation tools (`Toolbar.tsx` / `shapes.tsx`): rect / circle / arrow / line / pen / text,
-    selectable color (presets + custom popover), **Cmd+Scroll thickness** with a size preview,
-    **move/select/delete shapes**, **rect resize** via Konva Transformer, full **undo/redo**.
-  - Output: **Copy** to clipboard, **Save** (timestamped PNG), **Save As** (dialog), native resolution.
-- **Settings** (`features/settings/`): tray window to edit hotkeys + save folder, persisted to
-  `settings.json` in userData (`src/main/settings.ts`). Hotkey recorder shows live keycap chips
-  (`useHotkeyRecorder`).
-- **Recording** (`features/record/`, logic in `useRecorder`): record hotkey → setup panel
-  (**source picker** for any screen/window, full-screen / region toggle, **30/60 fps**, system + mic
-  audio) → `getDisplayMedia` → `MediaRecorder` → native **`.mp4`** when supported, else `.webm`.
-  Region pipes the stream through a cropped canvas; system (loopback, ScreenCaptureKit) + mic audio
-  mix via WebAudio. During recording the overlay is click-through with a **draggable Stop pill**; the
-  record hotkey again also stops & saves. (Stop pill is visible in the recording — accepted tradeoff.)
-- **GIF recording** (`features/gif/`, logic in `useGifRecorder`): gif hotkey → setup panel that
-  reuses the record feature's **source picker** + region toggle (no audio, **15/30/60 presets or a
-  custom 5–60 fps**, default 30) → `getDisplayMedia` (audio off) → per-frame canvas draw
-  (region-cropped, resampled from the 2x Retina buffer down to the actual on-screen resolution) →
-  **incremental `gifenc` encoding**. Each frame gets its **own** 256-colour palette (quantized from a
-  1/4 subsample for speed) → accurate screen colours with no cross-frame banding; every frame after
-  the first is a **delta** — a pixel is written transparent (disposal = leave) only when it stays
-  within tolerance of the **accumulated displayed canvas**, not merely the previous raw frame. That
-  distinction is what avoids ghost trails on scrolling content while keeping mostly-static recordings
-  small. Each frame's delay is the measured wall-clock interval, so playback is real-time. Shares the
-  click-through **draggable Stop pill**; gif hotkey again stops & saves. gifenc is main-thread (no
-  Web Worker), so it stays within the production CSP (`script-src 'self'`).
+Redaction has two modes and defaults to **solid**: pixelated and blurred text are both recoverable in
+some cases, so the safe one is not the opt-in. Pixelate re-samples the frozen frame through Konva's
+Pixelate filter, cached at the export pixelRatio.
 
-- `a564d9d` scaffold + screenshot/record mode split
-- `b0c04da` annotation editor (movable box, shape select/move, undo/redo)
-- `2b46c12` add Prettier + format all
-- `296472f` resizable capture box, native shape drag, whitish veil
-- `3807344` save/save-as, settings window, ellipse tool, refined hotkey recorder
-- `5decd75` Phase 2 screen recording (full-screen + region, mic, Stop pill)
-- `05ae091` system+mic audio, native MP4, fps selector, draggable pill
-- `40d4885` recording source picker (screen / window)
-- **(uncommitted)** feature-based renderer refactor + `@renderer`/`@preload` absolute imports
+**Recording** (`features/record`, `features/gif`)
+Source picker (screen or window), region crop, 30/60fps, system + mic audio, High/Balanced/Small
+quality. WebCodecs at constant quality via `mp4Encoder`, muxed by mediabunny. Silent recording adds
+an MP4/GIF toggle. Live annotation burns into the capture.
 
-## ACTIVE BUG — text annotation can't be typed
+`createRetroEncoder` is the second encoder: it defers muxing so the front of a recording can be
+dropped ("keep only the last 30s/60s/3m", video recording only). `createMp4Encoder` is untouched and
+still handles every untrimmed recording — do not disturb it, its behaviour is measured in
+`quality.ts`.
 
-Picking the **T** tool and clicking in the box creates the text box, but you can't type.
-Debug logs proved the sequence: `TEXT branch` → `textarea FOCUS` → `textarea BLUR` (immediate,
-not from our code) → `onBlur` → `commitEditing()` → editing nulled → empty box removed.
+**Bundles** (`main/bundle.ts`, `main/report.ts`)
+A recording saves as a folder holding the media, `meta.json` and a self-contained `report.html`. The
+media keeps the name it would have had as a loose file. Settings has a checkbox to go back to flat
+files. `report.html` must never fetch anything from the network — a test enforces it.
 
-**Root cause:** `app.dock.hide()` makes snapit an **accessory app**; its frameless/transparent
-always-on-top window **can't retain macOS key-window status**, so the textarea loses focus the
-instant it gets it. (Mouse works on non-key windows; keyboard doesn't.)
+**Markers** (`features/record/markers.ts`)
+⌘⇧M or the pill's flag drops a timestamped marker; they land in `meta.json` and become a seekable
+list in the report. The hotkey is registered only while recording.
 
-**Already tried (insufficient):** removing the `'screen-saver'` alwaysOnTop level,
-`app.focus({steal:true})` on ready-to-show, `webContents.focus()`, explicit textarea ref focus,
-`app.setActivationPolicy('regular')` while the overlay is open, and a non-transparent (opaque)
-window — the last two were reverted as they didn't fix it.
+**MCP server** (`main/mcp/`)
+`list_displays`, `capture_screen`, `capture_region`, `pick_region`, `recent_captures`. Local-only,
+bearer-token gated, Host/Origin checked. `recent_captures` understands bundle folders, including the
+partially-written ones the save path deliberately allows.
 
-**Recommended next fix:** since activation policy and opacity didn't help, suspect the Konva canvas
-mousedown stealing first-responder back. Try `preventDefault` on the stage mousedown for the text
-branch and/or focusing the textarea synchronously in the same gesture; failing that, stop hiding the
-dock entirely. The debug log bridge was removed — re-add a temporary focus/blur log to verify FOCUS
-sticks with no immediate BLUR before testing typing.
+## Conventions that matter
 
-## Pending
+- **Pure logic lives in its own electron-free module and is unit-tested**; the fs/electron wrapper
+  around it is not. See `filename.ts`, `bundle.ts`, `mcp/region.ts`, `record/retroBuffer.ts`.
+- Tests live in `tests/` beside the code, `src/**/tests/*.spec.ts`, environment `node` — there is no
+  DOM, so component behaviour is not unit-tested.
+- Renderer is feature-based: `features/<name>/{Component.tsx, useThing.ts, types.ts, styles.ts}`.
+- Prettier: no semicolons, single quotes, width 110. Run `npm run format`.
+- Comments earn their place or come out.
 
-1. **Fix text focus** (above) — the open blocker. The T tool is **hidden from the toolbar** until this
-   is fixed (filter in `Toolbar.tsx`, code path intact); re-enable once it's solved.
-2. **Evaluate Tauri for v2** — the v1.0.0 `.dmg` is ~114 MB, almost entirely Electron's bundled
-   Chromium (our code is ~1.4 MB). Locale-strip + max-compression only trim the margins, and arm64
-   forces an APFS dmg that ignores extra compression. A Tauri port (Rust core + OS webview, reusing
-   the React/Konva renderer) would drop installers to ~3–10 MB. Decided: ship Electron for v1.0.0,
-   port for v2.
-3. ~~Remove debug instrumentation~~ — **done** (the `window.snapit.log` bridge was removed).
-4. ~~Rework the Settings hotkey recorder~~ — **done** (`useHotkeyRecorder` + live keycap chips).
-5. ~~Commit Phase 1 milestone 1d~~ — **done**.
-6. ~~Phase 2 screen recording~~ — **done** (source picker, region, 30/60 fps, system + mic audio,
-   native MP4; recording verified working). WebCodecs + `mp4-muxer` fallback is only needed if a
-   runtime lacks native MP4 recording.
-7. Later phases: Chrome extension + Playwright test-gen (Phase 3), assisted form-fill (Phase 4),
-   cloud share. See `DESIGN.md`.
+## Open decisions
 
-## Known issues / macOS notes
+- **Background arming of the retro buffer.** The encoder supports it; whether snapit becomes an
+  always-capturing app is unresolved. See `ROADMAP.md` M1.2.
+- **Notarization**, deferred 2026-08-21. `build/afterPack.cjs` codesigns manually with `--deep` while
+  `electron-builder.yml` sets `identity: null`; notarization needs electron-builder to sign
+  inside-out with hardened runtime and entitlements. That conflict is the trap.
 
-- **Screen Recording permission**: belongs to the launching terminal, not Electron. If capture
-  is black, grant it to Terminal/iTerm and relaunch. `tccutil reset ScreenCapture com.github.Electron`
-  - reboot if the grant gets stuck.
-- **Electron binary download**: if a fresh `npm install` leaves "Electron uninstall", run
-  `node node_modules/electron/install.js` directly.
-- **NSSpellServer log spam**: disabled via `session.defaultSession.setSpellCheckerEnabled(false)`;
-  confirm it's gone after the focus fix (it was worsened by the focus/blur churn).
-- Bundle ~1.35MB (Konva) — fine for desktop; not a runtime cost.
+## Known macOS issues
 
-## Working conventions (from the user)
-
-- Present changes before committing; don't commit until verified.
-- Don't guess on bugs — add logging and diagnose from evidence.
-- Match existing style (Prettier: no semicolons, single quotes, width 110). Run `npm run format`.
-- Keep comments minimal and only where they earn their place.
+- Builds are ad-hoc signed and not notarized, so first launch needs
+  `xattr -dr com.apple.quarantine /Applications/snapit.app`, and Privacy grants reset on each update.
+  `tccutil reset All com.karantrehan.snapit` clears a stuck state.
+- Screen Recording permission belongs to the launching process in dev.
