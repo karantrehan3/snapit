@@ -86,7 +86,23 @@ entitlements, and Apple discourages `--deep`. That conflict is the trap, not the
   2's intent channel — the single highest-value input to test generation, and it costs one text
   field.
 - **Retro-buffer:** "save the last N seconds." Bugs are noticed _after_ they happen. This is the one
-  capture feature Jam has and snapit does not, and the encoder is already incremental.
+  capture feature Jam has and snapit does not.
+
+  **Finding (2026-08-22): not a small change, and audio is the blocker.** `mp4Encoder` is a
+  single-shot pipeline — `Output` + `BufferTarget` accumulates the whole muxed file, every packet
+  goes straight into `EncodedVideoPacketSource`, and finalize writes an index over all of it. There
+  is no way to drop the beginning. The right shape is to hold packets in a ring trimmed at keyframe
+  boundaries (`KEY_FRAME_INTERVAL_SEC` already gives regular ones) and only create the `Output` at
+  save time, rebasing timestamps to zero — `videoSource.add()` is already the funnel, it just gets
+  deferred. But audio is handed to mediabunny wholesale via `MediaStreamAudioTrackSource`, which
+  pulls from the live track and encodes AAC itself, with no packet-level hook to trim. So:
+
+  - **silent recording** (⌘⇧7) — clean, the ring-buffer approach works as-is;
+  - **video with audio** (⌘⇧8) — needs the audio path rebuilt around `AudioEncoder` so its packets
+    can be buffered too, or video starts N seconds back while audio starts at zero and the two
+    desync.
+
+  Splitting the milestone accordingly: markers shipped, retro-buffer scoped but not built.
 
 ### M1.3 — The browser collector
 
