@@ -3,6 +3,7 @@ import {
   REDACTED,
   isSensitiveField,
   redactCookies,
+  redactAriaSnapshot,
   redactHar,
   redactJsonText,
   redactNameValues,
@@ -134,5 +135,43 @@ describe('redactHar', () => {
   it('survives a HAR with no entries at all', () => {
     expect(redactHar({ log: { entries: [] } }).log.entries).toEqual([])
     expect(redactHar({} as { log?: { entries?: [] } })).toEqual({})
+  })
+})
+
+describe('redactAriaSnapshot', () => {
+  const snapshot = [
+    '- text: Email',
+    '- textbox "Email": ada@example.com',
+    '- textbox "Password": hunter2',
+    '- combobox "Country": United Kingdom',
+    '- button "Place order"',
+    '- status: Order placed',
+    '- list:',
+    '  - listitem: Widget x2'
+  ].join('\n')
+
+  const out = redactAriaSnapshot(snapshot)
+
+  it('strips every typed value, not just the ones that look sensitive', () => {
+    // A "Card number" field is no less sensitive than a password and no name-based
+    // heuristic catches them all, so no input value is kept at all.
+    expect(out).not.toContain('hunter2')
+    expect(out).not.toContain('ada@example.com')
+    expect(out).not.toContain('United Kingdom')
+  })
+
+  it('keeps the rendered text an assertion is actually derived from', () => {
+    expect(out).toContain('- status: Order placed')
+    expect(out).toContain('- listitem: Widget x2')
+    expect(out).toContain('- button "Place order"')
+  })
+
+  it('keeps the structure and the field names intact', () => {
+    expect(out).toContain('- textbox "Password":')
+    expect(out.split('\n')).toHaveLength(snapshot.split('\n').length)
+  })
+
+  it('preserves indentation, which is what carries nesting', () => {
+    expect(out).toContain('  - listitem: Widget x2')
   })
 })

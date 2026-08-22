@@ -107,6 +107,35 @@ export function redactJsonText(text: string): string {
   return JSON.stringify(walk(parsed))
 }
 
+/**
+ * Roles whose ARIA snapshot line carries what the user typed. Every other role's text
+ * is rendered content — `- status: Order placed` — which is exactly the signal an
+ * assertion is derived from and must survive.
+ */
+const VALUE_BEARING_ROLES = ['textbox', 'searchbox', 'combobox', 'spinbutton', 'slider']
+
+const ARIA_VALUE_LINE = new RegExp(`^(\\s*-\\s*(?:${VALUE_BEARING_ROLES.join('|')})\\b[^:]*:)\\s*(.+)$`)
+
+/**
+ * Strip typed values out of an ARIA snapshot.
+ *
+ * `locator.ariaSnapshot()` includes input values, so a snapshot taken after someone
+ * types into a login form contains their password in plain text — through a completely
+ * different door from the action trail, which redacts it properly. The values are not
+ * worth keeping here anyway: what was typed is already recorded, with the right
+ * redaction, on the action itself. A snapshot's job is to show what *changed as a
+ * result*, and that is all structure and rendered text.
+ */
+export function redactAriaSnapshot(snapshot: string): string {
+  return snapshot
+    .split('\n')
+    .map((line) => {
+      const match = ARIA_VALUE_LINE.exec(line)
+      return match ? `${match[1]} ${REDACTED}` : line
+    })
+    .join('\n')
+}
+
 type HarEntry = {
   request?: {
     url?: string

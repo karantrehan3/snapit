@@ -5,6 +5,14 @@ import { chromium, type Browser, type BrowserContext, type CDPSession, type Page
 import { harFromMessages } from 'chrome-har'
 import { cdpEndpoint, chromeCandidates, launchArgs } from './chrome'
 import { redactHar } from './redact'
+import {
+  BINDING_NAME,
+  INJECTED_SCRIPT,
+  appendAction,
+  normalizeAction,
+  prepareSnapshot,
+  type ActionRecord
+} from './actions'
 
 /**
  * The browser-side collector: launches Chrome with a debugging port, attaches over CDP,
@@ -21,6 +29,11 @@ const READY_TIMEOUT_MS = 15_000
 const READY_POLL_MS = 200
 /** Console output is unbounded in principle; a chatty page must not exhaust memory. */
 const MAX_CONSOLE_ENTRIES = 5000
+/**
+ * How long to let the page settle before snapshotting what an action changed. Too short
+ * and the snapshot is the old DOM; too long and fast clicking blurs two actions together.
+ */
+const SETTLE_MS = 250
 
 /** The CDP events chrome-har needs to reconstruct a HAR. */
 const NETWORK_EVENTS = [
@@ -59,6 +72,7 @@ export type CollectedSession = {
   durationMs: number
   console: ConsoleEntry[]
   navigations: NavigationEntry[]
+  actions: ActionRecord[]
   /** HAR 1.2, with credentials already stripped. */
   har: unknown
 }
@@ -134,7 +148,11 @@ export async function startCollector(opts: CollectorOptions): Promise<CollectorH
   const messages: { method: string; params: unknown }[] = []
   const consoleEntries: ConsoleEntry[] = []
   const navigations: NavigationEntry[] = []
+  let actions: ActionRecord[] = []
   const attached = new WeakSet<Page>()
+  // ariaSnapshot is a round trip to the page; serialise them so a burst of clicks
+  // cannot pile up concurrent calls on a page that is still navigating.
+  let snapshots: Promise<void> = Promise.resolve()
   let browser: Browser | null = null
 
   const since = (): number => Date.now() - startedPerf
@@ -187,6 +205,41 @@ export async function startCollector(opts: CollectorOptions): Promise<CollectorH
       pushConsole({ atMs: since(), level: e.entry.level, text: e.entry.text, url: e.entry.url })
     })
 
+    // The action trail. The binding is a global the page can call with anything, so
+    // every payload goes through normalizeAction before it is believed.
+    try {
+      await cdp.send('Runtime.addBinding', { name: BINDING_NAME })
+      await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: INJECTED_SCRIPT })
+      // addScriptToEvaluateOnNewDocument only affects the *next* document; the one
+      // already open needs it evaluated directly.
+      await cdp.send('Runtime.evaluate', { expression: INJECTED_SCRIPT })
+    } catch (err) {
+      console.warn('[snapit] could not install the action listener:', err)
+    }
+
+    cdp.on('Runtime.bindingCalled', (e) => {
+      if (e.name !== BINDING_NAME) return
+      let payload: unknown
+      try {
+        payload = JSON.parse(e.payload)
+      } catch {
+        return // Not ours, or a page poking at the binding.
+      }
+      const record = normalizeAction(payload, since())
+      if (!record) return
+      actions = appendAction(actions, record)
+      // Mutating the record rather than indexing the list: appendAction returns a new
+      // array, and the cap can shift every index out from under us.
+      snapshots = snapshots.then(async () => {
+        await new Promise((r) => setTimeout(r, SETTLE_MS))
+        try {
+          record.ariaAfter = prepareSnapshot(await page.locator('body').ariaSnapshot())
+        } catch {
+          // Page navigated or closed mid-snapshot; the action itself is still worth having.
+        }
+      })
+    })
+
     cdp.on('Page.frameNavigated', (e) => {
       if (e.frame.parentId) return // Sub-frames are noise in a navigation trail.
       navigations.push({ atMs: since(), url: e.frame.url })
@@ -227,6 +280,8 @@ export async function startCollector(opts: CollectorOptions): Promise<CollectorH
 
   const stop = async (): Promise<CollectedSession> => {
     const durationMs = since()
+    // Let any in-flight snapshot finish, so the last action is not left bare.
+    await Promise.race([snapshots, new Promise((r) => setTimeout(r, SETTLE_MS * 4))])
     try {
       // Disconnects the CDP client; it does not close a browser we spawned ourselves.
       await browser?.close()
@@ -248,6 +303,7 @@ export async function startCollector(opts: CollectorOptions): Promise<CollectorH
       durationMs,
       console: consoleEntries,
       navigations,
+      actions,
       har: redactHar(har as { log?: { entries?: [] } })
     }
   }
