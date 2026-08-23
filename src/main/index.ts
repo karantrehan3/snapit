@@ -32,7 +32,14 @@ import { readBundleJson, targetBundle } from './mcp/bundles'
 import { summariseConsole, summariseFailedRequests, summariseSteps } from './mcp/summarise'
 import type { ActionRecord } from './collector/actions'
 import type { ConsoleEntry } from './collector/session'
-import { isBrowserSessionActive, startBrowserSession, stopBrowserSession } from './browserSession'
+import {
+  contributeRecording,
+  isBrowserSessionActive,
+  openSessionDir,
+  sessionOffsetFor,
+  startBrowserSession,
+  stopBrowserSession
+} from './captureSession'
 import { renderReport } from './report'
 import {
   EDITABLE_EXTENSIONS,
@@ -190,14 +197,40 @@ async function persistRecording(data: ArrayBuffer, ext: string, details: unknown
     return finish(filePath)
   }
 
-  const layout = bundleLayout(saveDir, captureBaseName(), ext)
-  await mkdir(layout.dir, { recursive: true })
-  await writeFile(layout.mediaPath, bytes)
+  // A session already has a bundle open; join it rather than writing a second one
+  // beside it, so a repro step and the frame it happened on end up together.
+  const sessionDir = openSessionDir()
+  const base = captureBaseName()
+  const layout = bundleLayout(saveDir, base, ext)
+  // In a session the folder is already open under an earlier name; only the media file
+  // is written here, and it keeps the same stem it would have had on its own.
+  const dir = sessionDir ?? layout.dir
+  const mediaName = layout.mediaName
+  const mediaPath = join(dir, mediaName)
+  await mkdir(dir, { recursive: true })
+  await writeFile(mediaPath, bytes)
   const reported = (details as { durationMs?: unknown } | null)?.durationMs
   const durationMs = resolveDurationMs(
     reported,
     recordStartedAt === null ? null : Date.now() - recordStartedAt
   )
+  const markers = sanitizeMarkers((details as { markers?: unknown } | null)?.markers, durationMs)
+
+  if (sessionDir) {
+    // The session writes the metadata and the report when it stops, covering both
+    // halves; there is nothing more to do here than hand over what was recorded.
+    contributeRecording({
+      mediaName,
+      mediaBytes: bytes.byteLength,
+      ext,
+      durationMs,
+      markers,
+      hasSystemAudio: recordWantsSystemAudio,
+      source: recordSource,
+      offsetMs: sessionOffsetFor(recordStartedAt ?? Date.now())
+    })
+    return finish(mediaPath)
+  }
 
   // The recording is already safe on disk by this point. Failing to write the context
   // around it is worth logging, but it is not a failed capture — never let it throw
@@ -215,7 +248,7 @@ async function persistRecording(data: ArrayBuffer, ext: string, details: unknown
       durationMs,
       hasSystemAudio: recordWantsSystemAudio,
       source: recordSource,
-      markers: sanitizeMarkers((details as { markers?: unknown } | null)?.markers, durationMs),
+      markers,
       mediaName: layout.mediaName,
       mediaBytes: bytes.byteLength,
       ext
@@ -226,7 +259,7 @@ async function persistRecording(data: ArrayBuffer, ext: string, details: unknown
     console.error('[snapit] recording saved, but its report could not be written:', err)
   }
 
-  return finish(layout.mediaPath)
+  return finish(mediaPath)
 }
 
 /**

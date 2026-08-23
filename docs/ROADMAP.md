@@ -46,10 +46,11 @@ console error, the failed request and the repro steps — without typing a descr
 
 Two gaps remain, both deliberate rather than forgotten:
 
-- **A recording and a browser session write separate bundles.** Survivable for Phase 1, where most
-  bugs need one or the other. Load-bearing for Phase 2: the build-once table exists to correlate
-  each step to a frame, a network window and a marker, and a step cannot reach a frame that lives in
-  another folder on another clock. Fix this before M2.1.
+- ~~A recording and a browser session write separate bundles.~~ **Fixed 2026-08-23.** A session owns
+  one bundle and one origin; a recording started while it runs writes its media there and reports
+  where it began relative to that origin. `videoTimeSec` converts any session-clock moment onto the
+  video's clock, so a repro step or a console error seeks the recording to the frame it happened on.
+  A recording taken with no session open still writes its own bundle exactly as before.
 - **The retro buffer cannot be armed in the background.** What shipped trims a recording you
   started; instant replay means buffering with no session at all. A posture change, not an encoder
   problem — the encoder is ready.

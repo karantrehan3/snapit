@@ -40,6 +40,24 @@ export type ReportData = {
 
 const VIDEO_EXTS = ['mp4', 'webm']
 
+/**
+ * Where a session-clock moment lands in the recording, or null when the recording had
+ * not started yet. Negative offsets are fine: they mean the recording started first.
+ */
+export function videoTimeSec(sessionMs: number, recordingOffsetMs: number | undefined): number | null {
+  if (recordingOffsetMs === undefined) return null
+  const ms = sessionMs - recordingOffsetMs
+  return ms >= 0 ? ms / 1000 : null
+}
+
+/** A timestamp, as a button that seeks the recording when there is one to seek. */
+function stamp(atMs: number, seek: number | null): string {
+  const label = escapeHtml(humanDuration(atMs))
+  return seek === null
+    ? `<span class="at">${label}</span>`
+    : `<button type="button" class="at" data-at="${seek.toFixed(3)}">${label}</button>`
+}
+
 function mediaTag(meta: CaptureMeta): string {
   if (!meta.media) return ''
   const src = escapeHtml(meta.media.file)
@@ -75,20 +93,19 @@ function listSection(title: string, items: string[], className = ''): string {
   return `<section class="panel lines ${className}"><h2>${escapeHtml(title)}</h2><ol>${shown.join('')}${more}</ol></section>`
 }
 
-const time = (atMs: number): string => escapeHtml(humanDuration(atMs))
-
-function markerSection(meta: CaptureMeta): string {
+function markerSection(meta: CaptureMeta, seekable: boolean): string {
   const markers = meta.capture.markers
   if (markers.length === 0) return ''
-  const seekable = meta.media !== null && VIDEO_EXTS.includes(meta.media.ext)
+  // Markers are stamped by the recorder, so they are already on the video's clock.
   const items = markers.map((m) => {
     const note = m.note ? `<span class="note">${escapeHtml(m.note)}</span>` : ''
-    return seekable
-      ? `<li><button type="button" data-at="${(m.atMs / 1000).toFixed(3)}">${time(m.atMs)}</button>${note}</li>`
-      : `<li><span class="at">${time(m.atMs)}</span>${note}</li>`
+    return `<li>${stamp(m.atMs, seekable ? m.atMs / 1000 : null)}${note}</li>`
   })
-  const script = seekable
-    ? `<script>
+  return listSection('Markers', items, 'marks')
+}
+
+/** The one script this page carries: clicking a timestamp seeks the player. */
+const SEEK_SCRIPT = `<script>
 document.querySelectorAll('button[data-at]').forEach(function (b) {
   b.addEventListener('click', function () {
     var v = document.querySelector('video')
@@ -98,19 +115,16 @@ document.querySelectorAll('button[data-at]').forEach(function (b) {
   })
 })
 </script>`
-    : ''
-  return `${listSection('Markers', items, 'marks')}${script}`
-}
 
-function stepsSection(actions: ReportAction[] | undefined): string {
+function stepsSection(actions: ReportAction[] | undefined, offsetMs: number | undefined): string {
   if (!actions?.length) return ''
   const items = actions.map(
-    (a) => `<li><span class="at">${time(a.atMs)}</span><span>${escapeHtml(a.label)}</span></li>`
+    (a) => `<li>${stamp(a.atMs, videoTimeSec(a.atMs, offsetMs))}<span>${escapeHtml(a.label)}</span></li>`
   )
   return listSection('Steps to reproduce', items, 'steps')
 }
 
-function consoleSection(lines: ReportConsoleLine[] | undefined): string {
+function consoleSection(lines: ReportConsoleLine[] | undefined, offsetMs: number | undefined): string {
   if (!lines?.length) return ''
   // Errors first: a hundred info lines must not bury the one that matters.
   const rank = (l: ReportConsoleLine): number =>
@@ -119,7 +133,7 @@ function consoleSection(lines: ReportConsoleLine[] | undefined): string {
     .sort((a, b) => rank(a) - rank(b) || a.atMs - b.atMs)
     .map(
       (l) =>
-        `<li class="lvl-${escapeHtml(l.level)}"><span class="at">${time(l.atMs)}</span>` +
+        `<li class="lvl-${escapeHtml(l.level)}">${stamp(l.atMs, videoTimeSec(l.atMs, offsetMs))}` +
         `<span class="lvl">${escapeHtml(l.level)}</span><span>${escapeHtml(l.text)}</span></li>`
     )
   return listSection('Console', items, 'console')
@@ -141,6 +155,9 @@ function requestsSection(requests: ReportRequest[] | undefined): string {
 
 export function renderReport(meta: CaptureMeta, data: ReportData = {}): string {
   const isSession = meta.capture.kind === 'browser-session'
+  const seekable = meta.media !== null && VIDEO_EXTS.includes(meta.media.ext)
+  // Only convert onto the video clock when there is a video to seek.
+  const offsetMs = seekable ? meta.capture.recordingOffsetMs : undefined
   const title = meta.media ? meta.media.file : 'Browser session'
   const source = meta.capture.source
   const c = meta.collected
@@ -220,12 +237,11 @@ export function renderReport(meta: CaptureMeta, data: ReportData = {}): string {
   .requests .lvl { color: var(--accent); }
   .url { word-break: break-all; }
   .body { display: block; margin-top: .25rem; color: var(--ink-2); font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
-  .marks button, .marks .at {
+  button.at {
     color: var(--accent); background: none; border: 1px solid var(--edge);
     border-radius: 3px; padding: .1rem .4rem; cursor: pointer;
   }
-  .marks .at { cursor: default; }
-  .marks button:hover { border-color: var(--accent); }
+  button.at:hover { border-color: var(--accent); }
   .note { color: var(--ink-2); }
   footer { color: var(--ink-2); font-size: 12px; }
 </style>
@@ -238,12 +254,13 @@ export function renderReport(meta: CaptureMeta, data: ReportData = {}): string {
   </header>
   ${mediaTag(meta)}
   <div class="panel"><table><tbody>${rows}</tbody></table></div>
-  ${stepsSection(data.actions)}
+  ${stepsSection(data.actions, offsetMs)}
   ${requestsSection(data.failedRequests)}
-  ${consoleSection(data.console)}
-  ${markerSection(meta)}
+  ${consoleSection(data.console, offsetMs)}
+  ${markerSection(meta, seekable)}
   <footer>Everything in this report came from this machine. Credentials were stripped before it was written; the full console, network and action data sit beside this page as JSON.</footer>
 </main>
+${seekable ? SEEK_SCRIPT : ''}
 </body>
 </html>
 `

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { buildMeta, type MetaInput } from '../bundle'
-import { escapeHtml, renderReport } from '../report'
+import { escapeHtml, renderReport, videoTimeSec } from '../report'
 
 const base = (over: Partial<MetaInput> = {}): MetaInput => ({
   capturedAt: new Date('2026-08-22T12:31:07.000Z'),
@@ -166,5 +166,87 @@ describe('renderReport — recording still works', () => {
     expect(html).toContain('<video')
     expect(html).not.toContain('Steps to reproduce')
     expect(html).not.toContain('Failed requests')
+  })
+})
+
+describe('videoTimeSec', () => {
+  it('has no answer when nothing was recorded', () => {
+    expect(videoTimeSec(5_000, undefined)).toBeNull()
+  })
+
+  it('shifts a session moment onto the video clock', () => {
+    // Recording began 20s into the session, so 30s of session is 10s of video.
+    expect(videoTimeSec(30_000, 20_000)).toBe(10)
+  })
+
+  it('returns null for a moment before the recording started', () => {
+    // Nothing to seek to: those frames do not exist.
+    expect(videoTimeSec(5_000, 20_000)).toBeNull()
+  })
+
+  it('handles a recording that started before the session', () => {
+    // A negative offset means the video is already running at the session's origin.
+    expect(videoTimeSec(5_000, -10_000)).toBe(15)
+  })
+
+  it('maps the exact start of the recording to zero', () => {
+    expect(videoTimeSec(20_000, 20_000)).toBe(0)
+  })
+})
+
+describe('renderReport — a session that also recorded', () => {
+  const merged = buildMeta({
+    ...base(),
+    mediaName: 'snapit-merged.mp4',
+    mediaBytes: 2048,
+    ext: 'mp4',
+    recordingOffsetMs: 20_000,
+    markers: [{ atMs: 4_000, note: 'here' }]
+  })
+
+  const html = renderReport(merged, {
+    actions: [
+      { atMs: 5_000, label: 'Click button “Too early”' },
+      { atMs: 30_000, label: 'Click button “Place order”' }
+    ],
+    console: [{ atMs: 32_000, level: 'error', text: 'boom', count: 1 }]
+  })
+
+  it('makes a step that happened on camera seekable', () => {
+    // 30s session - 20s offset = 10s into the video.
+    expect(html).toContain('data-at="10.000"')
+  })
+
+  it('leaves a step from before the recording as plain text', () => {
+    expect(html).toContain('Too early')
+    expect(html).not.toContain('data-at="-15.000"')
+  })
+
+  it('seeks console errors onto the video too', () => {
+    expect(html).toContain('data-at="12.000"')
+  })
+
+  it('treats markers as already being on the video clock', () => {
+    // The recorder stamps them, so they need no conversion.
+    expect(html).toContain('data-at="4.000"')
+  })
+
+  it('includes the seek script exactly once', () => {
+    expect(html.match(/<script>/g)).toHaveLength(1)
+  })
+
+  it('has no seek controls at all when there is no video', () => {
+    const sessionOnly = renderReport(
+      buildMeta({
+        ...base(),
+        kind: 'browser-session',
+        mediaName: undefined,
+        mediaBytes: undefined,
+        ext: undefined
+      }),
+      { actions: [{ atMs: 5_000, label: 'Click' }] }
+    )
+    expect(sessionOnly).not.toContain('data-at')
+    expect(sessionOnly).not.toContain('<script')
   })
 })

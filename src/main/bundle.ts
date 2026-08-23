@@ -114,6 +114,12 @@ export type CaptureMeta = {
     hasSystemAudio: boolean
     source: CaptureSource
     markers: Marker[]
+    /**
+     * When the recording began relative to the session's origin, for a bundle holding
+     * both. Absent when there was no session, or no recording. Subtract it from a
+     * session-clock moment to find where it lands in the video.
+     */
+    recordingOffsetMs?: number
   }
   /** Null for a browser session, which captures context rather than pixels. */
   media: { file: string; bytes: number; ext: string } | null
@@ -135,6 +141,7 @@ export type MetaInput = {
   hasSystemAudio: boolean
   source: CaptureSource
   markers: Marker[]
+  recordingOffsetMs?: number
   /** Omit all three for a browser session, which has no media file. */
   mediaName?: string
   mediaBytes?: number
@@ -161,7 +168,8 @@ export function buildMeta(input: MetaInput): CaptureMeta {
       durationMs: input.durationMs !== null && input.durationMs >= 0 ? input.durationMs : null,
       hasSystemAudio: input.hasSystemAudio,
       source: input.source,
-      markers: input.markers
+      markers: input.markers,
+      ...(input.recordingOffsetMs !== undefined ? { recordingOffsetMs: input.recordingOffsetMs } : {})
     },
     media:
       input.mediaName !== undefined && input.ext !== undefined

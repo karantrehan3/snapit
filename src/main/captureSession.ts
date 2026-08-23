@@ -1,0 +1,173 @@
+import { mkdir, writeFile } from 'fs/promises'
+import { release } from 'os'
+import { join } from 'path'
+import { app, shell } from 'electron'
+import { BUNDLE_FILES, buildMeta, bundleDir, type CollectedSummary, type Marker } from './bundle'
+import { captureBaseName } from './filename'
+import { currentDisplays } from './displays'
+import { renderReport, type ReportAction, type ReportConsoleLine } from './report'
+import { getSettings } from './settings'
+import { actionLabel } from './collector/actions'
+import { summariseFailedRequests } from './mcp/summarise'
+import { startCollector, type CollectedSession, type CollectorHandle } from './collector/session'
+
+/**
+ * The capture session: one bundle that a browser collection and a screen recording can
+ * both contribute to.
+ *
+ * They used to write separate folders, which was survivable but meant a step in the
+ * action trail could never reach the frame it happened on — different folders, different
+ * clocks. Here the session owns a single origin, the recording reports where it began
+ * relative to it, and everything the collector saw can be converted onto the video's
+ * clock. That conversion is what lets a repro step seek the recording, and it is what
+ * assertion generation will need.
+ *
+ * A recording taken with no session open still writes its own bundle exactly as before.
+ */
+
+type Recording = {
+  mediaName: string
+  mediaBytes: number
+  ext: string
+  durationMs: number | null
+  markers: Marker[]
+  hasSystemAudio: boolean
+  source: { id: string; name: string; type: 'screen' | 'window' } | null
+  /** When the recording began, relative to the session's origin. May be negative. */
+  offsetMs: number
+}
+
+type OpenSession = {
+  dir: string
+  startedAt: Date
+  /** Wall clock at the session's origin; every offset is measured from this. */
+  originMs: number
+  collector: CollectorHandle | null
+  recording: Recording | null
+}
+
+let session: OpenSession | null = null
+
+export const isBrowserSessionActive = (): boolean => session?.collector != null
+
+/** The folder a recording should write into, or null when no session is open. */
+export const openSessionDir = (): string | null => session?.dir ?? null
+
+/** Where a recording starting now sits on the session's clock. */
+export const sessionOffsetFor = (startedAtMs: number): number =>
+  session ? startedAtMs - session.originMs : 0
+
+const countRequests = (har: unknown): number =>
+  ((har as { log?: { entries?: unknown[] } })?.log?.entries ?? []).length
+
+function summarise(collected: CollectedSession, failed: number): CollectedSummary {
+  return {
+    console: collected.console.length,
+    consoleErrors: collected.console.filter((c) => c.level === 'error' || c.level === 'uncaught').length,
+    requests: countRequests(collected.har),
+    failedRequests: failed,
+    actions: collected.actions.length,
+    navigations: collected.navigations.length
+  }
+}
+
+export async function startBrowserSession(startUrl?: string): Promise<void> {
+  if (session?.collector) throw new Error('A browser session is already running.')
+
+  const { saveDir } = getSettings()
+  const dir = bundleDir(saveDir, captureBaseName())
+  await mkdir(dir, { recursive: true })
+
+  // Kept beside the app's own data and reused between sessions, so signing in to the
+  // application under test is a once-per-machine cost.
+  const profileDir = join(app.getPath('userData'), 'collector-profile')
+  const started: OpenSession = {
+    dir,
+    startedAt: new Date(),
+    originMs: Date.now(),
+    collector: null,
+    recording: null
+  }
+  session = started
+  try {
+    started.collector = await startCollector({ profileDir, startUrl })
+  } catch (err) {
+    session = null
+    throw err
+  }
+}
+
+/**
+ * Hand a finished recording to the open session instead of writing its own bundle.
+ * Returns false when there is nothing to join, and the caller writes its own.
+ */
+export function contributeRecording(recording: Recording): boolean {
+  if (!session) return false
+  session.recording = recording
+  return true
+}
+
+/** Stop, write the bundle, reveal it. Returns the bundle folder, or null if none ran. */
+export async function stopBrowserSession(): Promise<string | null> {
+  const open = session
+  const handle = open?.collector
+  if (!open || !handle) return null
+  open.collector = null
+  session = null
+
+  const collected = await handle.stop()
+  const { dir } = open
+  await mkdir(dir, { recursive: true })
+
+  // Written first and independently: if the report fails to render, the session's
+  // evidence must still be on disk.
+  await Promise.all([
+    writeFile(join(dir, BUNDLE_FILES.console), JSON.stringify(collected.console, null, 2)),
+    writeFile(join(dir, BUNDLE_FILES.har), JSON.stringify(collected.har, null, 2)),
+    writeFile(
+      join(dir, BUNDLE_FILES.actions),
+      JSON.stringify({ actions: collected.actions, navigations: collected.navigations }, null, 2)
+    )
+  ])
+
+  const rec = open.recording
+  const failed = summariseFailedRequests(collected.har, 100)
+  const meta = buildMeta({
+    // A session that also recorded is both; the kind names the richer half.
+    kind: rec ? 'recording' : 'browser-session',
+    capturedAt: open.startedAt,
+    appVersion: app.getVersion(),
+    platform: process.platform,
+    release: release(),
+    arch: process.arch,
+    locale: app.getLocale(),
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    displays: currentDisplays(),
+    durationMs: collected.durationMs,
+    hasSystemAudio: rec?.hasSystemAudio ?? false,
+    source: rec?.source ?? null,
+    markers: rec?.markers ?? [],
+    recordingOffsetMs: rec ? rec.offsetMs : undefined,
+    ...(rec ? { mediaName: rec.mediaName, mediaBytes: rec.mediaBytes, ext: rec.ext } : {}),
+    collected: summarise(collected, failed.length)
+  })
+
+  try {
+    await writeFile(join(dir, BUNDLE_FILES.meta), JSON.stringify(meta, null, 2))
+    const consoleLines: ReportConsoleLine[] = collected.console.map((c) => ({
+      atMs: c.atMs,
+      level: c.level,
+      text: c.text
+    }))
+    const actions: ReportAction[] = collected.actions.map((a) => ({ atMs: a.atMs, label: actionLabel(a) }))
+    await writeFile(
+      join(dir, BUNDLE_FILES.report),
+      renderReport(meta, { console: consoleLines, actions, failedRequests: failed })
+    )
+  } catch (err) {
+    console.error('[snapit] session data saved, but its report could not be written:', err)
+  }
+
+  shell.showItemInFolder(join(dir, BUNDLE_FILES.report))
+  return dir
+}
