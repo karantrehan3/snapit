@@ -1,4 +1,4 @@
-import { basename } from 'path'
+import { basename, join } from 'path'
 import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
@@ -111,6 +111,9 @@ export function registerSessionTools(server: McpServer, hooks: SessionHooks): vo
         media: meta.media?.file ?? null,
         markers: meta.capture.markers.length,
         collected: meta.collected ?? null,
+        // Read this file directly; it is a Playwright skeleton of the session with the
+        // assertions left out, and its header says where they come from.
+        generatedSpec: meta.collected ? join(dir, BUNDLE_FILES.spec) : null,
         system: meta.system,
         snapit: meta.app.version
       })

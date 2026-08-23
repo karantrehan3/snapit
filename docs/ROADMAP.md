@@ -238,16 +238,27 @@ ships its own Playwright version.
 writes almost no assertions, guesses one selector with no knowledge of repo conventions, and emits a
 linear script with no scenario structure. We reuse the recording approach and replace the generator.
 
-### M2.0 — The codegen shortcut (ship this first)
+### M2.0 — The skeleton spec
 
-The cheapest possible first deliverable, needing almost no new capture code: run a codegen session
-inside snapit, take its **linear spec with no assertions**, and hand that to Claude _alongside the
-Phase 1 bundle_. Claude upgrades the skeleton — adds assertions from the ARIA deltas and the HAR,
-splits scenarios on marker boundaries, renames by intent, matches repo conventions.
+**Built 2026-08-23 — and not the way this was planned.** The milestone assumed `playwright codegen`
+was needed for the mechanical part, Playwright's selector generation. The M1.3 spike then found
+`_enableRecorder` optional, and M1.3 built a trail that is _richer_ than codegen's: timestamped, with
+ranked selector candidates and an ARIA snapshot per action. Shelling out to codegen would now buy
+less than we already have, at the cost of an unsupported internal API. The skeleton is generated
+from our own trail instead.
 
-Codegen supplies the mechanical 60% Playwright already solved. The bundle supplies the 40% codegen
-structurally cannot: what each action was _supposed to accomplish_. Ship this and find out how good
-the output is before investing in M2.1.
+`specgen.ts` emits a runnable Playwright file into every session bundle as `generated.spec.ts`. It
+picks the best locator each element supports — test id, then role and accessible name, then label,
+text, id, and a CSS path only as a last resort because it breaks on any refactor. Redacted fills
+become `process.env.TEST_SECRET` rather than a literal. Markers land between the steps they fell
+between, converted onto the session clock. Verified by generating from a real live session, not
+fixtures.
+
+**It asserts nothing, deliberately.** Which of an action's changes is worth asserting, and what the
+test should be called, are judgements the generator has no basis for. The file's header points
+whoever opens it — human or agent — at `actions.json`'s `ariaAfter` snapshots, the HAR and the
+markers, and says what each is for. `get_session_summary` returns its path so an agent can read it
+directly, rather than spending a tool on it.
 
 ### M2.1 — Assertion inference
 

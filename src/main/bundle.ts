@@ -18,7 +18,8 @@ export const BUNDLE_FILES = {
   report: 'report.html',
   console: 'console.json',
   har: 'network.har',
-  actions: 'actions.json'
+  actions: 'actions.json',
+  spec: 'generated.spec.ts'
 } as const
 
 /** The folder a bundle lives in. A browser session has one but no media inside it. */

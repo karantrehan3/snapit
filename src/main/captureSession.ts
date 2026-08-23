@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from 'fs/promises'
 import { release } from 'os'
-import { join } from 'path'
+import { basename, join } from 'path'
 import { app, shell } from 'electron'
 import { BUNDLE_FILES, buildMeta, bundleDir, type CollectedSummary, type Marker } from './bundle'
 import { captureBaseName } from './filename'
@@ -9,6 +9,7 @@ import { renderReport, type ReportAction, type ReportConsoleLine } from './repor
 import { getSettings } from './settings'
 import { actionLabel } from './collector/actions'
 import { summariseFailedRequests } from './mcp/summarise'
+import { actionsToSpec } from './specgen'
 import { startCollector, type CollectedSession, type CollectorHandle } from './collector/session'
 
 /**
@@ -129,6 +130,24 @@ export async function stopBrowserSession(): Promise<string | null> {
       JSON.stringify({ actions: collected.actions, navigations: collected.navigations }, null, 2)
     )
   ])
+
+  // A Playwright skeleton of what just happened. Written even when the session recorded
+  // nothing worth turning into a test — an empty one costs nothing and its absence is
+  // harder to explain than its emptiness.
+  try {
+    await writeFile(
+      join(dir, BUNDLE_FILES.spec),
+      actionsToSpec({
+        actions: collected.actions,
+        navigations: collected.navigations,
+        markers: open.recording?.markers ?? [],
+        recordingOffsetMs: open.recording?.offsetMs,
+        bundleName: basename(dir)
+      })
+    )
+  } catch (err) {
+    console.error('[snapit] could not write the generated spec:', err)
+  }
 
   const rec = open.recording
   const failed = summariseFailedRequests(collected.har, 100)
