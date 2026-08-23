@@ -72,13 +72,17 @@ No new features.
   export `pixelRatio` or the result comes out soft. Two modes, **solid by default** — pixelated and
   blurred text are both recoverable in some cases, so the safe one is not the opt-in.
 
-**Deferred: notarization.** Decided 2026-08-21 — not doing it for now. The consequence is that
-first launch still needs `xattr -dr com.apple.quarantine`, and ad-hoc-signed builds keep resetting
-Privacy grants on every update. Both are real drags on adoption for a product whose ask is "trust me
-with your screen," so this should be revisited before any wider release. When it comes back:
-`build/afterPack.cjs` runs `codesign --force --deep` manually while `electron-builder.yml` sets
-`identity: null`; notarization needs electron-builder to sign inside-out with hardened runtime and
-entitlements, and Apple discourages `--deep`. That conflict is the trap, not the config.
+**Notarization is the last item, immediately before a wider release.** Deferred 2026-08-21, position
+fixed 2026-08-23. It gates nothing else — no feature depends on it — so it earns nothing by being
+done earlier, and doing it now would mean carrying a paid certificate and a notarisation step
+through every build in between. Meanwhile first launch needs `xattr -dr com.apple.quarantine` and
+ad-hoc-signed builds reset Privacy grants on every update, which is a drag on development but only
+a real cost once other people are installing it.
+
+When it comes back, the trap is not the config: `build/afterPack.cjs` codesigns manually with
+`--deep` while `electron-builder.yml` sets `identity: null`, and notarization needs electron-builder
+to sign inside-out with hardened runtime and entitlements, with `--deep` discouraged by Apple. That
+conflict has to be resolved first.
 
 ### M1.1 — The bundle
 
