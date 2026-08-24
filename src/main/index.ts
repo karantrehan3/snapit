@@ -33,10 +33,12 @@ import { summariseConsole, summariseFailedRequests, summariseSteps } from './mcp
 import type { ActionRecord } from './collector/actions'
 import type { ConsoleEntry } from './collector/session'
 import {
+  beginCapture,
   contributeRecording,
   isBrowserSessionActive,
   openSessionDir,
   sessionOffsetFor,
+  sessionPhase,
   startBrowserSession,
   stopBrowserSession
 } from './captureSession'
@@ -634,6 +636,29 @@ async function endBrowserSession(): Promise<void> {
   }
 }
 
+/**
+ * One entry per phase. During setup the useful action is starting the capture, not
+ * stopping a session the user has not begun using yet.
+ */
+function webCaptureItems(): Electron.MenuItemConstructorOptions[] {
+  if (!isBrowserSessionActive()) {
+    return [{ label: 'Capture a web app…', click: () => void beginBrowserSession() }]
+  }
+  const capturing = sessionPhase() === 'capturing'
+  return [
+    capturing
+      ? { label: '⏹  Stop and save', click: () => void endBrowserSession() }
+      : {
+          label: '▶  Start capture',
+          click: () => {
+            beginCapture()
+            buildTray()
+          }
+        },
+    ...(capturing ? [] : [{ label: 'Cancel capture', click: () => void endBrowserSession() }])
+  ]
+}
+
 function buildTray(): void {
   const { screenshotHotkey, recordHotkey, gifHotkey } = getSettings()
   const template: Electron.MenuItemConstructorOptions[] = [
@@ -659,9 +684,7 @@ function buildTray(): void {
     },
     { label: 'Open image…', click: () => void openImageFromDialog() },
     { type: 'separator' },
-    isBrowserSessionActive()
-      ? { label: '⏹  Stop browser session', click: () => void endBrowserSession() }
-      : { label: 'Start browser session…', click: () => void beginBrowserSession() },
+    ...webCaptureItems(),
     { type: 'separator' },
     { label: 'Settings…', click: openSettingsWindow },
     { label: 'Open save folder', click: () => void shell.openPath(getSettings().saveDir) },

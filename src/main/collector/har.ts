@@ -1,5 +1,6 @@
 /**
- * Response bodies for the requests that failed.
+ * Post-processing for the HAR that chrome-har reconstructs: response bodies for the
+ * requests that failed, and trimming away the setup phase.
  *
  * `chrome-har` reconstructs a HAR from CDP events, but the events never carry a body —
  * that needs a separate `Network.getResponseBody` call per request. Which is why this
@@ -26,6 +27,34 @@ type HarEntry = {
 }
 
 type Har = { log?: { entries?: HarEntry[] } }
+
+type DatedEntry = HarEntry & { startedDateTime?: string }
+
+/**
+ * Drop requests that happened before the capture began.
+ *
+ * Done here rather than by clearing the CDP event buffer, which was the obvious
+ * approach and is wrong: chrome-har maps each request to a page using the frame
+ * lifecycle events that came before it, so throwing those away makes every later
+ * request unmappable and it silently drops them. The event stream stays whole; the
+ * built HAR is filtered instead.
+ */
+export function trimHarBefore<T extends Har>(har: T, cutoffMs: number): T {
+  const entries = har?.log?.entries as DatedEntry[] | undefined
+  if (!Array.isArray(entries)) return har
+  return {
+    ...har,
+    log: {
+      ...har.log,
+      entries: entries.filter((entry) => {
+        const started = entry.startedDateTime ? Date.parse(entry.startedDateTime) : NaN
+        // An entry with no usable timestamp is kept: dropping evidence because its
+        // clock is unreadable is worse than leaving one stale request in.
+        return Number.isNaN(started) || started >= cutoffMs
+      })
+    }
+  }
+}
 
 /**
  * Merge fetched bodies into the HAR by request id.

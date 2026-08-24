@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { MAX_BODY_CHARS, attachResponseBodies, isFailedStatus } from '../bodies'
+import { MAX_BODY_CHARS, attachResponseBodies, isFailedStatus, trimHarBefore } from '../har'
 
 describe('isFailedStatus', () => {
   it('treats 4xx and 5xx as failures', () => {
@@ -67,5 +67,53 @@ describe('attachResponseBodies', () => {
   it('survives a malformed or empty HAR', () => {
     expect(attachResponseBodies({ log: { entries: [] } }, {})).toEqual({ log: { entries: [] } })
     expect(attachResponseBodies({}, {})).toEqual({})
+  })
+})
+
+describe('trimHarBefore', () => {
+  const at = (iso: string, url: string): Record<string, unknown> => ({
+    startedDateTime: iso,
+    request: { url },
+    response: { status: 200 }
+  })
+  const cutoff = Date.parse('2026-08-25T10:00:00.000Z')
+  const har = {
+    log: {
+      entries: [
+        at('2026-08-25T09:59:00.000Z', '/login'),
+        at('2026-08-25T09:59:30.000Z', '/auth/token'),
+        at('2026-08-25T10:00:00.000Z', '/app'),
+        at('2026-08-25T10:00:05.000Z', '/api/orders')
+      ]
+    }
+  }
+
+  it('drops what happened during setup', () => {
+    const urls = trimHarBefore(har, cutoff).log.entries.map((e) => e.request.url)
+    expect(urls).toEqual(['/app', '/api/orders'])
+  })
+
+  it('keeps a request that began exactly at the cutoff', () => {
+    expect(trimHarBefore(har, cutoff).log.entries.some((e) => e.request.url === '/app')).toBe(true)
+  })
+
+  it('keeps everything when the capture began at launch', () => {
+    expect(trimHarBefore(har, 0).log.entries).toHaveLength(4)
+  })
+
+  it('keeps an entry whose timestamp cannot be read', () => {
+    // Losing evidence because a clock is unreadable is worse than one stale request.
+    const odd = { log: { entries: [{ request: { url: '/x' } }, { startedDateTime: 'nonsense' }] } }
+    expect(trimHarBefore(odd, cutoff).log.entries).toHaveLength(2)
+  })
+
+  it('does not mutate the HAR it was given', () => {
+    trimHarBefore(har, cutoff)
+    expect(har.log.entries).toHaveLength(4)
+  })
+
+  it('survives a malformed HAR', () => {
+    expect(trimHarBefore({}, cutoff)).toEqual({})
+    expect(trimHarBefore({ log: { entries: [] } }, cutoff).log.entries).toEqual([])
   })
 })

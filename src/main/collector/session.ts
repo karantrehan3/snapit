@@ -3,9 +3,9 @@ import { existsSync } from 'fs'
 import { mkdir } from 'fs/promises'
 import { chromium, type Browser, type BrowserContext, type CDPSession, type Page } from 'playwright-core'
 import { harFromMessages } from 'chrome-har'
-import { cdpEndpoint, chromeCandidates, launchArgs } from './chrome'
+import { LANDING_PAGE, cdpEndpoint, chromeCandidates, launchArgs } from './chrome'
 import { redactHar } from './redact'
-import { MAX_BODIES, attachResponseBodies, isFailedStatus, type ResponseBody } from './bodies'
+import { MAX_BODIES, attachResponseBodies, isFailedStatus, trimHarBefore, type ResponseBody } from './har'
 import {
   BINDING_NAME,
   INJECTED_SCRIPT,
@@ -80,6 +80,13 @@ export type CollectedSession = {
 
 export type CollectorHandle = {
   endpoint: string
+  /**
+   * Throw away everything collected so far and restart the clock: the capture begins
+   * now. Getting to the broken page — signing in, navigating, picking an account — is
+   * not part of the flow being captured, and leaving it in means a trail that opens
+   * with twenty steps of setup and a HAR that is mostly auth traffic.
+   */
+  beginCapture: () => void
   stop: () => Promise<CollectedSession>
 }
 
@@ -135,7 +142,7 @@ export async function startCollector(opts: CollectorOptions): Promise<CollectorH
   // Launch blank and navigate only once CDP is attached. Chrome starts fetching the
   // moment it has a URL, and Network.enable is per-session — handing it the target URL
   // up front loses every request the first page load makes, which is most of them.
-  const child: ChildProcess = spawn(chromePath, launchArgs({ port, profileDir, startUrl: 'about:blank' }), {
+  const child: ChildProcess = spawn(chromePath, launchArgs({ port, profileDir, startUrl: LANDING_PAGE }), {
     stdio: 'ignore',
     detached: false
   })
@@ -144,8 +151,8 @@ export async function startCollector(opts: CollectorOptions): Promise<CollectorH
     state.killed = true
   })
 
-  const startedAt = new Date()
-  const startedPerf = Date.now()
+  let startedAt = new Date()
+  let startedPerf = Date.now()
   const messages: { method: string; params: unknown }[] = []
   const consoleEntries: ConsoleEntry[] = []
   const navigations: NavigationEntry[] = []
@@ -154,7 +161,11 @@ export async function startCollector(opts: CollectorOptions): Promise<CollectorH
   // them. Keyed by request id, which is what chrome-har puts on each HAR entry.
   const bodies: Record<string, ResponseBody> = {}
   const failedRequestIds = new Set<string>()
+  /** Wall clock of the capture's start; requests before it belong to setup. */
+  let captureFromMs = 0
   const attached = new WeakSet<Page>()
+  // Kept so beginCapture can seed the trail with wherever setup left the browser.
+  let primaryPage: Page | null = null
   // ariaSnapshot is a round trip to the page; serialise them so a burst of clicks
   // cannot pile up concurrent calls on a page that is still navigating.
   let snapshots: Promise<void> = Promise.resolve()
@@ -171,6 +182,7 @@ export async function startCollector(opts: CollectorOptions): Promise<CollectorH
   const attachPage = async (page: Page): Promise<void> => {
     if (attached.has(page)) return
     attached.add(page)
+    primaryPage ??= page
     let cdp: CDPSession
     try {
       cdp = await page.context().newCDPSession(page)
@@ -304,6 +316,24 @@ export async function startCollector(opts: CollectorOptions): Promise<CollectorH
     throw err
   }
 
+  const beginCapture = (): void => {
+    // messages is deliberately NOT cleared: chrome-har needs the frame lifecycle events
+    // that came before a request to map it to a page, and without them it drops the
+    // request entirely. The HAR is trimmed by timestamp at the end instead.
+    captureFromMs = Date.now()
+    consoleEntries.length = 0
+    navigations.length = 0
+    actions = []
+    failedRequestIds.clear()
+    for (const key of Object.keys(bodies)) delete bodies[key]
+    startedAt = new Date()
+    startedPerf = Date.now()
+    // Without this the spec has no page.goto: the navigation that got here was
+    // discarded with the rest of the setup.
+    const url = primaryPage?.url()
+    if (url && /^https?:/.test(url)) navigations.push({ atMs: 0, url })
+  }
+
   const stop = async (): Promise<CollectedSession> => {
     const durationMs = since()
     // Let any in-flight snapshot finish, so the last action is not left bare.
@@ -318,12 +348,10 @@ export async function startCollector(opts: CollectorOptions): Promise<CollectorH
 
     let har: unknown = { log: { version: '1.2', entries: [] } }
     try {
-      har = attachResponseBodies(
-        harFromMessages(messages, { includeTextFromResponseBody: false }) as {
-          log?: { entries?: [] }
-        },
-        bodies
-      )
+      const built = harFromMessages(messages, { includeTextFromResponseBody: false }) as {
+        log?: { entries?: [] }
+      }
+      har = attachResponseBodies(trimHarBefore(built, captureFromMs), bodies)
     } catch (err) {
       // A malformed event stream must not lose the console and navigation trail too.
       console.error('[snapit] could not build a HAR from the collected events:', err)
@@ -339,5 +367,5 @@ export async function startCollector(opts: CollectorOptions): Promise<CollectorH
     }
   }
 
-  return { endpoint, stop }
+  return { endpoint, beginCapture, stop }
 }

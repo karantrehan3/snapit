@@ -1,6 +1,7 @@
+import { existsSync } from 'fs'
 import { mkdir, writeFile } from 'fs/promises'
 import { release } from 'os'
-import { basename, join } from 'path'
+import { basename, dirname, join } from 'path'
 import { app, shell } from 'electron'
 import { BUNDLE_FILES, buildMeta, bundleDir, type CollectedSummary, type Marker } from './bundle'
 import { captureBaseName } from './filename'
@@ -38,8 +39,15 @@ type Recording = {
   offsetMs: number
 }
 
+/**
+ * `setup` is everything before the flow starts — signing in, navigating, getting to the
+ * broken page. It is collected but discarded, because it is not what is being captured.
+ */
+export type SessionPhase = 'setup' | 'capturing'
+
 type OpenSession = {
   dir: string
+  phase: SessionPhase
   startedAt: Date
   /** Wall clock at the session's origin; every offset is measured from this. */
   originMs: number
@@ -50,6 +58,38 @@ type OpenSession = {
 let session: OpenSession | null = null
 
 export const isBrowserSessionActive = (): boolean => session?.collector != null
+
+export const sessionPhase = (): SessionPhase | null => session?.phase ?? null
+
+/**
+ * End setup and start the capture. Everything collected so far is thrown away and the
+ * clock restarts, so the trail, the HAR and the generated spec all begin at the flow.
+ */
+export function beginCapture(): boolean {
+  if (!session?.collector || session.phase === 'capturing') return false
+  session.collector.beginCapture()
+  session.phase = 'capturing'
+  // A recording already running started before the capture; a negative offset is the
+  // correct description of that, and videoTimeSec handles it.
+  session.originMs = Date.now()
+  session.startedAt = new Date()
+  return true
+}
+
+/**
+ * Name the profile so Chrome's own UI identifies the window as snapit's. Only on first
+ * run — Chrome owns this file afterwards, and a failure here is cosmetic.
+ */
+async function markProfile(profileDir: string): Promise<void> {
+  const prefs = join(profileDir, 'Default', 'Preferences')
+  if (existsSync(prefs)) return
+  try {
+    await mkdir(dirname(prefs), { recursive: true })
+    await writeFile(prefs, JSON.stringify({ profile: { name: 'snapit — collecting' } }))
+  } catch (err) {
+    console.warn('[snapit] could not name the collector profile:', err)
+  }
+}
 
 /** The folder a recording should write into, or null when no session is open. */
 export const openSessionDir = (): string | null => session?.dir ?? null
@@ -82,8 +122,10 @@ export async function startBrowserSession(startUrl?: string): Promise<void> {
   // Kept beside the app's own data and reused between sessions, so signing in to the
   // application under test is a once-per-machine cost.
   const profileDir = join(app.getPath('userData'), 'collector-profile')
+  await markProfile(profileDir)
   const started: OpenSession = {
     dir,
+    phase: 'setup',
     startedAt: new Date(),
     originMs: Date.now(),
     collector: null,
@@ -96,6 +138,9 @@ export async function startBrowserSession(startUrl?: string): Promise<void> {
     session = null
     throw err
   }
+  // A caller that named a URL has said where the flow starts, so there is no setup to
+  // sit through. Without one, the user gets themselves ready and starts the capture.
+  if (startUrl) beginCapture()
 }
 
 /**
@@ -113,6 +158,8 @@ export async function stopBrowserSession(): Promise<string | null> {
   const open = session
   const handle = open?.collector
   if (!open || !handle) return null
+  // Stopping during setup still writes a bundle; it just holds whatever setup did,
+  // which is better than silently discarding a session someone ran.
   open.collector = null
   session = null
 
