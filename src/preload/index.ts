@@ -23,7 +23,15 @@ export type WorkArea = { x: number; y: number; w: number; h: number }
 /** What the overlay renderer needs to know about the current capture session. */
 export type CaptureSession = (
   | { mode: 'screenshot'; frame: Frame }
-  | { mode: 'record'; source: DisplaySource }
+  | {
+      mode: 'record'
+      source: DisplaySource
+      /**
+       * Skip the setup panel and record this source immediately. Set when snapit itself
+       * knows what to record — the browser window it just opened.
+       */
+      auto?: { sourceId: string }
+    }
   | { mode: 'gif'; source: DisplaySource }
 ) & { workArea: WorkArea }
 

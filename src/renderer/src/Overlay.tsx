@@ -58,7 +58,12 @@ export function Overlay(): ReactElement | null {
       ) : session.mode === 'gif' ? (
         <GifOverlay source={session.source} workArea={session.workArea} onReady={onReady} />
       ) : (
-        <RecordOverlay source={session.source} workArea={session.workArea} onReady={onReady} />
+        <RecordOverlay
+          source={session.source}
+          auto={session.auto}
+          workArea={session.workArea}
+          onReady={onReady}
+        />
       )}
     </Suspense>
   )

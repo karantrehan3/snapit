@@ -2,7 +2,7 @@ import { existsSync } from 'fs'
 import { mkdir, writeFile } from 'fs/promises'
 import { release } from 'os'
 import { basename, dirname, join } from 'path'
-import { app, shell } from 'electron'
+import { app, desktopCapturer, shell } from 'electron'
 import { BUNDLE_FILES, buildMeta, bundleDir, type CollectedSummary, type Marker } from './bundle'
 import { captureBaseName } from './filename'
 import { currentDisplays } from './displays'
@@ -48,6 +48,10 @@ export type SessionPhase = 'setup' | 'capturing'
 type OpenSession = {
   dir: string
   phase: SessionPhase
+  /** desktopCapturer id of the Chrome window snapit launched, once it can be found. */
+  windowSourceId: string | null
+  /** True when snapit started the recording itself, so one Stop should end both. */
+  autoRecording: boolean
   startedAt: Date
   /** Wall clock at the session's origin; every offset is measured from this. */
   originMs: number
@@ -60,6 +64,41 @@ let session: OpenSession | null = null
 export const isBrowserSessionActive = (): boolean => session?.collector != null
 
 export const sessionPhase = (): SessionPhase | null => session?.phase ?? null
+
+/** Snapit started the recording, so stopping it should stop the session too. */
+export const isAutoRecording = (): boolean => session?.autoRecording === true
+
+export function markAutoRecording(): void {
+  if (session) session.autoRecording = true
+}
+
+/** The Chrome window snapit launched, so a recording can target it without a picker. */
+export const sessionWindowSourceId = (): string | null => session?.windowSourceId ?? null
+
+/**
+ * Find the window snapit just opened.
+ *
+ * The landing page's title is the marker — it is set precisely so this is possible, and
+ * it is only reliable before the user navigates away, which is why this runs at launch
+ * and the answer is kept.
+ */
+async function findLaunchedWindow(): Promise<string | null> {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    try {
+      const sources = await desktopCapturer.getSources({
+        types: ['window'],
+        thumbnailSize: { width: 0, height: 0 }
+      })
+      const match = sources.find((s) => s.name.includes('snapit — collecting'))
+      if (match) return match.id
+    } catch (err) {
+      console.warn('[snapit] could not list windows to find the collector browser:', err)
+      return null
+    }
+    await new Promise((r) => setTimeout(r, 300))
+  }
+  return null
+}
 
 /**
  * End setup and start the capture. Everything collected so far is thrown away and the
@@ -126,6 +165,8 @@ export async function startBrowserSession(startUrl?: string): Promise<void> {
   const started: OpenSession = {
     dir,
     phase: 'setup',
+    windowSourceId: null,
+    autoRecording: false,
     startedAt: new Date(),
     originMs: Date.now(),
     collector: null,
@@ -138,6 +179,12 @@ export async function startBrowserSession(startUrl?: string): Promise<void> {
     session = null
     throw err
   }
+  // Not awaited: the user is already looking at the browser, and nothing needs this
+  // until they start the capture.
+  void findLaunchedWindow().then((id) => {
+    if (session === started) started.windowSourceId = id
+  })
+
   // A caller that named a URL has said where the flow starts, so there is no setup to
   // sit through. Without one, the user gets themselves ready and starts the capture.
   if (startUrl) beginCapture()

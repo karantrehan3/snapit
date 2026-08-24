@@ -35,6 +35,9 @@ import type { ConsoleEntry } from './collector/session'
 import {
   beginCapture,
   contributeRecording,
+  isAutoRecording,
+  markAutoRecording,
+  sessionWindowSourceId,
   isBrowserSessionActive,
   openSessionDir,
   sessionOffsetFor,
@@ -96,7 +99,7 @@ type WorkArea = { x: number; y: number; w: number; h: number }
 
 type CaptureSession = (
   | { mode: 'screenshot'; frame: Frame }
-  | { mode: 'record'; source: DisplaySource }
+  | { mode: 'record'; source: DisplaySource; auto?: { sourceId: string } }
   | { mode: 'gif'; source: DisplaySource }
 ) & { workArea: WorkArea }
 
@@ -231,6 +234,16 @@ async function persistRecording(data: ArrayBuffer, ext: string, details: unknown
       source: recordSource,
       offsetMs: sessionOffsetFor(recordStartedAt ?? Date.now())
     })
+    // Snapit started this recording as part of a web-app capture, so its Stop is the
+    // capture's Stop. The session reveals the finished report, so this one stays quiet
+    // rather than opening Finder twice.
+    if (isAutoRecording()) {
+      closeOverlayWindow()
+      recordStartedAt = null
+      recordSource = null
+      void endBrowserSession()
+      return mediaPath
+    }
     return finish(mediaPath)
   }
 
@@ -637,6 +650,38 @@ async function endBrowserSession(): Promise<void> {
 }
 
 /**
+ * Begin the capture: trim the collector back to now, and start recording the browser
+ * window snapit opened. No source picker — snapit launched the window, so it knows
+ * which one, and being asked to point at it would be the interface apologising for
+ * its own implementation.
+ */
+async function startWebAppCapture(): Promise<void> {
+  beginCapture()
+  const sourceId = sessionWindowSourceId()
+  if (!sourceId) {
+    // Rare: the window could not be identified. Better a capture with no video than
+    // no capture, and the collector is already running.
+    console.warn('[snapit] could not find the collector browser window; capturing without video')
+    buildTray()
+    return
+  }
+  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+  try {
+    session = {
+      mode: 'record',
+      workArea: windowWorkArea(display),
+      source: await getDisplaySource(display),
+      auto: { sourceId }
+    }
+    markAutoRecording()
+    showOverlay(display)
+  } catch (err) {
+    console.error('[snapit] could not start recording the collector browser:', err)
+  }
+  buildTray()
+}
+
+/**
  * One entry per phase. During setup the useful action is starting the capture, not
  * stopping a session the user has not begun using yet.
  */
@@ -648,13 +693,7 @@ function webCaptureItems(): Electron.MenuItemConstructorOptions[] {
   return [
     capturing
       ? { label: '⏹  Stop and save', click: () => void endBrowserSession() }
-      : {
-          label: '▶  Start capture',
-          click: () => {
-            beginCapture()
-            buildTray()
-          }
-        },
+      : { label: '▶  Start capture', click: () => void startWebAppCapture() },
     ...(capturing ? [] : [{ label: 'Cancel capture', click: () => void endBrowserSession() }])
   ]
 }

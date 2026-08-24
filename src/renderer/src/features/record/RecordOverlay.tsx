@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactElement } from 'react'
+import { useEffect, useRef, useState, type ReactElement } from 'react'
 import type { DisplaySource, WorkArea } from '@preload/index'
 import { useLiveSurface } from '../annotate-live/useLiveSurface'
 import { useRecorder } from './useRecorder'
@@ -16,6 +16,7 @@ import { DEFAULT_QUALITY, type QualityPreset } from './quality'
 import { RecordingChrome } from './RecordingChrome'
 import {
   barDivider,
+  barSegmented,
   centerHint,
   commandBar,
   hintAction,
@@ -26,6 +27,7 @@ import {
   iconToggle,
   primaryButton,
   regionBox,
+  segment,
   stage
 } from './styles'
 
@@ -42,10 +44,13 @@ import {
 export function RecordOverlay({
   source,
   workArea,
+  auto,
   onReady
 }: {
   source: DisplaySource
   workArea: WorkArea
+  /** Set when snapit knows what to record: the browser window it just opened. */
+  auto?: { sourceId: string }
   onReady?: () => void
 }): ReactElement {
   const [systemAudio, setSystemAudio] = useState(true)
@@ -64,7 +69,8 @@ export function RecordOverlay({
   const { selectedId, canRegion } = picker
   // Best-effort: a window title rarely names its browser on macOS, so the offer is made
   // for any window and simply worded more confidently when the name gives it away.
-  const hint = browserHint(picker.sources.find((s) => s.id === selectedId) ?? null)
+  const detected = browserHint(picker.sources.find((s) => s.id === selectedId) ?? null)
+  const hint = detected?.confident ? detected : null
   const region = useRegionSelect(canRegion)
 
   // `canRegion` means the source is the display this overlay covers, which is what makes
@@ -72,6 +78,38 @@ export function RecordOverlay({
   // would stretch them onto a different area.
   const surface = useLiveSurface(canRegion)
   const recorder = useRecorder(surface.options)
+
+  // Snapit opened the window and knows what to record, so the setup panel would only be
+  // asking the user to confirm a choice already made for them. Start straight away.
+  const startedAuto = useRef(false)
+  useEffect(() => {
+    if (!auto || startedAuto.current) return
+    startedAuto.current = true
+    void recorder.start({
+      selectedId: auto.sourceId,
+      systemAudio: false,
+      mic: false,
+      fps,
+      regionMode: false,
+      box: null,
+      annotatable: false,
+      fallbackWidth: source.width,
+      fallbackHeight: source.height,
+      quality,
+      retroWindow
+    })
+    // Deliberately once, on mount: re-running would start a second recording.
+  }, [auto])
+
+  if (auto && recorder.phase !== 'recording') {
+    return (
+      <div style={stage}>
+        <div style={centerHint}>
+          {recorder.error ? <span style={errorText}>{recorder.error}</span> : 'Starting capture…'}
+        </div>
+      </div>
+    )
+  }
 
   if (recorder.phase === 'recording') {
     return (
@@ -125,6 +163,23 @@ export function RecordOverlay({
       )}
 
       <div style={commandBar} onMouseDown={(e) => e.stopPropagation()}>
+        {/* The one decision worth making first: pixels only, or the whole story. A web
+            app capture opens its own browser, so there is nothing to pick after this. */}
+        <div style={barSegmented} title="What are you capturing?">
+          <button type="button" style={segment(true)}>
+            Screen
+          </button>
+          <button
+            type="button"
+            style={segment(false)}
+            onClick={() => window.snapit.captureWebApp()}
+            title="Opens a browser snapit collects from: console, network, steps and a test"
+          >
+            Web app
+          </button>
+        </div>
+
+        <div style={barDivider} />
         <SourceDropdown
           sources={picker.sources}
           loading={picker.loading}
