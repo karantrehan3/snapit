@@ -16,6 +16,42 @@ export const stage: CSSProperties = {
   color: '#fff'
 }
 
+/**
+ * Sits below the command bar, quieter than it. The offer has to be visible without
+ * competing with the controls someone came here to use.
+ */
+export const hintBar: CSSProperties = {
+  position: 'fixed',
+  left: '50%',
+  top: 88,
+  transform: 'translateX(-50%)',
+  display: 'flex',
+  alignItems: 'center',
+  gap: 10,
+  maxWidth: 620,
+  padding: '8px 12px',
+  borderRadius: 12,
+  background: 'rgba(28, 28, 30, 0.62)',
+  backdropFilter: 'blur(20px) saturate(180%)',
+  WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+  border: '1px solid rgba(255, 255, 255, 0.10)',
+  color: 'rgba(255, 255, 255, 0.72)',
+  font: '12px/1.45 -apple-system, system-ui, sans-serif'
+}
+
+export const hintAction: CSSProperties = {
+  appearance: 'none',
+  flex: 'none',
+  border: '1px solid rgba(255, 255, 255, 0.22)',
+  borderRadius: 8,
+  padding: '4px 10px',
+  background: 'transparent',
+  color: '#fff',
+  font: '600 12px -apple-system, system-ui, sans-serif',
+  cursor: 'pointer',
+  whiteSpace: 'nowrap'
+}
+
 /** Frosted-glass control bar, docked bottom-centre and floating over the screen. */
 export const commandBar: CSSProperties = {
   position: 'fixed',

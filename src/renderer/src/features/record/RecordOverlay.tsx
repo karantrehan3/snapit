@@ -9,6 +9,7 @@ import { FpsControl } from './FpsControl'
 import { ModeToggle } from './ModeToggle'
 import { QualityControl } from './QualityControl'
 import { RetroControl } from './RetroControl'
+import { browserHint } from './browserHint'
 import { DEFAULT_RETRO } from './retroWindow'
 import type { RetroWindow } from './retroBuffer'
 import { DEFAULT_QUALITY, type QualityPreset } from './quality'
@@ -17,6 +18,8 @@ import {
   barDivider,
   centerHint,
   commandBar,
+  hintAction,
+  hintBar,
   DIM,
   errorText,
   ghostIcon,
@@ -59,6 +62,9 @@ export function RecordOverlay({
 
   const picker = useSourcePicker(source.id)
   const { selectedId, canRegion } = picker
+  // Best-effort: a window title rarely names its browser on macOS, so the offer is made
+  // for any window and simply worded more confidently when the name gives it away.
+  const hint = browserHint(picker.sources.find((s) => s.id === selectedId) ?? null)
   const region = useRegionSelect(canRegion)
 
   // `canRegion` means the source is the display this overlay covers, which is what makes
@@ -106,6 +112,15 @@ export function RecordOverlay({
       {recorder.error && (
         <div style={{ ...centerHint, color: '#ff453a' }}>
           <span style={errorText}>{recorder.error}</span>
+        </div>
+      )}
+
+      {hint && (
+        <div style={hintBar} onMouseDown={(e) => e.stopPropagation()}>
+          <span>{hint.text}</span>
+          <button type="button" style={hintAction} onClick={() => window.snapit.captureWebApp()}>
+            Capture a web app instead
+          </button>
         </div>
       )}
 

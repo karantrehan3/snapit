@@ -1024,6 +1024,13 @@ app.whenReady().then(() => {
   // format for Slack/GitHub/Jira). Flag the next mode, then close the GIF overlay —
   // its 'closed' handler starts the record session after teardown, so the new
   // session isn't cleared by the outgoing window.
+  // Offered from the record setup bar: what they actually want is the collector, not
+  // a silent movie of a browser.
+  ipcMain.on('capture:web-app', () => {
+    closeOverlayWindow()
+    void beginBrowserSession()
+  })
+
   ipcMain.on('capture:switch-to-record', () => {
     if (!session) {
       void startCapture('record')

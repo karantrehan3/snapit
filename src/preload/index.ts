@@ -75,6 +75,8 @@ const api = {
   closeOverlay: (): void => ipcRenderer.send('overlay:close'),
   /** Switch the current GIF setup to a video recording (better for Slack/GitHub/Jira). */
   recordVideoInstead: (): void => ipcRenderer.send('capture:switch-to-record'),
+  /** Abandon this recording and open a browser snapit collects from instead. */
+  captureWebApp: (): void => ipcRenderer.send('capture:web-app'),
   /** List capturable sources (screens + windows) with preview thumbnails. */
   listSources: (): Promise<RecordSourceInfo[]> => ipcRenderer.invoke('record:list-sources'),
   /** Set the next recording's system/loopback audio + source id (before getDisplayMedia). */
