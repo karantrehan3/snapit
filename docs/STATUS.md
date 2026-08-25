@@ -4,7 +4,7 @@
 > [`DESIGN.md`](DESIGN.md) is kept for its stack rationale and locked decisions; its phase 3–4
 > roadmap is superseded by `ROADMAP.md`.
 >
-> Last updated: 2026-08-22.
+> Last updated: 2026-08-25.
 
 ## What this is
 
@@ -58,6 +58,26 @@ A recording saves as a folder holding the media, `meta.json` and a self-containe
 media keeps the name it would have had as a loose file. Settings has a checkbox to go back to flat
 files. `report.html` must never fetch anything from the network — a test enforces it.
 
+The report is two columns: the player sticks beside the timeline, and playback moves a highlight
+down each list, so a timestamp is worth clicking because the frame it seeks is still on screen. The
+counts lead and double as the jump list; the environment table is folded away. Repeated console
+lines collapse with a count, and chatter hides behind a CSS-only filter that starts on — CSS-only so
+a session with no video still ships no script at all.
+
+**Look** (`styles/tokens.css`, `components/Icon.tsx`)
+One palette, in custom properties, for two contexts: chrome floating over someone else's screen, and
+windows of our own. Meaning colours (blue selected, red recording) are shared. Annotation colours are
+**not** tokens — Konva draws them onto a canvas, which cannot resolve a variable, so they stay
+literal in `annotate/types.ts`. Icons are one inline-SVG set on a 24-unit grid, stroked in
+`currentColor`; no emoji, no Unicode glyphs. Focus rings are an `outline`, because inline styles beat
+a stylesheet and most controls set their own `box-shadow`.
+
+**Capture preferences** (`main/capturePrefs.ts`)
+The bar opens where it was left: fps, quality, retro window, audio, MP4/GIF. The prefs travel with
+the capture session rather than being fetched by the overlay, so it renders once instead of painting
+defaults and correcting itself. Saved when a capture starts, not on every toggle. The silent bar
+keeps its own frame rate — 30 against the recorder's 60, because a 60fps GIF is enormous.
+
 **Markers** (`features/record/markers.ts`)
 ⌘⇧M or the pill's flag drops a timestamped marker; they land in `meta.json` and become a seekable
 list in the report. The hotkey is registered only while recording.
@@ -70,10 +90,13 @@ partially-written ones the save path deliberately allows.
 ## Conventions that matter
 
 - **Pure logic lives in its own electron-free module and is unit-tested**; the fs/electron wrapper
-  around it is not. See `filename.ts`, `bundle.ts`, `mcp/region.ts`, `record/retroBuffer.ts`.
+  around it is not. See `filename.ts`, `bundle.ts`, `mcp/region.ts`, `record/retroBuffer.ts`,
+  `capturePrefs.ts`.
 - Tests live in `tests/` beside the code, `src/**/tests/*.spec.ts`, environment `node` — there is no
   DOM, so component behaviour is not unit-tested.
 - Renderer is feature-based: `features/<name>/{Component.tsx, useThing.ts, types.ts, styles.ts}`.
+- Colours, radii, shadows and the font stack come from `styles/tokens.css`; a new literal in a
+  `styles.ts` is a token that has not been added yet. New iconography goes in `components/Icon.tsx`.
 - Prettier: no semicolons, single quotes, width 110. Run `npm run format`.
 - Comments earn their place or come out.
 
