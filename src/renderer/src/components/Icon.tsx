@@ -36,6 +36,11 @@ export type IconName =
   | 'grip'
   | 'globe'
   | 'star'
+  | 'film'
+  | 'image'
+  | 'folder'
+  | 'trash'
+  | 'clipboard'
 
 const PATHS: Record<IconName, ReactElement> = {
   move: (
@@ -137,7 +142,37 @@ const PATHS: Record<IconName, ReactElement> = {
       <ellipse cx="12" cy="12" rx="4" ry="8.5" />
     </>
   ),
-  star: <path d="M12 3.5l2.6 5.6 6 .8-4.4 4.2 1.1 6.1-5.3-3-5.3 3 1.1-6.1L3.4 9.9l6-.8z" />
+  star: <path d="M12 3.5l2.6 5.6 6 .8-4.4 4.2 1.1 6.1-5.3-3-5.3 3 1.1-6.1L3.4 9.9l6-.8z" />,
+  film: (
+    <>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="M8 5v14M16 5v14M3 12h18" />
+    </>
+  ),
+  image: (
+    <>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <circle cx="8.5" cy="10" r="1.5" />
+      <path d="M4 17l4.5-4.5 3.5 3.5 3-3L20 17" />
+    </>
+  ),
+  folder: (
+    <path d="M3.5 7a1.5 1.5 0 0 1 1.5-1.5h3.8l2 2.5H19a1.5 1.5 0 0 1 1.5 1.5v8A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5z" />
+  ),
+  trash: (
+    <>
+      <path d="M4 6.5h16M9.5 6.5V4.5h5v2" />
+      <path d="M6.5 6.5l.8 12a1.5 1.5 0 0 0 1.5 1.4h6.4a1.5 1.5 0 0 0 1.5-1.4l.8-12" />
+      <path d="M10.5 10.5v6M13.5 10.5v6" />
+    </>
+  ),
+  clipboard: (
+    <>
+      <path d="M9 4.5h6v3H9z" />
+      <path d="M9 6H6.5A1.5 1.5 0 0 0 5 7.5v11A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5v-11A1.5 1.5 0 0 0 17.5 6H15" />
+      <path d="M8.5 12h7M8.5 15.5h4.5" />
+    </>
+  )
 }
 
 /**

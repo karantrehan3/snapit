@@ -76,6 +76,27 @@
   outline-offset: 2px;
 }
 
+/*
+ * Hover states, which an inline style object cannot express at all. Keyed on data
+ * attributes rather than classes so the styling stays where the rest of it is — in the
+ * feature's styles.ts — and this file only supplies what CSS alone can do.
+ */
+[data-row]:hover {
+  background: var(--surface-sunken);
+}
+[data-row][data-selected='true']:hover {
+  background: var(--accent-tint);
+}
+[data-action]:hover {
+  border-color: var(--ink-3);
+  color: var(--ink);
+}
+[data-action][data-danger='true']:hover {
+  border-color: var(--danger);
+  background: rgba(255, 59, 48, 0.08);
+  color: var(--danger);
+}
+
 /* Controls inherit the app's font instead of the platform's form default. */
 button,
 input,

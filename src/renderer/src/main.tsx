@@ -10,6 +10,8 @@ import { About } from '@renderer/features/about/About'
 const ImageEditor = lazy(() =>
   import('@renderer/features/edit/ImageEditor').then((m) => ({ default: m.ImageEditor }))
 )
+// Lazy too: the library is its own window, and the overlay must not carry its bundle.
+const Library = lazy(() => import('@renderer/features/library/Library').then((m) => ({ default: m.Library })))
 
 const container = document.getElementById('root')
 if (!container) throw new Error('Root element #root not found')
@@ -20,6 +22,10 @@ const view =
     <Settings />
   ) : route === 'about' ? (
     <About />
+  ) : route === 'library' ? (
+    <Suspense fallback={null}>
+      <Library />
+    </Suspense>
   ) : route === 'edit' ? (
     <Suspense fallback={null}>
       <ImageEditor />

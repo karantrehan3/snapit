@@ -21,6 +21,22 @@ export type RecordSourceInfo = { id: string; name: string; type: 'screen' | 'win
 export type WorkArea = { x: number; y: number; w: number; h: number }
 
 /** What the overlay renderer needs to know about the current capture session. */
+/** One capture as the library shows it. Mirrors main's LibraryEntry. */
+export type LibraryEntry = {
+  path: string
+  name: string
+  kind: 'screenshot' | 'recording' | 'session'
+  capturedAt: string
+  bytes: number
+  durationMs: number | null
+  mediaPath: string | null
+  reportPath: string | null
+  consoleErrors: number
+  failedRequests: number
+  steps: number
+  markers: number
+}
+
 /** Setup is collected and discarded; capturing is what reaches the report. */
 export type SessionPhase = 'setup' | 'capturing'
 
@@ -108,6 +124,24 @@ const api = {
   recordVideoInstead: (): void => ipcRenderer.send('capture:switch-to-record'),
   /** Abandon this recording and open a browser snapit collects from instead. */
   captureWebApp: (): void => ipcRenderer.send('capture:web-app'),
+  /** Every capture in the save folder, newest first. */
+  listLibrary: (): Promise<LibraryEntry[]> => ipcRenderer.invoke('library:list'),
+  /** A capture's thumbnail as a data URL, or null when the platform cannot make one. */
+  captureThumbnail: (path: string): Promise<string | null> => ipcRenderer.invoke('library:thumbnail', path),
+  /** Open a capture in whatever the OS uses for it — the report, or the media itself. */
+  openCapture: (path: string): Promise<string> => ipcRenderer.invoke('library:open', path),
+  revealCapture: (path: string): void => ipcRenderer.send('library:reveal', path),
+  copyCaptureMarkdown: (path: string): Promise<void> => ipcRenderer.invoke('library:copy-markdown', path),
+  editCapture: (path: string): Promise<void> => ipcRenderer.invoke('library:edit', path),
+  /** Confirmed by a native dialog in main; resolves false when the user backs out. */
+  deleteCapture: (path: string, name: string): Promise<boolean> =>
+    ipcRenderer.invoke('library:delete', path, name),
+  /** Fires when a capture is written, so an open library does not go stale. */
+  onLibraryChanged: (cb: () => void): (() => void) => {
+    const handler = (): void => cb()
+    ipcRenderer.on('library:changed', handler)
+    return () => ipcRenderer.removeListener('library:changed', handler)
+  },
   /** End setup and start keeping what the browser does. */
   beginWebCapture: (): void => ipcRenderer.send('session:begin-capture'),
   /** Stop the session and write its bundle. */

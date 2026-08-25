@@ -48,6 +48,7 @@ import {
   type SessionPhase
 } from './captureSession'
 import { renderReport } from './report'
+import { assertInside, deleteCapture, listLibrary, thumbnailFor } from './library'
 import {
   EDITABLE_EXTENSIONS,
   bufferFromDataUrl,
@@ -161,6 +162,7 @@ let availableUpdate: UpdateInfo | null = null
 // Set while an MCP `pick_region` call is waiting on the user to finish a screenshot
 // capture (copy/save/save-as resolves it; Esc/dismiss without acting rejects it).
 let pendingMcpCapture: { resolve: (dataUrl: string) => void; reject: (err: Error) => void } | null = null
+let libraryWindow: BrowserWindow | null = null
 
 // Locks the packaged renderer to its own bundle: no remote script, no eval, no
 // plugins, no framing. data:/blob: cover the frozen-frame dataURL, source-picker
@@ -195,6 +197,7 @@ async function persistRecording(data: ArrayBuffer, ext: string, details: unknown
 
   const finish = (mediaPath: string): string => {
     shell.showItemInFolder(mediaPath)
+    refreshLibrary()
     closeOverlayWindow()
     recordStartedAt = null
     recordSource = null
@@ -432,6 +435,46 @@ function closeOverlayWindow(): void {
   }
 }
 
+/**
+ * Where captures live.
+ *
+ * Everything snapit made was findable only in Finder, which knows a bundle as a folder
+ * of JSON and cannot say which capture holds the 500. Resizable, unlike the app's other
+ * windows, because this one holds a list that grows.
+ */
+function openLibraryWindow(): void {
+  if (libraryWindow) {
+    libraryWindow.focus()
+    return
+  }
+  libraryWindow = new BrowserWindow({
+    width: 1040,
+    height: 720,
+    minWidth: 560,
+    minHeight: 420,
+    title: 'snapit Library',
+    backgroundColor: '#f5f5f7',
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: true,
+      spellcheck: false
+    }
+  })
+  libraryWindow.on('closed', () => {
+    libraryWindow = null
+  })
+  libraryWindow.once('ready-to-show', () => {
+    if (process.platform === 'darwin') app.focus({ steal: true })
+    libraryWindow?.focus()
+  })
+  loadRenderer(libraryWindow, 'library')
+}
+
+/** Tell an open library its list is stale, so a new capture appears without a reopen. */
+function refreshLibrary(): void {
+  libraryWindow?.webContents.send('library:changed')
+}
+
 function openSettingsWindow(): void {
   if (settingsWindow) {
     settingsWindow.focus()
@@ -601,17 +644,21 @@ function registerHotkeys(): void {
 }
 
 /**
- * Put the most recent bundle on the clipboard as Markdown, ready to paste into a
- * ticket, a pull request or a chat.
+ * Put a bundle on the clipboard as Markdown, ready to paste into a ticket, a pull
+ * request or a chat.
  *
  * This is the whole integration story on purpose. snapit does not talk to Jira, Linear
  * or Slack: whoever files the ticket is already signed in to it, and a paste costs them
  * one keystroke against an OAuth flow and a token to keep alive here.
+ *
+ * It used to be a tray item acting on "the last report" — an object nobody could see,
+ * name or choose. It is now an action on the capture you picked in the library, which
+ * is the same code addressing something visible.
  */
-async function copyLatestReportAsMarkdown(): Promise<void> {
+async function copyReportAsMarkdown(bundle?: string): Promise<void> {
   try {
     const { saveDir } = getSettings()
-    const dir = await targetBundle(saveDir)
+    const dir = bundle ? assertInside(saveDir, bundle) : await targetBundle(saveDir)
     const meta = await readBundleJson<CaptureMeta>(dir, BUNDLE_FILES.meta)
     if (!meta) throw new Error(`${basename(dir)} has no readable metadata.`)
 
@@ -681,6 +728,7 @@ async function endBrowserSession(): Promise<void> {
   if (session?.mode === 'session') closeOverlayWindow()
   try {
     await stopBrowserSession()
+    refreshLibrary()
   } catch (err) {
     console.error('[snapit] failed to finish the browser session:', err)
     dialog.showMessageBox({
@@ -769,9 +817,9 @@ function buildTray(): void {
     { type: 'separator' },
     ...webCaptureItems(),
     { type: 'separator' },
+    { label: 'Library…', click: openLibraryWindow },
     { label: 'Settings…', click: openSettingsWindow },
     { label: 'Open save folder', click: () => void shell.openPath(getSettings().saveDir) },
-    { label: 'Copy last report as Markdown', click: () => void copyLatestReportAsMarkdown() },
     {
       label: 'Claude Code (MCP)',
       submenu: [
@@ -1079,6 +1127,7 @@ app.whenReady().then(() => {
     const filePath = captureFilePath(saveDir, 'png')
     await writeFile(filePath, pngBuffer(dataUrl))
     shell.showItemInFolder(filePath)
+    refreshLibrary()
     resolvePendingMcpCapture(dataUrl)
     closeOverlayWindow()
     return filePath
@@ -1237,6 +1286,69 @@ app.whenReady().then(() => {
   // the renderer flips it back on when the pointer is over the Stop pill.
   ipcMain.on('record:set-ignore-mouse', (_event, ignore: boolean) => {
     overlayWindow?.setIgnoreMouseEvents(ignore, { forward: true })
+  })
+
+  ipcMain.handle('library:list', () => listLibrary(getSettings().saveDir))
+  // Fetched per tile rather than with the list: a thumbnail goes through the OS
+  // thumbnail service, and forty of those would hold up the window painting at all.
+  ipcMain.handle('library:thumbnail', (_event, path: string) => {
+    try {
+      return thumbnailFor(assertInside(getSettings().saveDir, path))
+    } catch {
+      return null
+    }
+  })
+  ipcMain.handle('library:open', (_event, path: string) => {
+    try {
+      return shell.openPath(assertInside(getSettings().saveDir, path))
+    } catch (err) {
+      return err instanceof Error ? err.message : String(err)
+    }
+  })
+  ipcMain.on('library:reveal', (_event, path: string) => {
+    try {
+      shell.showItemInFolder(assertInside(getSettings().saveDir, path))
+    } catch (err) {
+      console.warn('[snapit] refused to reveal a path outside the save folder:', err)
+    }
+  })
+  ipcMain.handle('library:copy-markdown', (_event, path: string) => copyReportAsMarkdown(path))
+  ipcMain.handle('library:edit', async (_event, path: string) => {
+    try {
+      await openImageForEdit(assertInside(getSettings().saveDir, path))
+    } catch (err) {
+      console.warn('[snapit] could not open that capture for editing:', err)
+    }
+  })
+  /**
+   * Confirmed here rather than in the renderer: this is the one irreversible thing the
+   * library does, and a native dialog is the one prompt a user cannot mistake for part
+   * of the page. It goes to the trash, so "irreversible" is really "inconvenient".
+   */
+  ipcMain.handle('library:delete', async (_event, path: string, name: string) => {
+    const options: Electron.MessageBoxOptions = {
+      type: 'warning',
+      buttons: ['Move to Trash', 'Cancel'],
+      defaultId: 1,
+      cancelId: 1,
+      message: `Move "${name}" to the Trash?`,
+      detail: 'Everything in this capture goes with it — the recording, the report and the collected data.'
+    }
+    const { response } = libraryWindow
+      ? await dialog.showMessageBox(libraryWindow, options)
+      : await dialog.showMessageBox(options)
+    if (response !== 0) return false
+    try {
+      await deleteCapture(getSettings().saveDir, path)
+      return true
+    } catch (err) {
+      void dialog.showMessageBox({
+        type: 'error',
+        message: 'Could not delete that capture',
+        detail: err instanceof Error ? err.message : String(err)
+      })
+      return false
+    }
   })
 
   ipcMain.handle('app:get-info', () => ({ version: app.getVersion() }))
