@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { buildMeta, type MetaInput } from '../bundle'
-import { escapeHtml, renderReport, videoTimeSec } from '../report'
+import { collapseConsole, escapeHtml, renderReport, videoTimeSec } from '../report'
 
 const base = (over: Partial<MetaInput> = {}): MetaInput => ({
   capturedAt: new Date('2026-08-22T12:31:07.000Z'),
@@ -137,8 +137,19 @@ describe('renderReport — browser session', () => {
     expect(html).toContain('Cannot read properties of null')
   })
 
-  it('puts errors above ordinary chatter, which would otherwise bury them', () => {
-    expect(html.indexOf('Cannot read properties of null')).toBeLessThan(html.indexOf('ordinary chatter'))
+  it('keeps the console in the order it happened, so it reads beside the recording', () => {
+    // Errors used to be sorted to the top so chatter could not bury them. That broke the
+    // one property a console needs next to a video: the line above is what happened
+    // before. Hiding chatter solves the burying instead.
+    expect(html.indexOf('ordinary chatter')).toBeLessThan(html.indexOf('Cannot read properties of null'))
+  })
+
+  it('hides ordinary chatter behind a filter that starts on', () => {
+    expect(html).toContain('Problems only')
+    expect(html).toContain('(1 hidden)')
+    // The line is still in the document, so unticking puts it back where it happened.
+    expect(html).toContain('ordinary chatter')
+    expect(html).toContain('sev-mute')
   })
 
   it('summarises what the sibling JSON files hold', () => {
@@ -248,5 +259,102 @@ describe('renderReport — a session that also recorded', () => {
     )
     expect(sessionOnly).not.toContain('data-at')
     expect(sessionOnly).not.toContain('<script')
+  })
+})
+
+describe('collapseConsole', () => {
+  it('folds identical messages into one line with a count', () => {
+    const collapsed = collapseConsole([
+      { atMs: 100, level: 'error', text: 'boom' },
+      { atMs: 200, level: 'error', text: 'boom' },
+      { atMs: 300, level: 'error', text: 'boom' }
+    ])
+    expect(collapsed).toHaveLength(1)
+    expect(collapsed[0].count).toBe(3)
+  })
+
+  it('keeps the first timestamp, which is where the problem started', () => {
+    const collapsed = collapseConsole([
+      { atMs: 100, level: 'error', text: 'boom' },
+      { atMs: 9000, level: 'error', text: 'boom' }
+    ])
+    expect(collapsed[0].atMs).toBe(100)
+  })
+
+  it('does not fold the same text logged at different levels', () => {
+    const collapsed = collapseConsole([
+      { atMs: 1, level: 'warning', text: 'slow' },
+      { atMs: 2, level: 'error', text: 'slow' }
+    ])
+    expect(collapsed).toHaveLength(2)
+  })
+})
+
+describe('renderReport — reading it', () => {
+  const meta = buildMeta({ ...base(), markers: [{ atMs: 1000, note: 'here' }] })
+
+  it('leads with what went wrong, not with the display configuration', () => {
+    const html = renderReport(meta, {
+      console: [{ atMs: 10, level: 'error', text: 'boom' }],
+      failedRequests: [{ method: 'POST', status: 500, url: 'https://api.test/orders' }],
+      actions: [{ atMs: 5, label: 'Click' }]
+    })
+    // The counts are anchors as well as a summary, so one element does both jobs.
+    expect(html).toContain('href="#console"')
+    expect(html).toContain('href="#requests"')
+    expect(html).toContain('<b>1</b> console error')
+    // The environment table is reference material once there is a timeline.
+    expect(html).toMatch(/<details class="panel env"><summary>/)
+  })
+
+  it('opens the environment when it is the whole story', () => {
+    // A plain recording has no timeline, so the table is all there is to read.
+    expect(renderReport(buildMeta(base()))).toContain('<details class="panel env" open>')
+  })
+
+  it('sticks the media beside the timeline, and drops the column when there is none', () => {
+    const withTimeline = renderReport(meta, { actions: [{ atMs: 5, label: 'Click' }] })
+    expect(withTimeline).toContain('class="split"')
+    expect(withTimeline).toContain('class="media-col"')
+    // A timestamp is only worth clicking if the player it seeks is still on screen.
+    expect(withTimeline).toContain('position: sticky')
+    expect(renderReport(buildMeta(base()))).toContain('class="solo"')
+  })
+
+  it('collapses a repeated console line rather than filling the report with it', () => {
+    const flood = Array.from({ length: 400 }, (_, i) => ({
+      atMs: i * 10,
+      level: 'error',
+      text: 'the same failure'
+    }))
+    const html = renderReport(meta, { console: flood })
+    expect(html.match(/the same failure/g)).toHaveLength(1)
+    expect(html).toContain('×400')
+    expect(html).not.toContain('more, see the JSON beside this file')
+  })
+
+  it('offers no filter when every line is a problem', () => {
+    // Filtering to an identical list is a control that does nothing.
+    const html = renderReport(meta, { console: [{ atMs: 1, level: 'error', text: 'boom' }] })
+    expect(html).not.toContain('Problems only')
+  })
+
+  it('marks a failed request by whether it is the bug or the symptom', () => {
+    const html = renderReport(meta, {
+      failedRequests: [
+        { method: 'POST', status: 500, url: 'https://api.test/orders' },
+        { method: 'GET', status: 404, url: 'https://api.test/favicon.ico' }
+      ]
+    })
+    expect(html).toContain('class="sev-error"')
+    expect(html).toContain('class="sev-warn"')
+  })
+
+  it('moves the highlight down the timeline as the recording plays', () => {
+    const html = renderReport(buildMeta({ ...base(), recordingOffsetMs: 0 }), {
+      actions: [{ atMs: 1000, label: 'Click' }]
+    })
+    expect(html).toContain("classList.toggle('now'")
+    expect(html.match(/<script>/g)).toHaveLength(1)
   })
 })
