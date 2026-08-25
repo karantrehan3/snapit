@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react'
-import type { DisplaySource, WorkArea } from '@preload/index'
+import type { CapturePrefs, DisplaySource, WorkArea } from '@preload/index'
 import { useLiveSurface } from '../annotate-live/useLiveSurface'
 import { useRecorder } from './useRecorder'
 import { useSourcePicker } from './useSourcePicker'
@@ -11,9 +11,8 @@ import { QualityControl } from './QualityControl'
 import { RetroControl } from './RetroControl'
 import { Icon } from '@renderer/components/Icon'
 import { browserHint } from './browserHint'
-import { DEFAULT_RETRO } from './retroWindow'
 import type { RetroWindow } from './retroBuffer'
-import { DEFAULT_QUALITY, type QualityPreset } from './quality'
+import type { QualityPreset } from './quality'
 import { RecordingChrome } from './RecordingChrome'
 import {
   barDivider,
@@ -44,21 +43,32 @@ import {
  */
 export function RecordOverlay({
   source,
+  prefs,
   workArea,
   auto,
   onReady
 }: {
   source: DisplaySource
+  /** How the bar was left last time. See main/capturePrefs.ts. */
+  prefs: CapturePrefs
   workArea: WorkArea
   /** Set when snapit knows what to record: the browser window it just opened. */
   auto?: { sourceId: string }
   onReady?: () => void
 }): ReactElement {
-  const [systemAudio, setSystemAudio] = useState(true)
-  const [mic, setMic] = useState(true)
-  const [fps, setFps] = useState(60)
-  const [quality, setQuality] = useState<QualityPreset>(DEFAULT_QUALITY)
-  const [retroWindow, setRetroWindow] = useState<RetroWindow>(DEFAULT_RETRO)
+  const [systemAudio, setSystemAudio] = useState(prefs.systemAudio)
+  const [mic, setMic] = useState(prefs.mic)
+  const [fps, setFps] = useState(prefs.fps)
+  const [quality, setQuality] = useState<QualityPreset>(prefs.quality)
+  const [retroWindow, setRetroWindow] = useState<RetroWindow>(prefs.retroSec)
+
+  // Saved when a capture starts, not on every toggle: pressing Record is the moment
+  // someone means it, and a cancelled setup should not change what opens next time.
+  const remember = (): void => {
+    void window.snapit.setSettings({
+      capture: { ...prefs, fps, quality, retroSec: retroWindow, systemAudio, mic }
+    })
+  }
 
   // The live desktop shows through immediately; signal on mount so main reveals us.
   useEffect(() => {
@@ -233,7 +243,8 @@ export function RecordOverlay({
         <button
           type="button"
           style={recordButton}
-          onClick={() =>
+          onClick={() => {
+            remember()
             void recorder.start({
               selectedId,
               systemAudio,
@@ -247,7 +258,7 @@ export function RecordOverlay({
               quality,
               retroWindow
             })
-          }
+          }}
         >
           <span style={{ fontSize: 10 }}>●</span> Record
         </button>

@@ -21,18 +21,31 @@ export type RecordSourceInfo = { id: string; name: string; type: 'screen' | 'win
 export type WorkArea = { x: number; y: number; w: number; h: number }
 
 /** What the overlay renderer needs to know about the current capture session. */
+/** Mirrors main's CapturePrefs; the compiler catches drift where the two meet. */
+export type CapturePrefs = {
+  fps: number
+  silentFps: number
+  quality: 'high' | 'balanced' | 'small'
+  retroSec: number | null
+  systemAudio: boolean
+  mic: boolean
+  silentFormat: 'mp4' | 'gif'
+}
+
 export type CaptureSession = (
   | { mode: 'screenshot'; frame: Frame }
   | {
       mode: 'record'
       source: DisplaySource
+      /** Last time's bar settings, sent with the session so it opens correct, not default. */
+      prefs: CapturePrefs
       /**
        * Skip the setup panel and record this source immediately. Set when snapit itself
        * knows what to record — the browser window it just opened.
        */
       auto?: { sourceId: string }
     }
-  | { mode: 'gif'; source: DisplaySource }
+  | { mode: 'gif'; source: DisplaySource; prefs: CapturePrefs }
 ) & { workArea: WorkArea }
 
 export type Settings = {
@@ -41,6 +54,7 @@ export type Settings = {
   gifHotkey: string
   saveDir: string
   bundleRecordings: boolean
+  capture: CapturePrefs
 }
 
 /** A moment marked while a recording ran, in milliseconds from its first frame. */

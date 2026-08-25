@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactElement } from 'react'
 import { Icon } from '@renderer/components/Icon'
-import type { DisplaySource, WorkArea } from '@preload/index'
+import type { CapturePrefs, DisplaySource, WorkArea } from '@preload/index'
 import { useLiveSurface } from '../annotate-live/useLiveSurface'
 import { useSourcePicker } from '../record/useSourcePicker'
 import { useRegionSelect } from '../record/useRegionSelect'
@@ -10,7 +10,7 @@ import { ModeToggle } from '../record/ModeToggle'
 import { QualityControl } from '../record/QualityControl'
 import { RecordingChrome } from '../record/RecordingChrome'
 import { useGifRecorder, type SilentFormat } from './useGifRecorder'
-import { DEFAULT_QUALITY, type QualityPreset } from '../record/quality'
+import type { QualityPreset } from '../record/quality'
 import { FormatToggle } from './FormatToggle'
 import {
   barDivider,
@@ -25,8 +25,6 @@ import {
   stage
 } from '../record/styles'
 
-const DEFAULT_FPS = 30
-
 /**
  * Silent-capture overlay — floating command bar (mirrors RecordOverlay, minus audio).
  *
@@ -40,16 +38,26 @@ const DEFAULT_FPS = 30
  */
 export function GifOverlay({
   source,
+  prefs,
   workArea,
   onReady
 }: {
   source: DisplaySource
+  /** How the bar was left last time. See main/capturePrefs.ts. */
+  prefs: CapturePrefs
   workArea: WorkArea
   onReady?: () => void
 }): ReactElement {
-  const [fps, setFps] = useState(DEFAULT_FPS)
-  const [format, setFormat] = useState<SilentFormat>('mp4')
-  const [quality, setQuality] = useState<QualityPreset>(DEFAULT_QUALITY)
+  const [fps, setFps] = useState(prefs.silentFps)
+  const [format, setFormat] = useState<SilentFormat>(prefs.silentFormat)
+  const [quality, setQuality] = useState<QualityPreset>(prefs.quality)
+
+  // Saved when a capture starts, not on every toggle — see RecordOverlay.
+  const remember = (): void => {
+    void window.snapit.setSettings({
+      capture: { ...prefs, silentFps: fps, quality, silentFormat: format }
+    })
+  }
 
   // The live desktop shows through immediately; signal on mount so main reveals us.
   useEffect(() => {
@@ -157,7 +165,8 @@ export function GifOverlay({
         <button
           type="button"
           style={recordButton}
-          onClick={() =>
+          onClick={() => {
+            remember()
             void recorder.start({
               selectedId,
               fps,
@@ -167,7 +176,7 @@ export function GifOverlay({
               format,
               quality
             })
-          }
+          }}
         >
           <span style={{ fontSize: 10 }}>●</span> Start {format === 'gif' ? 'GIF' : 'MP4'}
         </button>

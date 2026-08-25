@@ -56,10 +56,16 @@ export function Overlay(): ReactElement | null {
       {session.mode === 'screenshot' ? (
         <ScreenshotOverlay frame={session.frame} workArea={session.workArea} onReady={onReady} />
       ) : session.mode === 'gif' ? (
-        <GifOverlay source={session.source} workArea={session.workArea} onReady={onReady} />
+        <GifOverlay
+          source={session.source}
+          prefs={session.prefs}
+          workArea={session.workArea}
+          onReady={onReady}
+        />
       ) : (
         <RecordOverlay
           source={session.source}
+          prefs={session.prefs}
           auto={session.auto}
           workArea={session.workArea}
           onReady={onReady}

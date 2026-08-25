@@ -2,6 +2,9 @@ import { join } from 'path'
 import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { randomBytes } from 'crypto'
 import { app } from 'electron'
+import { coerceCapture, defaultCapture, type CapturePrefs } from './capturePrefs'
+
+export type { CapturePrefs }
 
 export type Settings = {
   screenshotHotkey: string
@@ -17,6 +20,8 @@ export type Settings = {
   mcpToken: string
   /** Port the local MCP server listens on (127.0.0.1 only). */
   mcpPort: number
+  /** What the capture bar was set to last time. See capturePrefs.ts. */
+  capture: CapturePrefs
 }
 
 const DEFAULT_MCP_PORT = 47317
@@ -29,7 +34,8 @@ function defaults(): Settings {
     saveDir: join(app.getPath('pictures'), 'snapit'),
     bundleRecordings: true,
     mcpToken: randomBytes(24).toString('hex'),
-    mcpPort: DEFAULT_MCP_PORT
+    mcpPort: DEFAULT_MCP_PORT,
+    capture: defaultCapture()
   }
 }
 
@@ -49,7 +55,8 @@ function coerce(raw: unknown): Settings {
     saveDir: typeof o.saveDir === 'string' ? o.saveDir : d.saveDir,
     bundleRecordings: typeof o.bundleRecordings === 'boolean' ? o.bundleRecordings : d.bundleRecordings,
     mcpToken: typeof o.mcpToken === 'string' && o.mcpToken.length > 0 ? o.mcpToken : d.mcpToken,
-    mcpPort: typeof o.mcpPort === 'number' && Number.isInteger(o.mcpPort) ? o.mcpPort : d.mcpPort
+    mcpPort: typeof o.mcpPort === 'number' && Number.isInteger(o.mcpPort) ? o.mcpPort : d.mcpPort,
+    capture: coerceCapture(o.capture)
   }
 }
 
@@ -62,6 +69,7 @@ function sanitize(partial: Partial<Settings>): Partial<Settings> {
   if (typeof o.gifHotkey === 'string') out.gifHotkey = o.gifHotkey
   if (typeof o.saveDir === 'string') out.saveDir = o.saveDir
   if (typeof o.bundleRecordings === 'boolean') out.bundleRecordings = o.bundleRecordings
+  if (o.capture !== undefined) out.capture = coerceCapture(o.capture)
   return out
 }
 

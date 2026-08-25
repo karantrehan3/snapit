@@ -22,6 +22,7 @@ import {
 } from 'electron'
 import { captureDisplay, getDisplaySource, type DisplaySource } from './capture'
 import { getSettings, setSettings, regenerateMcpToken, type Settings } from './settings'
+import type { CapturePrefs } from './capturePrefs'
 import { checkForUpdate, type UpdateInfo } from './updater'
 import { captureBaseName, captureFilePath } from './filename'
 import { bundleLayout, buildMeta, resolveDurationMs, sanitizeMarkers, type CaptureSource } from './bundle'
@@ -99,8 +100,8 @@ type WorkArea = { x: number; y: number; w: number; h: number }
 
 type CaptureSession = (
   | { mode: 'screenshot'; frame: Frame }
-  | { mode: 'record'; source: DisplaySource; auto?: { sourceId: string } }
-  | { mode: 'gif'; source: DisplaySource }
+  | { mode: 'record'; source: DisplaySource; prefs: CapturePrefs; auto?: { sourceId: string } }
+  | { mode: 'gif'; source: DisplaySource; prefs: CapturePrefs }
 ) & { workArea: WorkArea }
 
 /** `display.workArea` is in screen coordinates; shift it to be window-relative. */
@@ -553,7 +554,14 @@ async function startCapture(mode: CaptureMode): Promise<void> {
   } else {
     // record and gif both capture a live display source; only the encoding differs.
     try {
-      session = { mode, workArea: windowWorkArea(display), source: await getDisplaySource(display) }
+      session = {
+        mode,
+        workArea: windowWorkArea(display),
+        source: await getDisplaySource(display),
+        // Sent with the session rather than fetched by the overlay: the bar renders
+        // once, correct, instead of painting defaults and then correcting itself.
+        prefs: getSettings().capture
+      }
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err)
       console.error(`[snapit] ${mode} source failed: ${detail}`)
@@ -671,6 +679,7 @@ async function startWebAppCapture(): Promise<void> {
       mode: 'record',
       workArea: windowWorkArea(display),
       source: await getDisplaySource(display),
+      prefs: getSettings().capture,
       auto: { sourceId }
     }
     markAutoRecording()
