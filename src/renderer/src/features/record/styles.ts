@@ -16,42 +16,6 @@ export const stage: CSSProperties = {
   color: 'var(--on-dark)'
 }
 
-/**
- * Sits below the command bar, quieter than it. The offer has to be visible without
- * competing with the controls someone came here to use.
- */
-export const hintBar: CSSProperties = {
-  position: 'fixed',
-  left: '50%',
-  top: 88,
-  transform: 'translateX(-50%)',
-  display: 'flex',
-  alignItems: 'center',
-  gap: 10,
-  maxWidth: 620,
-  padding: '8px 12px',
-  borderRadius: 12,
-  background: 'rgba(28, 28, 30, 0.62)',
-  backdropFilter: 'var(--blur)',
-  WebkitBackdropFilter: 'var(--blur)',
-  border: '1px solid rgba(255, 255, 255, 0.10)',
-  color: 'var(--on-dark-2)',
-  font: '12px/1.45 var(--font)'
-}
-
-export const hintAction: CSSProperties = {
-  appearance: 'none',
-  flex: 'none',
-  border: '1px solid var(--glass-edge-strong)',
-  borderRadius: 8,
-  padding: '4px 10px',
-  background: 'transparent',
-  color: 'var(--on-dark)',
-  font: '600 12px var(--font)',
-  cursor: 'pointer',
-  whiteSpace: 'nowrap'
-}
-
 /** Frosted-glass control bar, docked bottom-centre and floating over the screen. */
 export const commandBar: CSSProperties = {
   position: 'fixed',
@@ -227,7 +191,12 @@ export const segmented: CSSProperties = {
   background: 'var(--glass-fill-strong)'
 }
 
-export function segment(active: boolean): CSSProperties {
+/**
+ * `nudged` marks the inactive option snapit thinks is the right one — used when the
+ * selected window names a browser. It reads as a suggestion rather than a state, which
+ * is why it is a marker and a tint rather than the selected background.
+ */
+export function segment(active: boolean, nudged = false): CSSProperties {
   return {
     boxSizing: 'border-box',
     flex: 1,
@@ -235,6 +204,7 @@ export function segment(active: boolean): CSSProperties {
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 5,
     padding: '0 10px',
     border: 'none',
     borderRadius: 7,
@@ -243,8 +213,17 @@ export function segment(active: boolean): CSSProperties {
     fontSize: 13,
     fontWeight: 600,
     whiteSpace: 'nowrap',
-    background: active ? 'var(--accent)' : 'transparent'
+    background: active ? 'var(--accent)' : nudged ? 'var(--glass-fill-strong)' : 'transparent'
   }
+}
+
+/** The amber dot on a nudged segment — the same colour the session bar uses for "not yet". */
+export const nudgeDot: CSSProperties = {
+  width: 6,
+  height: 6,
+  borderRadius: '50%',
+  flex: 'none',
+  background: '#ffb340'
 }
 
 /** Full/Region toggle sizing inside the command bar (fixed width so halves are even). */

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { browserHint, looksLikeBrowser } from '../browserHint'
+import { looksLikeBrowser, webAppNudge } from '../browserHint'
 
 describe('looksLikeBrowser', () => {
   it('recognises the browsers people actually use', () => {
@@ -19,39 +19,31 @@ describe('looksLikeBrowser', () => {
   })
 })
 
-describe('browserHint', () => {
-  it('is confident when the window names its browser', () => {
-    const hint = browserHint({ name: 'Checkout - Google Chrome', type: 'window' })
-    expect(hint?.confident).toBe(true)
-    expect(hint?.text).toContain('looks like a browser')
+describe('webAppNudge', () => {
+  it('speaks up when the window names its browser', () => {
+    expect(webAppNudge({ name: 'Checkout - Google Chrome', type: 'window' })).toMatch(/looks like a browser/)
   })
 
-  it('still offers for a window whose title gives nothing away', () => {
-    // On macOS a Chrome window is usually titled with the page, not the browser, so
-    // detection failing must never hide the offer — that is the whole point of it.
-    const hint = browserHint({ name: 'Checkout', type: 'window' })
-    expect(hint).not.toBeNull()
-    expect(hint?.confident).toBe(false)
+  it('says nothing when the title gives nothing away', () => {
+    // On macOS a Chrome window is usually titled with the page, so this finds nothing
+    // most of the time. That is fine now: the Web app option is permanently in the
+    // selector, so a silent nudge hides nothing — it only declines to point.
+    expect(webAppNudge({ name: 'Checkout', type: 'window' })).toBeNull()
   })
 
-  it('says nothing for a plain screen capture, which is rarely about a web app', () => {
-    expect(browserHint({ name: 'Entire screen', type: 'screen' })).toBeNull()
+  it('says nothing for an ordinary screen capture', () => {
+    expect(webAppNudge({ name: 'Entire screen', type: 'screen' })).toBeNull()
   })
 
-  it('is confident even for a whole screen when a browser is named', () => {
-    expect(browserHint({ name: 'Google Chrome', type: 'screen' })?.confident).toBe(true)
+  it('speaks up for a whole screen when a browser is named', () => {
+    expect(webAppNudge({ name: 'Google Chrome', type: 'screen' })).not.toBeNull()
   })
 
   it('says nothing when nothing is selected yet', () => {
-    expect(browserHint(null)).toBeNull()
+    expect(webAppNudge(null)).toBeNull()
   })
 
-  it('always explains the limitation, however it is worded', () => {
-    for (const source of [
-      { name: 'Google Chrome', type: 'window' as const },
-      { name: 'Untitled', type: 'window' as const }
-    ]) {
-      expect(browserHint(source)?.text).toMatch(/browser it opens/)
-    }
+  it('explains what recording the picture would miss', () => {
+    expect(webAppNudge({ name: 'Google Chrome', type: 'window' })).toMatch(/console, network, steps/)
   })
 })

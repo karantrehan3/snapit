@@ -7,10 +7,15 @@
  * launched itself — a distinction nobody should have to discover by getting an empty
  * report.
  *
- * Detection is best-effort on purpose. Window titles on macOS are usually just the page
- * title, so "Google Chrome" often does not appear anywhere; on Windows and Linux it
- * usually does. The offer is therefore made either way, and detection only decides how
- * confidently it is worded. Getting this wrong must never hide the offer.
+ * This used to be a second bar floating under the command bar, offering to abandon the
+ * recording and start a web capture. That offer now lives permanently in the bar's own
+ * Screen/Web app selector, so a whole prompt for it was one idea asked twice. What is
+ * left is the part the selector cannot do: pointing at it when the chosen window gives
+ * the game away.
+ *
+ * Detection stays best-effort. A Chrome window on macOS is usually titled with the page
+ * rather than the browser, so this often finds nothing — which is why it only ever adds
+ * emphasis. The offer itself is always on screen regardless.
  */
 
 const BROWSER_SIGNATURES = [
@@ -30,25 +35,11 @@ export function looksLikeBrowser(sourceName: string): boolean {
   return BROWSER_SIGNATURES.some((sig) => name.includes(sig))
 }
 
-export type BrowserHint = { confident: boolean; text: string }
-
 /**
- * The line shown under the record controls, or null when there is nothing useful to
- * say — a full-screen capture of a second display, say, is not about to be a browser.
+ * What to say on the Web app control when the selected source names a browser, or null
+ * when there is nothing worth saying — which is most of the time, and is fine.
  */
-export function browserHint(source: { name: string; type: 'screen' | 'window' } | null): BrowserHint | null {
-  if (!source) return null
-  if (looksLikeBrowser(source.name)) {
-    return {
-      confident: true,
-      text: 'That looks like a browser. This will record the picture only — snapit can also capture its console, network and steps, but only in a browser it opens.'
-    }
-  }
-  if (source.type === 'window') {
-    return {
-      confident: false,
-      text: 'Recording a web app? snapit can capture its console, network and steps too — in a browser it opens.'
-    }
-  }
-  return null
+export function webAppNudge(source: { name: string; type: 'screen' | 'window' } | null): string | null {
+  if (!source || !looksLikeBrowser(source.name)) return null
+  return 'That looks like a browser. Recording it captures the picture only — Web app also captures its console, network, steps and a test.'
 }

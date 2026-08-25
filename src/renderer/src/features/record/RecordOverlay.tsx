@@ -10,7 +10,7 @@ import { ModeToggle } from './ModeToggle'
 import { QualityControl } from './QualityControl'
 import { RetroControl } from './RetroControl'
 import { Icon } from '@renderer/components/Icon'
-import { browserHint } from './browserHint'
+import { webAppNudge } from './browserHint'
 import type { RetroWindow } from './retroBuffer'
 import type { QualityPreset } from './quality'
 import { RecordingChrome } from './RecordingChrome'
@@ -19,12 +19,11 @@ import {
   barSegmented,
   centerHint,
   commandBar,
-  hintAction,
-  hintBar,
   DIM,
   errorText,
   ghostIcon,
   iconToggle,
+  nudgeDot,
   recordButton,
   regionBox,
   segment,
@@ -78,10 +77,10 @@ export function RecordOverlay({
 
   const picker = useSourcePicker(source.id)
   const { selectedId, canRegion } = picker
-  // Best-effort: a window title rarely names its browser on macOS, so the offer is made
-  // for any window and simply worded more confidently when the name gives it away.
-  const detected = browserHint(picker.sources.find((s) => s.id === selectedId) ?? null)
-  const hint = detected?.confident ? detected : null
+  // The offer is permanently in the selector below; this only decides whether to point
+  // at it. Usually it finds nothing, because a Chrome window on macOS is titled with
+  // the page rather than the browser — and that is fine, the option is still there.
+  const nudge = webAppNudge(picker.sources.find((s) => s.id === selectedId) ?? null)
   const region = useRegionSelect(canRegion)
 
   // `canRegion` means the source is the display this overlay covers, which is what makes
@@ -164,15 +163,6 @@ export function RecordOverlay({
         </div>
       )}
 
-      {hint && (
-        <div style={hintBar} onMouseDown={(e) => e.stopPropagation()}>
-          <span>{hint.text}</span>
-          <button type="button" style={hintAction} onClick={() => window.snapit.captureWebApp()}>
-            Capture a web app instead
-          </button>
-        </div>
-      )}
-
       <div style={commandBar} onMouseDown={(e) => e.stopPropagation()}>
         {/* The one decision worth making first: pixels only, or the whole story. A web
             app capture opens its own browser, so there is nothing to pick after this. */}
@@ -182,10 +172,11 @@ export function RecordOverlay({
           </button>
           <button
             type="button"
-            style={segment(false)}
+            style={segment(false, nudge !== null)}
             onClick={() => window.snapit.captureWebApp()}
-            title="Opens a browser snapit collects from: console, network, steps and a test"
+            title={nudge ?? 'Opens a browser snapit collects from: console, network, steps and a test'}
           >
+            {nudge && <span style={nudgeDot} />}
             Web app
           </button>
         </div>
