@@ -78,6 +78,27 @@ the capture session rather than being fetched by the overlay, so it renders once
 defaults and correcting itself. Saved when a capture starts, not on every toggle. The silent bar
 keeps its own frame rate — 30 against the recorder's 60, because a 60fps GIF is enormous.
 
+**Library** (`main/library.ts`, `main/libraryEntry.ts`, `features/library`)
+Tray → **Library…**. Every capture in the save folder, newest first, grouped by day, with what went
+wrong on the face of each row. Per-capture actions live here: reveal, edit a screenshot, copy as
+Markdown, delete. Delete goes to the Trash behind a native dialog, and every path from the renderer
+is checked against the save folder before anything is touched. Thumbnails come from the OS thumbnail
+service (`nativeImage.createThumbnailFromPath`), fetched per row so the window paints first.
+`libraryEntry.ts` is pure: a `meta.json` can be missing, truncated or written by an older version,
+and a capture that exists must still be listed.
+
+**Web capture, on screen** (`features/session/SessionBar.tsx`)
+Starting the capture is a bar, not a tray item — it is the one action with a right moment. The bar
+names the phase (setup is collected and discarded; capturing is what reaches the report), shows
+without taking focus from the browser, and is click-through except over itself. It also carries the
+window-not-found case, where there is no recording pill to stop from. The tray keeps the way in and
+a way out, nothing between.
+
+**First run** (`features/welcome`)
+Shown once, and mostly about Screen Recording: without it macOS returns black frames rather than an
+error, so it is the one failure that makes everything else look broken. Re-checks on focus, since
+granting happens in another application. `hasSeenWelcome` is not settable through `settings:set`.
+
 **Markers** (`features/record/markers.ts`)
 ⌘⇧M or the pill's flag drops a timestamped marker; they land in `meta.json` and become a seekable
 list in the report. The hotkey is registered only while recording.
@@ -91,12 +112,16 @@ partially-written ones the save path deliberately allows.
 
 - **Pure logic lives in its own electron-free module and is unit-tested**; the fs/electron wrapper
   around it is not. See `filename.ts`, `bundle.ts`, `mcp/region.ts`, `record/retroBuffer.ts`,
-  `capturePrefs.ts`.
+  `capturePrefs.ts`, `libraryEntry.ts`.
 - Tests live in `tests/` beside the code, `src/**/tests/*.spec.ts`, environment `node` — there is no
   DOM, so component behaviour is not unit-tested.
 - Renderer is feature-based: `features/<name>/{Component.tsx, useThing.ts, types.ts, styles.ts}`.
 - Colours, radii, shadows and the font stack come from `styles/tokens.css`; a new literal in a
   `styles.ts` is a token that has not been added yet. New iconography goes in `components/Icon.tsx`.
+- Hover states live in `tokens.css`, keyed on `data-` attributes — it is the one thing an inline
+  style object cannot express. Focus rings are an `outline` there, since inline styles beat a
+  stylesheet and most controls set their own `box-shadow`.
+- A failure a user can see is reported to them (`notifyProblem`), not only to the console.
 - Prettier: no semicolons, single quotes, width 110. Run `npm run format`.
 - Comments earn their place or come out.
 
