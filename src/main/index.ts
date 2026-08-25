@@ -44,7 +44,8 @@ import {
   sessionOffsetFor,
   sessionPhase,
   startBrowserSession,
-  stopBrowserSession
+  stopBrowserSession,
+  type SessionPhase
 } from './captureSession'
 import { renderReport } from './report'
 import {
@@ -102,6 +103,9 @@ type CaptureSession = (
   | { mode: 'screenshot'; frame: Frame }
   | { mode: 'record'; source: DisplaySource; prefs: CapturePrefs; auto?: { sourceId: string } }
   | { mode: 'gif'; source: DisplaySource; prefs: CapturePrefs }
+  // Chrome only: the browser is what the user is looking at, and this is the bar that
+  // says snapit is collecting from it and offers the one action worth taking.
+  | { mode: 'session'; phase: SessionPhase; videoUnavailable?: boolean }
 ) & { workArea: WorkArea }
 
 /** `display.workArea` is in screen coordinates; shift it to be window-relative. */
@@ -338,21 +342,28 @@ function revealOverlay(): void {
 // can't leave the overlay stuck hidden.
 let revealFallback: ReturnType<typeof setTimeout> | null = null
 
-function revealWhenPainted(): void {
+function revealWhenPainted(activate: boolean): void {
   if (revealFallback) clearTimeout(revealFallback)
-  revealFallback = setTimeout(doReveal, 400)
+  revealFallback = setTimeout(() => doReveal(activate), 400)
 }
 
-function doReveal(): void {
+let pendingActivate = true
+
+function doReveal(activate: boolean): void {
   if (!revealFallback) return
   clearTimeout(revealFallback)
   revealFallback = null
-  revealOverlay()
+  // The session bar floats over a browser someone is typing into. Stealing focus to
+  // show it would put their next keystroke somewhere they did not aim it.
+  if (activate) revealOverlay()
+  else overlayWindow?.showInactive()
 }
 
 /** Position the reused overlay on the cursor's display and push the session to it. */
-function showOverlay(display: Display): void {
+function showOverlay(display: Display, opts: { activate?: boolean } = {}): void {
   const win = ensureOverlayWindow()
+  const activate = opts.activate ?? true
+  pendingActivate = activate
   win.setBounds(display.bounds)
   // Reset state a prior recording may have left on (window is reused, not recreated).
   win.setContentProtection(false)
@@ -360,7 +371,7 @@ function showOverlay(display: Display): void {
 
   const push = (): void => {
     win.webContents.send('capture:session', session)
-    revealWhenPainted()
+    revealWhenPainted(activate)
   }
   // First capture: renderer still loading, so push once ready; later captures push now.
   if (win.webContents.isLoading()) win.webContents.once('did-finish-load', push)
@@ -525,7 +536,10 @@ async function startCapture(mode: CaptureMode): Promise<void> {
   if (session) {
     // A second record/gif hotkey press stops & saves; otherwise just dismiss.
     if (session.mode === 'record' || session.mode === 'gif') overlayWindow?.webContents.send('record:stop')
-    else closeOverlayWindow()
+    // The session bar is not a capture waiting to be dismissed — it is the only sign
+    // that a browser is being collected from, and the only way to stop it. A stray
+    // hotkey taking it off screen would leave a session running invisibly.
+    else if (session.mode !== 'session') closeOverlayWindow()
     return
   }
 
@@ -624,14 +638,33 @@ async function copyLatestReportAsMarkdown(): Promise<void> {
   }
 }
 
+/** Put the session bar on screen for the phase the session is currently in. */
+function showSessionBar(videoUnavailable = false): void {
+  const phase = sessionPhase()
+  if (!phase) return
+  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+  session = {
+    mode: 'session',
+    phase,
+    workArea: windowWorkArea(display),
+    ...(videoUnavailable ? { videoUnavailable } : {})
+  }
+  // Without activate:false the bar would take focus from the browser the user is about
+  // to type into.
+  showOverlay(display, { activate: false })
+}
+
 /**
- * Open Chrome under snapit's control. The tray is rebuilt so the item flips to Stop —
- * a session that is running with no visible sign of it would be a surprise, given it
- * records everything the browser does.
+ * Open Chrome under snapit's control, and put the bar on screen.
+ *
+ * A session running with no visible sign of it would be a surprise, given it records
+ * everything the browser does — and the tray menu it used to live in is the wrong place
+ * for a control whose whole value is being pressed at a particular moment.
  */
 async function beginBrowserSession(): Promise<void> {
   try {
     await startBrowserSession()
+    showSessionBar()
     buildTray()
   } catch (err) {
     dialog.showMessageBox({
@@ -643,6 +676,9 @@ async function beginBrowserSession(): Promise<void> {
 }
 
 async function endBrowserSession(): Promise<void> {
+  // Taken down first: the bundle write and its Finder reveal take a moment, and a bar
+  // still saying "capturing" through them would be lying.
+  if (session?.mode === 'session') closeOverlayWindow()
   try {
     await stopBrowserSession()
   } catch (err) {
@@ -667,9 +703,12 @@ async function startWebAppCapture(): Promise<void> {
   beginCapture()
   const sourceId = sessionWindowSourceId()
   if (!sourceId) {
-    // Rare: the window could not be identified. Better a capture with no video than
-    // no capture, and the collector is already running.
+    // Rare: the window could not be identified. Better a capture with no video than no
+    // capture, since the collector is already running — but the bar has to say so, or
+    // the missing video is discovered in the report with nothing to explain it. It also
+    // stays on screen as the only way left to stop, there being no recording pill.
     console.warn('[snapit] could not find the collector browser window; capturing without video')
+    showSessionBar(true)
     buildTray()
     return
   }
@@ -691,20 +730,16 @@ async function startWebAppCapture(): Promise<void> {
 }
 
 /**
- * One entry per phase. During setup the useful action is starting the capture, not
- * stopping a session the user has not begun using yet.
+ * The way in, and a way out. Starting the capture is deliberately not here: it is the
+ * one action with a right moment, and a menu you have to go looking for is the wrong
+ * place for it — it lives on the session bar, where the work is. Stopping stays as a
+ * fallback for a bar lost behind a full-screen window.
  */
 function webCaptureItems(): Electron.MenuItemConstructorOptions[] {
   if (!isBrowserSessionActive()) {
     return [{ label: 'Capture a web app…', click: () => void beginBrowserSession() }]
   }
-  const capturing = sessionPhase() === 'capturing'
-  return [
-    capturing
-      ? { label: '⏹  Stop and save', click: () => void endBrowserSession() }
-      : { label: '▶  Start capture', click: () => void startWebAppCapture() },
-    ...(capturing ? [] : [{ label: 'Cancel capture', click: () => void endBrowserSession() }])
-  ]
+  return [{ label: 'Stop and save', click: () => void endBrowserSession() }]
 }
 
 function buildTray(): void {
@@ -1026,7 +1061,9 @@ app.whenReady().then(() => {
   ipcMain.handle('capture:get-session', () => session)
 
   // The renderer reports it has painted the pushed frame; reveal the overlay now.
-  ipcMain.on('overlay:ready', doReveal)
+  // The renderer only says it painted; whether that reveal takes focus was decided
+  // when the session was pushed.
+  ipcMain.on('overlay:ready', () => doReveal(pendingActivate))
 
   ipcMain.on('capture:copy', (_event, dataUrl: string) => {
     if (!isImageDataUrl(dataUrl)) return
@@ -1074,6 +1111,11 @@ app.whenReady().then(() => {
   // session isn't cleared by the outgoing window.
   // Offered from the record setup bar: what they actually want is the collector, not
   // a silent movie of a browser.
+  // The session bar's two actions. Both are also reachable from the tray's single
+  // entry, so a bar that ends up behind something is an inconvenience, not a trap.
+  ipcMain.on('session:begin-capture', () => void startWebAppCapture())
+  ipcMain.on('session:stop', () => void endBrowserSession())
+
   ipcMain.on('capture:web-app', () => {
     closeOverlayWindow()
     void beginBrowserSession()

@@ -12,6 +12,9 @@ const RecordOverlay = lazy(() =>
 const GifOverlay = lazy(() =>
   import('@renderer/features/gif/GifOverlay').then((m) => ({ default: m.GifOverlay }))
 )
+const SessionBar = lazy(() =>
+  import('@renderer/features/session/SessionBar').then((m) => ({ default: m.SessionBar }))
+)
 
 /**
  * Overlay container.
@@ -55,6 +58,8 @@ export function Overlay(): ReactElement | null {
     <Suspense key={captureKey} fallback={null}>
       {session.mode === 'screenshot' ? (
         <ScreenshotOverlay frame={session.frame} workArea={session.workArea} onReady={onReady} />
+      ) : session.mode === 'session' ? (
+        <SessionBar phase={session.phase} videoUnavailable={session.videoUnavailable} onReady={onReady} />
       ) : session.mode === 'gif' ? (
         <GifOverlay
           source={session.source}

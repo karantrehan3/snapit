@@ -21,6 +21,9 @@ export type RecordSourceInfo = { id: string; name: string; type: 'screen' | 'win
 export type WorkArea = { x: number; y: number; w: number; h: number }
 
 /** What the overlay renderer needs to know about the current capture session. */
+/** Setup is collected and discarded; capturing is what reaches the report. */
+export type SessionPhase = 'setup' | 'capturing'
+
 /** Mirrors main's CapturePrefs; the compiler catches drift where the two meet. */
 export type CapturePrefs = {
   fps: number
@@ -46,6 +49,12 @@ export type CaptureSession = (
       auto?: { sourceId: string }
     }
   | { mode: 'gif'; source: DisplaySource; prefs: CapturePrefs }
+  | {
+      mode: 'session'
+      phase: SessionPhase
+      /** The browser window could not be found, so this capture will have no video. */
+      videoUnavailable?: boolean
+    }
 ) & { workArea: WorkArea }
 
 export type Settings = {
@@ -99,6 +108,10 @@ const api = {
   recordVideoInstead: (): void => ipcRenderer.send('capture:switch-to-record'),
   /** Abandon this recording and open a browser snapit collects from instead. */
   captureWebApp: (): void => ipcRenderer.send('capture:web-app'),
+  /** End setup and start keeping what the browser does. */
+  beginWebCapture: (): void => ipcRenderer.send('session:begin-capture'),
+  /** Stop the session and write its bundle. */
+  stopWebCapture: (): void => ipcRenderer.send('session:stop'),
   /** List capturable sources (screens + windows) with preview thumbnails. */
   listSources: (): Promise<RecordSourceInfo[]> => ipcRenderer.invoke('record:list-sources'),
   /** Set the next recording's system/loopback audio + source id (before getDisplayMedia). */
