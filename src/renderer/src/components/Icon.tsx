@@ -41,6 +41,9 @@ export type IconName =
   | 'folder'
   | 'trash'
   | 'clipboard'
+  | 'alert'
+  | 'check'
+  | 'mute'
 
 const PATHS: Record<IconName, ReactElement> = {
   move: (
@@ -166,6 +169,20 @@ const PATHS: Record<IconName, ReactElement> = {
       <path d="M10.5 10.5v6M13.5 10.5v6" />
     </>
   ),
+  mute: (
+    <>
+      <path d="M4 9.5h3.5L12 5.5v13L7.5 14.5H4z" />
+      <path d="M16.5 10l4 4M20.5 10l-4 4" />
+    </>
+  ),
+  alert: (
+    <>
+      <path d="M12 4.5L21 19.5H3z" />
+      <path d="M12 10v4" />
+      <circle cx="12" cy="16.75" r="0.9" fill="currentColor" stroke="none" />
+    </>
+  ),
+  check: <path d="M5 12.5l4.5 4.5L19 7.5" />,
   clipboard: (
     <>
       <path d="M9 4.5h6v3H9z" />

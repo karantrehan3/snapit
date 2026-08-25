@@ -22,6 +22,12 @@ export type Settings = {
   mcpPort: number
   /** What the capture bar was set to last time. See capturePrefs.ts. */
   capture: CapturePrefs
+  /**
+   * Whether the welcome has been through. Not settable from `settings:set` — only the
+   * welcome window's own "done" marks it, so a stray write cannot skip first run for
+   * someone who has not had it.
+   */
+  hasSeenWelcome: boolean
 }
 
 const DEFAULT_MCP_PORT = 47317
@@ -35,7 +41,8 @@ function defaults(): Settings {
     bundleRecordings: true,
     mcpToken: randomBytes(24).toString('hex'),
     mcpPort: DEFAULT_MCP_PORT,
-    capture: defaultCapture()
+    capture: defaultCapture(),
+    hasSeenWelcome: false
   }
 }
 
@@ -56,7 +63,8 @@ function coerce(raw: unknown): Settings {
     bundleRecordings: typeof o.bundleRecordings === 'boolean' ? o.bundleRecordings : d.bundleRecordings,
     mcpToken: typeof o.mcpToken === 'string' && o.mcpToken.length > 0 ? o.mcpToken : d.mcpToken,
     mcpPort: typeof o.mcpPort === 'number' && Number.isInteger(o.mcpPort) ? o.mcpPort : d.mcpPort,
-    capture: coerceCapture(o.capture)
+    capture: coerceCapture(o.capture),
+    hasSeenWelcome: o.hasSeenWelcome === true
   }
 }
 
@@ -98,6 +106,13 @@ export function getSettings(): Settings {
 
 export function setSettings(partial: Partial<Settings>): Settings {
   cache = { ...getSettings(), ...sanitize(partial) }
+  persist(cache)
+  return cache
+}
+
+/** Mark first run as done. Deliberately not reachable through `settings:set`. */
+export function markWelcomeSeen(): Settings {
+  cache = { ...getSettings(), hasSeenWelcome: true }
   persist(cache)
   return cache
 }

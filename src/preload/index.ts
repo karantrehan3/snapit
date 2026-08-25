@@ -21,6 +21,15 @@ export type RecordSourceInfo = { id: string; name: string; type: 'screen' | 'win
 export type WorkArea = { x: number; y: number; w: number; h: number }
 
 /** What the overlay renderer needs to know about the current capture session. */
+/** What `systemPreferences.getMediaAccessStatus` can say, plus the non-macOS case. */
+export type ScreenPermission =
+  | 'granted'
+  | 'denied'
+  | 'restricted'
+  | 'not-determined'
+  | 'unknown'
+  | 'not-applicable'
+
 /** One capture as the library shows it. Mirrors main's LibraryEntry. */
 export type LibraryEntry = {
   path: string
@@ -124,6 +133,12 @@ const api = {
   recordVideoInstead: (): void => ipcRenderer.send('capture:switch-to-record'),
   /** Abandon this recording and open a browser snapit collects from instead. */
   captureWebApp: (): void => ipcRenderer.send('capture:web-app'),
+  /** macOS screen-recording status, or 'not-applicable' elsewhere. */
+  screenPermission: (): Promise<ScreenPermission> => ipcRenderer.invoke('welcome:permission'),
+  /** Open the Privacy pane where the permission is granted. */
+  openScreenSettings: (): void => ipcRenderer.send('welcome:open-settings'),
+  /** Mark first run as done and close the welcome. */
+  finishWelcome: (): void => ipcRenderer.send('welcome:done'),
   /** Every capture in the save folder, newest first. */
   listLibrary: (): Promise<LibraryEntry[]> => ipcRenderer.invoke('library:list'),
   /** A capture's thumbnail as a data URL, or null when the platform cannot make one. */

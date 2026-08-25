@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { Overlay } from './Overlay'
 import { Settings } from '@renderer/features/settings/Settings'
 import { About } from '@renderer/features/about/About'
+import { Welcome } from '@renderer/features/welcome/Welcome'
 
 // Lazy so the editor's Konva bundle (~1.4 MB) loads only for the #edit window and
 // never bloats the shared entry chunk that the overlay/settings/about windows load.
@@ -22,6 +23,8 @@ const view =
     <Settings />
   ) : route === 'about' ? (
     <About />
+  ) : route === 'welcome' ? (
+    <Welcome />
   ) : route === 'library' ? (
     <Suspense fallback={null}>
       <Library />

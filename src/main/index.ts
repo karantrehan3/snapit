@@ -21,7 +21,7 @@ import {
   type Display
 } from 'electron'
 import { captureDisplay, getDisplaySource, type DisplaySource } from './capture'
-import { getSettings, setSettings, regenerateMcpToken, type Settings } from './settings'
+import { getSettings, setSettings, markWelcomeSeen, regenerateMcpToken, type Settings } from './settings'
 import type { CapturePrefs } from './capturePrefs'
 import { checkForUpdate, type UpdateInfo } from './updater'
 import { captureBaseName, captureFilePath } from './filename'
@@ -163,6 +163,7 @@ let availableUpdate: UpdateInfo | null = null
 // capture (copy/save/save-as resolves it; Esc/dismiss without acting rejects it).
 let pendingMcpCapture: { resolve: (dataUrl: string) => void; reject: (err: Error) => void } | null = null
 let libraryWindow: BrowserWindow | null = null
+let welcomeWindow: BrowserWindow | null = null
 
 // Locks the packaged renderer to its own bundle: no remote script, no eval, no
 // plugins, no framing. data:/blob: cover the frozen-frame dataURL, source-picker
@@ -475,6 +476,51 @@ function refreshLibrary(): void {
   libraryWindow?.webContents.send('library:changed')
 }
 
+const SCREEN_SETTINGS_URL = 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'
+
+function openWelcomeWindow(): void {
+  if (welcomeWindow) {
+    welcomeWindow.focus()
+    return
+  }
+  welcomeWindow = new BrowserWindow({
+    width: 520,
+    height: 620,
+    resizable: false,
+    title: 'Welcome to snapit',
+    backgroundColor: '#f5f5f7',
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: true,
+      spellcheck: false
+    }
+  })
+  welcomeWindow.on('closed', () => {
+    welcomeWindow = null
+  })
+  welcomeWindow.once('ready-to-show', () => {
+    if (process.platform === 'darwin') app.focus({ steal: true })
+    welcomeWindow?.focus()
+  })
+  loadRenderer(welcomeWindow, 'welcome')
+}
+
+/**
+ * Tell someone what went wrong, where they will see it.
+ *
+ * These paths all used to end at console.error, which nobody reading a report with no
+ * video in it is looking at. A notification rather than a dialog: the failure has
+ * already happened and there is no decision to make, so interrupting adds nothing.
+ */
+function notifyProblem(title: string, body: string): void {
+  console.error(`[snapit] ${title}: ${body}`)
+  try {
+    new Notification({ title, body }).show()
+  } catch (err) {
+    console.warn('[snapit] could not show a notification:', err)
+  }
+}
+
 function openSettingsWindow(): void {
   if (settingsWindow) {
     settingsWindow.focus()
@@ -561,18 +607,41 @@ function forwardRendererConsole(win: BrowserWindow): void {
   })
 }
 
-/** Log screen-recording status and, if not granted, open the Settings pane. */
+/** Asked once per run: a hotkey that reopens System Settings every time is its own bug. */
+let promptedForScreen = false
+
+/**
+ * Check screen-recording permission and, if it is missing, say why before doing
+ * anything about it.
+ *
+ * This used to throw the user into System Settings with no explanation — a pane opening
+ * by itself, in another application, in response to a hotkey. The dialog is the whole
+ * point: without the permission macOS hands back black frames rather than an error, so
+ * a capture that looks broken is the only signal there is.
+ */
 function ensureScreenPermission(): void {
   if (process.platform !== 'darwin') return
   const status = systemPreferences.getMediaAccessStatus('screen')
   console.log(`[snapit] screen-recording permission: ${status}`)
-  if (status !== 'granted') {
-    console.warn(
-      '[snapit] Screen Recording not granted. NOTE: when launched from a terminal, ' +
-        'the permission belongs to the TERMINAL app — grant it there, then relaunch.'
-    )
-    void shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture')
-  }
+  if (status === 'granted' || promptedForScreen) return
+  promptedForScreen = true
+  console.warn(
+    '[snapit] Screen Recording not granted. NOTE: when launched from a terminal, ' +
+      'the permission belongs to the TERMINAL app — grant it there, then relaunch.'
+  )
+  void dialog
+    .showMessageBox({
+      type: 'warning',
+      buttons: ['Open System Settings', 'Not now'],
+      defaultId: 0,
+      cancelId: 1,
+      message: 'snapit needs Screen Recording permission',
+      detail:
+        'Without it macOS hands back black frames rather than an error, so captures come out black with nothing to explain why.\n\nGrant snapit under Privacy & Security → Screen Recording, then try again.'
+    })
+    .then(({ response }) => {
+      if (response === 0) void shell.openExternal(SCREEN_SETTINGS_URL)
+    })
 }
 
 async function startCapture(mode: CaptureMode): Promise<void> {
@@ -604,8 +673,9 @@ async function startCapture(mode: CaptureMode): Promise<void> {
         }
       }
     } catch (err) {
-      const detail = err instanceof Error ? err.message : String(err)
-      console.error(`[snapit] capture failed: ${detail}`)
+      // Pressing a hotkey and having nothing at all happen is the worst version of
+      // this: the user cannot tell a failure from a missed keypress.
+      notifyProblem('Screenshot failed', err instanceof Error ? err.message : String(err))
       return
     }
   } else {
@@ -772,7 +842,13 @@ async function startWebAppCapture(): Promise<void> {
     markAutoRecording()
     showOverlay(display)
   } catch (err) {
-    console.error('[snapit] could not start recording the collector browser:', err)
+    // The collector is already running, so the capture is under way — but it will have
+    // no video, and the report would be the first place anyone found that out.
+    notifyProblem(
+      'Capturing without video',
+      `The browser window could not be recorded, so this capture holds console, network and steps only. ${err instanceof Error ? err.message : String(err)}`
+    )
+    showSessionBar(true)
   }
   buildTray()
 }
@@ -1086,6 +1162,9 @@ app.whenReady().then(() => {
 
   createTray()
   registerHotkeys()
+  // First run, before anything else asks for attention. The permission it exists to
+  // explain is the one thing that makes every other part of snapit look broken.
+  if (!getSettings().hasSeenWelcome) openWelcomeWindow()
   void refreshUpdate()
   setInterval(() => void refreshUpdate(), UPDATE_CHECK_INTERVAL_MS)
   startMcpServer(app.getVersion(), {
@@ -1286,6 +1365,15 @@ app.whenReady().then(() => {
   // the renderer flips it back on when the pointer is over the Stop pill.
   ipcMain.on('record:set-ignore-mouse', (_event, ignore: boolean) => {
     overlayWindow?.setIgnoreMouseEvents(ignore, { forward: true })
+  })
+
+  ipcMain.handle('welcome:permission', () =>
+    process.platform === 'darwin' ? systemPreferences.getMediaAccessStatus('screen') : 'not-applicable'
+  )
+  ipcMain.on('welcome:open-settings', () => void shell.openExternal(SCREEN_SETTINGS_URL))
+  ipcMain.on('welcome:done', () => {
+    markWelcomeSeen()
+    welcomeWindow?.close()
   })
 
   ipcMain.handle('library:list', () => listLibrary(getSettings().saveDir))
