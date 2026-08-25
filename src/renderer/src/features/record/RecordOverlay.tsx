@@ -9,6 +9,7 @@ import { FpsControl } from './FpsControl'
 import { ModeToggle } from './ModeToggle'
 import { QualityControl } from './QualityControl'
 import { RetroControl } from './RetroControl'
+import { Icon } from '@renderer/components/Icon'
 import { browserHint } from './browserHint'
 import { DEFAULT_RETRO } from './retroWindow'
 import type { RetroWindow } from './retroBuffer'
@@ -25,7 +26,7 @@ import {
   errorText,
   ghostIcon,
   iconToggle,
-  primaryButton,
+  recordButton,
   regionBox,
   segment,
   stage
@@ -204,11 +205,20 @@ export function RecordOverlay({
           style={iconToggle(systemAudio)}
           onClick={() => setSystemAudio((v) => !v)}
           title="System audio"
+          aria-label="System audio"
+          aria-pressed={systemAudio}
         >
-          🔊
+          <Icon name="speaker" size={17} />
         </button>
-        <button type="button" style={iconToggle(mic)} onClick={() => setMic((v) => !v)} title="Microphone">
-          🎤
+        <button
+          type="button"
+          style={iconToggle(mic)}
+          onClick={() => setMic((v) => !v)}
+          title="Microphone"
+          aria-label="Microphone"
+          aria-pressed={mic}
+        >
+          <Icon name="mic" size={17} />
         </button>
         <div style={barDivider} />
         <button
@@ -216,12 +226,13 @@ export function RecordOverlay({
           style={ghostIcon}
           onClick={() => window.snapit.closeOverlay()}
           title="Cancel (Esc)"
+          aria-label="Cancel"
         >
-          ✕
+          <Icon name="close" size={17} />
         </button>
         <button
           type="button"
-          style={primaryButton('#ff3b30')}
+          style={recordButton}
           onClick={() =>
             void recorder.start({
               selectedId,

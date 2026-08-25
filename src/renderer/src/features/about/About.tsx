@@ -1,6 +1,7 @@
 import { useEffect, useState, type CSSProperties, type ReactElement } from 'react'
 import type { UpdateInfo } from '@preload/index'
 import { APP_ICON } from './appIcon'
+import { Icon } from '@renderer/components/Icon'
 
 const REPO = 'https://github.com/karantrehan3/snapit'
 const SITE = 'https://karantrehan3.github.io'
@@ -44,18 +45,21 @@ export function About(): ReactElement {
 
       <div style={divider} />
 
-      <div style={{ fontSize: 12, color: '#8e8e93' }}>Made by</div>
+      <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>Made by</div>
       <div style={{ fontSize: 15, fontWeight: 600, marginTop: 2 }}>Karan Trehan</div>
 
       <div style={linkRow}>
         <button type="button" style={linkBtn} onClick={open(SITE)}>
-          🌐 Website
+          <Icon name="globe" size={14} />
+          Website
         </button>
         <button type="button" style={linkBtn} onClick={open(REPO)}>
-          ★ GitHub
+          <Icon name="star" size={14} />
+          GitHub
         </button>
         <button type="button" style={linkBtn} onClick={open(ISSUES)}>
-          ⚑ Report a bug
+          <Icon name="flag" size={14} />
+          Report a bug
         </button>
       </div>
 
@@ -99,9 +103,9 @@ const page: CSSProperties = {
   padding: '28px 24px',
   height: '100vh',
   boxSizing: 'border-box',
-  fontFamily: '-apple-system, BlinkMacSystemFont, system-ui, sans-serif',
-  color: '#1c1c1e',
-  background: '#f5f5f7',
+  fontFamily: 'var(--font)',
+  color: 'var(--ink)',
+  background: 'var(--surface)',
   userSelect: 'none'
 }
 
@@ -148,16 +152,19 @@ const linkRow: CSSProperties = {
 }
 
 const linkBtn: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 6,
   height: 32,
   padding: '0 12px',
-  borderRadius: 8,
-  border: '1px solid #d0d0d4',
-  background: '#fff',
-  color: '#1c1c1e',
-  fontSize: 12,
-  fontWeight: 600,
+  borderRadius: 'var(--r-md)',
+  border: '1px solid var(--surface-edge)',
+  background: 'var(--surface-raised)',
+  color: 'var(--ink)',
   cursor: 'pointer',
-  font: '12px -apple-system, system-ui, sans-serif'
+  // One `font` shorthand, not a shorthand after `fontWeight` — that order silently
+  // reset the weight these buttons were asking for.
+  font: '600 12px var(--font)'
 }
 
 const updateBtn: CSSProperties = {
@@ -165,8 +172,8 @@ const updateBtn: CSSProperties = {
   padding: '0 18px',
   borderRadius: 8,
   border: 'none',
-  background: '#0a84ff',
-  color: '#fff',
+  background: 'var(--accent)',
+  color: 'var(--on-dark)',
   fontSize: 13,
   fontWeight: 600,
   cursor: 'pointer'
@@ -182,13 +189,13 @@ const updateBox: CSSProperties = {
   boxSizing: 'border-box'
 }
 
-const updateMuted: CSSProperties = { marginTop: 16, fontSize: 12, color: '#8e8e93' }
+const updateMuted: CSSProperties = { marginTop: 16, fontSize: 12, color: 'var(--ink-3)' }
 
 const inlineLink: CSSProperties = {
   background: 'none',
   border: 'none',
   padding: 0,
-  color: '#0a84ff',
+  color: 'var(--accent)',
   font: 'inherit',
   fontSize: 12,
   cursor: 'pointer'
@@ -198,5 +205,5 @@ const footer: CSSProperties = {
   marginTop: 'auto',
   paddingTop: 18,
   fontSize: 11,
-  color: '#8e8e93'
+  color: 'var(--ink-3)'
 }

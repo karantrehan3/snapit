@@ -1,0 +1,85 @@
+/*
+ * The design tokens every snapit surface draws from.
+ *
+ * There were three palettes before this file: dark glass in the record overlay, a
+ * different dark in the annotation toolbar, and a light form in Settings — each with
+ * its own blue, its own border and its own copy of the system font stack. They drifted
+ * because nothing held them together. Custom properties do, and inline style objects
+ * can reference them as plainly as a stylesheet can.
+ *
+ * Two families, because snapit really does have two contexts: chrome that floats over
+ * someone else's screen (dark, translucent, must not compete with what is underneath)
+ * and windows of our own (light, opaque, ordinary). Meaning colours are shared, so blue
+ * means "selected" and red means "recording" wherever they appear.
+ *
+ * Annotation colours are NOT here: they are drawn by Konva onto a canvas, which cannot
+ * resolve a CSS variable. They stay literal in features/annotate/types.ts.
+ */
+
+:root {
+  /* Floating chrome over live screen content */
+  --glass: rgba(28, 28, 30, 0.72);
+  --glass-strong: rgba(28, 28, 30, 0.92);
+  --glass-solid: rgba(30, 30, 32, 0.95);
+  --glass-raised: rgba(40, 40, 42, 0.98);
+  --glass-edge: rgba(255, 255, 255, 0.14);
+  --glass-edge-strong: rgba(255, 255, 255, 0.22);
+  --glass-fill: rgba(255, 255, 255, 0.06);
+  --glass-fill-strong: rgba(255, 255, 255, 0.08);
+  --blur: blur(20px) saturate(180%);
+
+  /* Ink on that chrome */
+  --on-dark: #ffffff;
+  --on-dark-2: rgba(255, 255, 255, 0.72);
+  --on-dark-3: rgba(255, 255, 255, 0.45);
+
+  /* Our own windows */
+  --surface: #f5f5f7;
+  --surface-raised: #ffffff;
+  --surface-sunken: #f2f2f4;
+  --surface-edge: #c7c7cc;
+  --ink: #1c1c1e;
+  --ink-2: #6b6b70;
+  --ink-3: #8e8e93;
+
+  /* Meaning, shared by both families */
+  --accent: #0a84ff;
+  --accent-fill: rgba(10, 132, 255, 0.28);
+  --accent-edge: rgba(10, 132, 255, 0.9);
+  --accent-tint: #eef6ff;
+  --danger: #ff3b30;
+  --danger-bright: #ff453a;
+  --success: #34c759;
+
+  /* Shape */
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 11px;
+  --r-xl: 16px;
+  --r-pill: 999px;
+
+  --shadow-bar: 0 16px 50px rgba(0, 0, 0, 0.5);
+  --shadow-pop: 0 18px 55px rgba(0, 0, 0, 0.6);
+  --shadow-pill: 0 6px 20px rgba(0, 0, 0, 0.5);
+  --shadow-toolbar: 0 4px 16px rgba(0, 0, 0, 0.4);
+
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+}
+
+/*
+ * Every control was reachable by keyboard and invisible once it got there — no focus
+ * styling existed anywhere in the app. An outline rather than a box-shadow because
+ * inline styles win over a stylesheet, and most of these controls set their own shadow.
+ */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Controls inherit the app's font instead of the platform's form default. */
+button,
+input,
+select,
+textarea {
+  font-family: var(--font);
+}

@@ -1,0 +1,166 @@
+import type { ReactElement } from 'react'
+
+/**
+ * The app's icons, as inline SVG.
+ *
+ * They were emoji and stray Unicode glyphs before — 🔊 🎤 ⚑ ⏹ ↶ on the chrome, ▭ ◯ ／ ▨
+ * on the annotation toolbar. Each of those is a different font's idea of a shape: they
+ * render at different weights on every platform, some fall back to a box, none take a
+ * colour, and a row of them never lines up. `MoveIcon` in the annotation toolbar was
+ * already the exception that proved it — this is that one icon, generalised.
+ *
+ * One 24-unit grid, stroked in `currentColor`, so an icon inherits whatever the control
+ * around it is doing. Fills are used only where a shape is the meaning (a solid
+ * redaction block, a stop square).
+ */
+
+export type IconName =
+  | 'move'
+  | 'rect'
+  | 'ellipse'
+  | 'arrow'
+  | 'line'
+  | 'pen'
+  | 'text'
+  | 'redact'
+  | 'redact-solid'
+  | 'redact-pixelate'
+  | 'undo'
+  | 'redo'
+  | 'close'
+  | 'chevron-down'
+  | 'speaker'
+  | 'mic'
+  | 'flag'
+  | 'stop'
+  | 'grip'
+  | 'globe'
+  | 'star'
+
+const PATHS: Record<IconName, ReactElement> = {
+  move: (
+    <>
+      <path d="M12 3v18M3 12h18" />
+      <path d="M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3" />
+    </>
+  ),
+  rect: <rect x="3.5" y="5.5" width="17" height="13" rx="1.5" />,
+  ellipse: <ellipse cx="12" cy="12" rx="8.5" ry="6.5" />,
+  arrow: (
+    <>
+      <path d="M5 19L19 5" />
+      <path d="M11 5h8v8" />
+    </>
+  ),
+  line: <path d="M5 19L19 5" />,
+  pen: (
+    <>
+      <path d="M4 20l4.5-1.2L20.2 7.1a2 2 0 0 0 0-2.8l-.5-.5a2 2 0 0 0-2.8 0L5.2 15.5z" />
+      <path d="M15.5 5.5l3 3" />
+    </>
+  ),
+  text: (
+    <>
+      <path d="M5 6.5V5h14v1.5" />
+      <path d="M12 5v14M9 19h6" />
+    </>
+  ),
+  // Lines of text with one struck out — a square with a slash read as "forbidden".
+  redact: (
+    <>
+      <path d="M4 6.5h16M4 17.5h10" />
+      <rect x="4" y="10.25" width="16" height="3.5" rx="0.5" fill="currentColor" stroke="none" />
+    </>
+  ),
+  'redact-solid': <rect x="3.5" y="6" width="17" height="12" rx="1.5" fill="currentColor" stroke="none" />,
+  // A framed checkerboard, so it contrasts with the solid block beside it at 13px.
+  'redact-pixelate': (
+    <>
+      <rect x="3.5" y="6" width="17" height="12" rx="1.5" />
+      <g fill="currentColor" stroke="none">
+        <rect x="4.5" y="7" width="4" height="4" />
+        <rect x="12.5" y="7" width="4" height="4" />
+        <rect x="8.5" y="11" width="4" height="4" />
+        <rect x="16.5" y="11" width="3" height="4" />
+        <rect x="4.5" y="15" width="4" height="2" />
+        <rect x="12.5" y="15" width="4" height="2" />
+      </g>
+    </>
+  ),
+  undo: (
+    <>
+      <path d="M4 9h11a5 5 0 0 1 0 10h-6" />
+      <path d="M8 5L4 9l4 4" />
+    </>
+  ),
+  redo: (
+    <>
+      <path d="M20 9H9a5 5 0 0 0 0 10h6" />
+      <path d="M16 5l4 4-4 4" />
+    </>
+  ),
+  close: <path d="M6 6l12 12M18 6L6 18" />,
+  'chevron-down': <path d="M6 9.5l6 6 6-6" />,
+  speaker: (
+    <>
+      <path d="M4 9.5h3.5L12 5.5v13L7.5 14.5H4z" />
+      <path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11" />
+    </>
+  ),
+  mic: (
+    <>
+      <rect x="9" y="3" width="6" height="11" rx="3" />
+      <path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M9 21h6" />
+    </>
+  ),
+  flag: (
+    <>
+      <path d="M6 21V4" />
+      <path d="M6 4.5h11l-2.2 3.75L17 12H6z" />
+    </>
+  ),
+  stop: <rect x="6.5" y="6.5" width="11" height="11" rx="1.5" fill="currentColor" stroke="none" />,
+  grip: (
+    <g fill="currentColor" stroke="none">
+      <circle cx="9" cy="6" r="1.5" />
+      <circle cx="15" cy="6" r="1.5" />
+      <circle cx="9" cy="12" r="1.5" />
+      <circle cx="15" cy="12" r="1.5" />
+      <circle cx="9" cy="18" r="1.5" />
+      <circle cx="15" cy="18" r="1.5" />
+    </g>
+  ),
+  globe: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M3.5 12h17" />
+      <ellipse cx="12" cy="12" rx="4" ry="8.5" />
+    </>
+  ),
+  star: <path d="M12 3.5l2.6 5.6 6 .8-4.4 4.2 1.1 6.1-5.3-3-5.3 3 1.1-6.1L3.4 9.9l6-.8z" />
+}
+
+/**
+ * `size` is the rendered box; the artwork is drawn on a 24-unit grid and scales to it.
+ * An icon is decoration — the control around it carries the accessible name — so it is
+ * hidden from assistive technology rather than announced twice.
+ */
+export function Icon({ name, size = 16 }: { name: IconName; size?: number }): ReactElement {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+      style={{ display: 'block', flex: 'none' }}
+    >
+      {PATHS[name]}
+    </svg>
+  )
+}

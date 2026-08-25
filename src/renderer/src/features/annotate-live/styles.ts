@@ -6,4 +6,4 @@ import type { CSSProperties } from 'react'
  */
 
 /** Thickness slider — live drawing has no size preview, so the control is visible. */
-export const strokeRange: CSSProperties = { width: 76, accentColor: '#0a84ff', cursor: 'pointer' }
+export const strokeRange: CSSProperties = { width: 76, accentColor: 'var(--accent)', cursor: 'pointer' }

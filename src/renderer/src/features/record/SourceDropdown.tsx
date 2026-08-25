@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactElement } from 'react'
 import type { RecordSourceInfo } from '@preload/index'
 import { SourcePicker } from './SourcePicker'
 import { barControl, caret, popover } from './styles'
+import { Icon } from '@renderer/components/Icon'
 
 type SourceTab = 'screen' | 'window'
 
@@ -45,7 +46,9 @@ export function SourceDropdown(props: Props): ReactElement {
         <span style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {label}
         </span>
-        <span style={caret}>▾</span>
+        <span style={caret}>
+          <Icon name="chevron-down" size={12} />
+        </span>
       </button>
 
       {open && (

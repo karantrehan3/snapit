@@ -46,5 +46,5 @@ export const toolbarPosition: CSSProperties = {
 
 export const loadingHint: CSSProperties = {
   color: 'rgba(255, 255, 255, 0.6)',
-  font: '14px -apple-system, system-ui, sans-serif'
+  font: '14px var(--font)'
 }

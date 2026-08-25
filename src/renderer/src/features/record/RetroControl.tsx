@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { RETRO_CHOICES, retroLabel } from './retroWindow'
 import type { RetroWindow } from './retroBuffer'
 import { barControl, caret, popover } from './styles'
+import { Icon } from '@renderer/components/Icon'
 
 /**
  * How much of the recording to keep, for the command bar. Mirrors QualityControl —
@@ -29,7 +30,10 @@ export function RetroControl({
   return (
     <div ref={ref} style={{ position: 'relative' }}>
       <button type="button" style={barControl} onClick={() => setOpen((o) => !o)} title="How much to keep">
-        {retroLabel(value)} <span style={caret}>▾</span>
+        {retroLabel(value)}{' '}
+        <span style={caret}>
+          <Icon name="chevron-down" size={12} />
+        </span>
       </button>
 
       {open && (

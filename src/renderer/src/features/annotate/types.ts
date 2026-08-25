@@ -1,4 +1,5 @@
 import type { Box } from '@renderer/lib/image'
+import type { IconName } from '@renderer/components/Icon'
 
 // --- Annotation tools & shapes ---
 
@@ -78,15 +79,15 @@ export const MIN_STROKE = 1
 export const MAX_STROKE = 48
 export const DEFAULT_STROKE = 4
 
-export const TOOLS: ReadonlyArray<{ tool: Tool; label: string; title: string }> = [
-  { tool: 'move', label: '↖', title: 'Move / Select' },
-  { tool: 'rect', label: '▭', title: 'Rectangle' },
-  { tool: 'circle', label: '◯', title: 'Ellipse' },
-  { tool: 'arrow', label: '↗', title: 'Arrow' },
-  { tool: 'line', label: '／', title: 'Line' },
-  { tool: 'pen', label: '✎', title: 'Pen' },
-  { tool: 'text', label: 'T', title: 'Text' },
-  { tool: 'redact', label: '▨', title: 'Redact — hide sensitive info' }
+export const TOOLS: ReadonlyArray<{ tool: Tool; icon: IconName; title: string }> = [
+  { tool: 'move', icon: 'move', title: 'Move / Select' },
+  { tool: 'rect', icon: 'rect', title: 'Rectangle' },
+  { tool: 'circle', icon: 'ellipse', title: 'Ellipse' },
+  { tool: 'arrow', icon: 'arrow', title: 'Arrow' },
+  { tool: 'line', icon: 'line', title: 'Line' },
+  { tool: 'pen', icon: 'pen', title: 'Pen' },
+  { tool: 'text', icon: 'text', title: 'Text' },
+  { tool: 'redact', icon: 'redact', title: 'Redact — hide sensitive info' }
 ]
 
 /** Text font size derived from the selected stroke width. */
@@ -114,11 +115,11 @@ export const REDACT_FILL = '#000000'
 
 export const DEFAULT_REDACT_MODE: RedactMode = 'solid'
 
-export const REDACT_MODES: ReadonlyArray<{ mode: RedactMode; label: string; title: string }> = [
-  { mode: 'solid', label: '██', title: 'Solid — the pixels are gone' },
+export const REDACT_MODES: ReadonlyArray<{ mode: RedactMode; icon: IconName; title: string }> = [
+  { mode: 'solid', icon: 'redact-solid', title: 'Solid — the pixels are gone' },
   {
     mode: 'pixelate',
-    label: '▩',
+    icon: 'redact-pixelate',
     title: 'Pixelate — recoverable in some cases; prefer solid for IDs and card numbers'
   }
 ]

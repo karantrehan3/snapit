@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { barControl, caret, fpsInput, popover, segment, segmented } from './styles'
+import { Icon } from '@renderer/components/Icon'
 
 const MIN_FPS = 5
 const MAX_FPS = 60
@@ -30,7 +31,10 @@ export function FpsControl({
   return (
     <div ref={ref} style={{ position: 'relative' }}>
       <button type="button" style={barControl} onClick={() => setOpen((o) => !o)} title="Frame rate">
-        {value} fps <span style={caret}>▾</span>
+        {value} fps{' '}
+        <span style={caret}>
+          <Icon name="chevron-down" size={12} />
+        </span>
       </button>
 
       {open && (

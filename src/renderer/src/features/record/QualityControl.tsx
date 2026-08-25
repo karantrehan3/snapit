@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { QUALITY_ORDER, QUALITY_PRESETS, type QualityPreset } from './quality'
 import { barControl, caret, popover } from './styles'
+import { Icon } from '@renderer/components/Icon'
 
 /**
  * Quality selector for the command bar, shared by the video and silent recorders.
@@ -31,7 +32,10 @@ export function QualityControl({
   return (
     <div ref={ref} style={{ position: 'relative' }}>
       <button type="button" style={barControl} onClick={() => setOpen((o) => !o)} title="Recording quality">
-        {QUALITY_PRESETS[value].label} <span style={caret}>▾</span>
+        {QUALITY_PRESETS[value].label}{' '}
+        <span style={caret}>
+          <Icon name="chevron-down" size={12} />
+        </span>
       </button>
 
       {open && (

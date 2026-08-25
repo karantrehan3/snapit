@@ -12,8 +12,8 @@ export const stage: CSSProperties = {
   position: 'fixed',
   inset: 0,
   userSelect: 'none',
-  font: '13px -apple-system, system-ui, sans-serif',
-  color: '#fff'
+  font: '13px var(--font)',
+  color: 'var(--on-dark)'
 }
 
 /**
@@ -32,22 +32,22 @@ export const hintBar: CSSProperties = {
   padding: '8px 12px',
   borderRadius: 12,
   background: 'rgba(28, 28, 30, 0.62)',
-  backdropFilter: 'blur(20px) saturate(180%)',
-  WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+  backdropFilter: 'var(--blur)',
+  WebkitBackdropFilter: 'var(--blur)',
   border: '1px solid rgba(255, 255, 255, 0.10)',
-  color: 'rgba(255, 255, 255, 0.72)',
-  font: '12px/1.45 -apple-system, system-ui, sans-serif'
+  color: 'var(--on-dark-2)',
+  font: '12px/1.45 var(--font)'
 }
 
 export const hintAction: CSSProperties = {
   appearance: 'none',
   flex: 'none',
-  border: '1px solid rgba(255, 255, 255, 0.22)',
+  border: '1px solid var(--glass-edge-strong)',
   borderRadius: 8,
   padding: '4px 10px',
   background: 'transparent',
-  color: '#fff',
-  font: '600 12px -apple-system, system-ui, sans-serif',
+  color: 'var(--on-dark)',
+  font: '600 12px var(--font)',
   cursor: 'pointer',
   whiteSpace: 'nowrap'
 }
@@ -63,13 +63,13 @@ export const commandBar: CSSProperties = {
   gap: 8,
   padding: '10px 12px',
   borderRadius: 16,
-  background: 'rgba(28, 28, 30, 0.72)',
-  backdropFilter: 'blur(20px) saturate(180%)',
-  WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-  border: '1px solid rgba(255, 255, 255, 0.14)',
-  boxShadow: '0 16px 50px rgba(0, 0, 0, 0.5)',
-  color: '#fff',
-  font: '13px -apple-system, system-ui, sans-serif'
+  background: 'var(--glass)',
+  backdropFilter: 'var(--blur)',
+  WebkitBackdropFilter: 'var(--blur)',
+  border: '1px solid var(--glass-edge)',
+  boxShadow: 'var(--shadow-bar)',
+  color: 'var(--on-dark)',
+  font: '13px var(--font)'
 }
 
 export const barDivider: CSSProperties = {
@@ -88,9 +88,9 @@ export const barControl: CSSProperties = {
   height: 36,
   padding: '0 12px',
   borderRadius: 11,
-  border: '1px solid rgba(255, 255, 255, 0.14)',
-  background: 'rgba(255, 255, 255, 0.06)',
-  color: '#fff',
+  border: '1px solid var(--glass-edge)',
+  background: 'var(--glass-fill)',
+  color: 'var(--on-dark)',
   fontSize: 13,
   fontWeight: 500,
   cursor: 'pointer',
@@ -110,9 +110,9 @@ export function iconToggle(active: boolean): CSSProperties {
     borderRadius: 11,
     cursor: 'pointer',
     fontSize: 15,
-    color: '#fff',
-    border: active ? '1px solid rgba(10, 132, 255, 0.9)' : '1px solid rgba(255, 255, 255, 0.14)',
-    background: active ? 'rgba(10, 132, 255, 0.28)' : 'rgba(255, 255, 255, 0.06)'
+    color: 'var(--on-dark)',
+    border: active ? '1px solid rgba(10, 132, 255, 0.9)' : '1px solid var(--glass-edge)',
+    background: active ? 'var(--accent-fill)' : 'var(--glass-fill)'
   }
 }
 
@@ -131,23 +131,22 @@ export const ghostIcon: CSSProperties = {
   cursor: 'pointer'
 }
 
-export function primaryButton(bg: string): CSSProperties {
-  return {
-    boxSizing: 'border-box',
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 8,
-    height: 36,
-    padding: '0 18px',
-    border: 'none',
-    borderRadius: 11,
-    cursor: 'pointer',
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: 700,
-    background: bg,
-    boxShadow: bg === '#ff3b30' ? '0 2px 12px rgba(255, 59, 48, 0.45)' : 'none'
-  }
+/** The one button that starts a capture. It has only ever been red. */
+export const recordButton: CSSProperties = {
+  boxSizing: 'border-box',
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 8,
+  height: 36,
+  padding: '0 18px',
+  border: 'none',
+  borderRadius: 'var(--r-lg)',
+  cursor: 'pointer',
+  color: 'var(--on-dark)',
+  fontSize: 13,
+  fontWeight: 700,
+  background: 'var(--danger)',
+  boxShadow: '0 2px 12px rgba(255, 59, 48, 0.45)'
 }
 
 /** A popover anchored above a bar control (source picker / fps menu). */
@@ -157,11 +156,11 @@ export const popover: CSSProperties = {
   left: 0,
   padding: 12,
   borderRadius: 14,
-  background: 'rgba(28, 28, 30, 0.92)',
-  backdropFilter: 'blur(20px) saturate(180%)',
-  WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-  border: '1px solid rgba(255, 255, 255, 0.14)',
-  boxShadow: '0 18px 55px rgba(0, 0, 0, 0.6)',
+  background: 'var(--glass-strong)',
+  backdropFilter: 'var(--blur)',
+  WebkitBackdropFilter: 'var(--blur)',
+  border: '1px solid var(--glass-edge)',
+  boxShadow: 'var(--shadow-pop)',
   zIndex: 2
 }
 
@@ -172,7 +171,7 @@ export const fpsInput: CSSProperties = {
   borderRadius: 8,
   border: '1px solid rgba(255, 255, 255, 0.2)',
   background: 'rgba(0, 0, 0, 0.3)',
-  color: '#fff',
+  color: 'var(--on-dark)',
   fontVariantNumeric: 'tabular-nums'
 }
 
@@ -181,7 +180,7 @@ export const linkButton: CSSProperties = {
   background: 'none',
   border: 'none',
   padding: '0 6px',
-  color: '#0a84ff',
+  color: 'var(--accent)',
   font: 'inherit',
   fontWeight: 600,
   cursor: 'pointer',
@@ -207,7 +206,7 @@ export const centerHint: CSSProperties = {
 
 export const regionBox: CSSProperties = {
   position: 'fixed',
-  border: '2px solid #ff3b30',
+  border: '2px solid var(--danger)',
   boxShadow: `0 0 0 1px rgba(0, 0, 0, 0.35), 0 0 0 9999px ${DIM}`,
   pointerEvents: 'none'
 }
@@ -216,7 +215,7 @@ export const regionBox: CSSProperties = {
  * usable), and the overlay is content-protected so this border isn't captured. */
 export const recordingBorder: CSSProperties = {
   position: 'fixed',
-  border: '2px solid #ff3b30',
+  border: '2px solid var(--danger)',
   boxShadow: '0 0 0 1px rgba(0, 0, 0, 0.4)',
   pointerEvents: 'none'
 }
@@ -225,7 +224,7 @@ export const segmented: CSSProperties = {
   display: 'flex',
   padding: 3,
   borderRadius: 9,
-  background: 'rgba(255, 255, 255, 0.08)'
+  background: 'var(--glass-fill-strong)'
 }
 
 export function segment(active: boolean): CSSProperties {
@@ -240,11 +239,11 @@ export function segment(active: boolean): CSSProperties {
     border: 'none',
     borderRadius: 7,
     cursor: 'pointer',
-    color: '#fff',
+    color: 'var(--on-dark)',
     fontSize: 13,
     fontWeight: 600,
     whiteSpace: 'nowrap',
-    background: active ? '#0a84ff' : 'transparent'
+    background: active ? 'var(--accent)' : 'transparent'
   }
 }
 
@@ -274,11 +273,11 @@ export function sourceItem(active: boolean): CSSProperties {
     gap: 4,
     minWidth: 0,
     padding: 6,
-    border: active ? '2px solid #0a84ff' : '2px solid transparent',
+    border: active ? '2px solid var(--accent)' : '2px solid transparent',
     borderRadius: 8,
-    background: 'rgba(255, 255, 255, 0.06)',
+    background: 'var(--glass-fill)',
     cursor: 'pointer',
-    color: '#fff',
+    color: 'var(--on-dark)',
     textAlign: 'left'
   }
 }
@@ -318,11 +317,11 @@ export const spinner: CSSProperties = {
   height: 22,
   borderRadius: '50%',
   border: '3px solid rgba(255, 255, 255, 0.2)',
-  borderTopColor: '#0a84ff',
+  borderTopColor: 'var(--accent)',
   animation: 'snapitSpin 0.8s linear infinite'
 }
 
-export const errorText: CSSProperties = { fontSize: 12, color: '#ff453a' }
+export const errorText: CSSProperties = { fontSize: 12, color: 'var(--danger-bright)' }
 
 export const pill: CSSProperties = {
   position: 'fixed',
@@ -331,16 +330,16 @@ export const pill: CSSProperties = {
   gap: 10,
   padding: '8px 12px',
   borderRadius: 999,
-  background: 'rgba(28, 28, 30, 0.95)',
-  boxShadow: '0 6px 20px rgba(0, 0, 0, 0.5)',
-  color: '#fff',
-  font: '13px -apple-system, system-ui, sans-serif',
+  background: 'var(--glass-solid)',
+  boxShadow: 'var(--shadow-pill)',
+  color: 'var(--on-dark)',
+  font: '13px var(--font)',
   pointerEvents: 'auto'
 }
 
 export const grip: CSSProperties = {
   cursor: 'grab',
-  color: 'rgba(255, 255, 255, 0.45)',
+  color: 'var(--on-dark-3)',
   fontSize: 16,
   lineHeight: 1,
   userSelect: 'none'
@@ -350,7 +349,7 @@ export const recDot: CSSProperties = {
   width: 10,
   height: 10,
   borderRadius: '50%',
-  background: '#ff3b30',
+  background: 'var(--danger)',
   boxShadow: '0 0 0 0 rgba(255, 59, 48, 0.6)',
   animation: 'snapitPulse 1.4s ease-out infinite'
 }
@@ -367,20 +366,39 @@ export function pillToggle(active: boolean): CSSProperties {
     borderRadius: 999,
     cursor: 'pointer',
     fontSize: 13,
-    color: '#fff',
+    color: 'var(--on-dark)',
     border: active ? '1px solid rgba(10, 132, 255, 0.9)' : '1px solid rgba(255, 255, 255, 0.18)',
-    background: active ? 'rgba(10, 132, 255, 0.32)' : 'rgba(255, 255, 255, 0.08)'
+    background: active ? 'rgba(10, 132, 255, 0.32)' : 'var(--glass-fill-strong)'
   }
 }
 
+/** The marker button grows to hold its count; without one it stays a square icon. */
+export function markerButton(count: number): CSSProperties {
+  return {
+    ...pillToggle(false),
+    gap: 4,
+    width: count > 0 ? 'auto' : 26,
+    padding: count > 0 ? '0 8px' : 0
+  }
+}
+
+export const markerCount: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 600,
+  fontVariantNumeric: 'tabular-nums'
+}
+
 export const stopButton: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 5,
   height: 26,
   padding: '0 12px',
   border: 'none',
   borderRadius: 999,
   cursor: 'pointer',
-  color: '#fff',
+  color: 'var(--on-dark)',
   fontSize: 12,
   fontWeight: 600,
-  background: '#ff3b30'
+  background: 'var(--danger)'
 }

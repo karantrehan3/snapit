@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactElement } from 'react'
+import { Icon } from '@renderer/components/Icon'
 import type { DisplaySource, WorkArea } from '@preload/index'
 import { useLiveSurface } from '../annotate-live/useLiveSurface'
 import { useSourcePicker } from '../record/useSourcePicker'
@@ -19,7 +20,7 @@ import {
   errorText,
   ghostIcon,
   linkButton,
-  primaryButton,
+  recordButton,
   regionBox,
   stage
 } from '../record/styles'
@@ -149,12 +150,13 @@ export function GifOverlay({
           style={ghostIcon}
           onClick={() => window.snapit.closeOverlay()}
           title="Cancel (Esc)"
+          aria-label="Cancel"
         >
-          ✕
+          <Icon name="close" size={17} />
         </button>
         <button
           type="button"
-          style={primaryButton('#ff3b30')}
+          style={recordButton}
           onClick={() =>
             void recorder.start({
               selectedId,

@@ -1,4 +1,5 @@
 import { useState, type CSSProperties, type ReactElement, type RefObject } from 'react'
+import { Icon } from '@renderer/components/Icon'
 import { COLORS, PALETTE, REDACT_MODES, TOOLS, type RedactMode, type Tool } from './types'
 import {
   palettePopover,
@@ -70,8 +71,15 @@ export function Toolbar({
   return (
     <div ref={barRef} style={{ ...barStyle, ...style }}>
       {TOOLS.map((t) => (
-        <button key={t.tool} title={t.title} onClick={() => setTool(t.tool)} style={btn(tool === t.tool)}>
-          {t.tool === 'move' ? <MoveIcon /> : t.label}
+        <button
+          key={t.tool}
+          title={t.title}
+          aria-label={t.title}
+          aria-pressed={tool === t.tool}
+          onClick={() => setTool(t.tool)}
+          style={btn(tool === t.tool)}
+        >
+          <Icon name={t.icon} />
         </button>
       ))}
       <span style={toolbarSep} />
@@ -81,15 +89,24 @@ export function Toolbar({
           <button
             key={m.mode}
             title={m.title}
+            aria-label={m.title}
+            aria-pressed={redactMode === m.mode}
             onClick={() => setRedactMode(m.mode)}
             style={btn(redactMode === m.mode)}
           >
-            {m.label}
+            <Icon name={m.icon} />
           </button>
         ))}
       {tool !== 'redact' &&
         COLORS.map((c) => (
-          <button key={c} title={c} onClick={() => setColor(c)} style={swatch(c, color === c)} />
+          <button
+            key={c}
+            title={colorName(c)}
+            aria-label={colorName(c)}
+            aria-pressed={color === c}
+            onClick={() => setColor(c)}
+            style={swatch(c, color === c)}
+          />
         ))}
       <div style={{ position: 'relative', display: 'inline-flex', ...(tool === 'redact' && hidden) }}>
         <button
@@ -102,7 +119,8 @@ export function Toolbar({
             {PALETTE.map((c) => (
               <button
                 key={c}
-                title={c}
+                title={colorName(c)}
+                aria-label={colorName(c)}
                 onClick={() => {
                   setColor(c)
                   setColorMenu(false)
@@ -114,11 +132,23 @@ export function Toolbar({
         )}
       </div>
       <span style={toolbarSep} />
-      <button title="Undo (⌘Z)" onClick={onUndo} disabled={!canUndo} style={btn(false, !canUndo)}>
-        ↶
+      <button
+        title="Undo (⌘Z)"
+        aria-label="Undo"
+        onClick={onUndo}
+        disabled={!canUndo}
+        style={btn(false, !canUndo)}
+      >
+        <Icon name="undo" />
       </button>
-      <button title="Redo (⌘⇧Z)" onClick={onRedo} disabled={!canRedo} style={btn(false, !canRedo)}>
-        ↷
+      <button
+        title="Redo (⌘⇧Z)"
+        aria-label="Redo"
+        onClick={onRedo}
+        disabled={!canRedo}
+        style={btn(false, !canRedo)}
+      >
+        <Icon name="redo" />
       </button>
       <button title="Copy to clipboard" onClick={onCopy} style={action('#0a84ff')}>
         Copy
@@ -128,8 +158,14 @@ export function Toolbar({
         <button title={saveTitle} onClick={onSave} style={splitMain('#34c759')}>
           {saveLabel}
         </button>
-        <button title={saveAsLabel} onClick={() => setSaveMenu((m) => !m)} style={splitChevron('#2da14e')}>
-          ▾
+        <button
+          title={saveAsLabel}
+          aria-label={saveAsLabel}
+          aria-expanded={saveMenu}
+          onClick={() => setSaveMenu((m) => !m)}
+          style={splitChevron('#2da14e')}
+        >
+          <Icon name="chevron-down" size={13} />
         </button>
         {saveMenu && (
           <div style={menuStyle(menuPlacement)}>
@@ -147,35 +183,25 @@ export function Toolbar({
         )}
       </div>
 
-      <button title="Cancel (Esc)" onClick={onCancel} style={action('#48484a')}>
-        ✕
+      <button title="Cancel (Esc)" aria-label="Cancel" onClick={onCancel} style={action('#48484a')}>
+        <Icon name="close" />
       </button>
     </div>
   )
 }
 
-/** Four-directional move arrows. */
-function MoveIcon(): ReactElement {
-  return (
-    <svg
-      width="15"
-      height="15"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      style={{ display: 'block' }}
-    >
-      <line x1="12" y1="3" x2="12" y2="21" />
-      <line x1="3" y1="12" x2="21" y2="12" />
-      <polyline points="9 6 12 3 15 6" />
-      <polyline points="9 18 12 21 15 18" />
-      <polyline points="6 9 3 12 6 15" />
-      <polyline points="18 9 21 12 18 15" />
-    </svg>
-  )
+/** Swatches announced themselves as '#ffcc00'; a name is what someone is looking for. */
+function colorName(hex: string): string {
+  return NAMED[hex.toLowerCase()] ?? hex
+}
+
+const NAMED: Record<string, string> = {
+  '#ff3b30': 'Red',
+  '#ffcc00': 'Yellow',
+  '#34c759': 'Green',
+  '#0a84ff': 'Blue',
+  '#ffffff': 'White',
+  '#1c1c1e': 'Black'
 }
 
 function splitMain(bg: string): CSSProperties {

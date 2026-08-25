@@ -1,3 +1,4 @@
+import type { IconName } from '@renderer/components/Icon'
 import type { RedactShape, Shape, TextShape } from '../annotate/types'
 
 /**
@@ -15,12 +16,12 @@ export type LiveShape = Exclude<Shape, TextShape | RedactShape> & { bornAt: numb
  */
 export type LiveTool = 'pen' | 'arrow' | 'rect' | 'circle' | 'line'
 
-export const LIVE_TOOLS: ReadonlyArray<{ tool: LiveTool; label: string; title: string }> = [
-  { tool: 'pen', label: '✎', title: 'Pen' },
-  { tool: 'arrow', label: '↗', title: 'Arrow' },
-  { tool: 'rect', label: '▭', title: 'Rectangle' },
-  { tool: 'circle', label: '◯', title: 'Ellipse' },
-  { tool: 'line', label: '／', title: 'Line' }
+export const LIVE_TOOLS: ReadonlyArray<{ tool: LiveTool; icon: IconName; title: string }> = [
+  { tool: 'pen', icon: 'pen', title: 'Pen' },
+  { tool: 'arrow', icon: 'arrow', title: 'Arrow' },
+  { tool: 'rect', icon: 'rect', title: 'Rectangle' },
+  { tool: 'circle', icon: 'ellipse', title: 'Ellipse' },
+  { tool: 'line', icon: 'line', title: 'Line' }
 ]
 
 /**

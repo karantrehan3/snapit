@@ -71,7 +71,7 @@ describe('TOOLS', () => {
   it('exposes redact, and every tool stays uniquely identifiable', () => {
     expect(TOOLS.map((t) => t.tool)).toContain('redact')
     expect(new Set(TOOLS.map((t) => t.tool)).size).toBe(TOOLS.length)
-    expect(new Set(TOOLS.map((t) => t.label)).size).toBe(TOOLS.length)
+    expect(new Set(TOOLS.map((t) => t.icon)).size).toBe(TOOLS.length)
   })
 
   it('still exposes text, which was hidden while its focus bug was open', () => {

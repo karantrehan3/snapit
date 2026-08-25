@@ -1,7 +1,16 @@
 import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactElement, RefObject } from 'react'
 import type { WorkArea } from '@preload/index'
 import type { Pt } from './types'
-import { grip, pill, pillToggle, recDot, stopButton } from './styles'
+import { Icon } from '@renderer/components/Icon'
+import {
+  grip,
+  markerButton,
+  markerCount as markerCountStyle,
+  pill,
+  pillToggle,
+  recDot,
+  stopButton
+} from './styles'
 
 /** Inset from the top of the *usable* area, so the pill clears the macOS menu bar. */
 const TOP_MARGIN = 16
@@ -51,18 +60,19 @@ export function RecordingPill({
         ) : (
           <>
             <span style={grip} onMouseDown={onGripMouseDown} title="Drag to move">
-              ⠿
+              <Icon name="grip" size={14} />
             </span>
             <span style={recDot} />
             <span style={{ fontVariantNumeric: 'tabular-nums', minWidth: 44 }}>{fmt(elapsed)}</span>
             <button
               type="button"
               onClick={onMark}
-              style={pillToggle(false)}
+              style={markerButton(markerCount)}
               title={`Mark this moment (⌘⇧M)${markerCount > 0 ? ` — ${markerCount} so far` : ''}`}
               aria-label="Mark this moment"
             >
-              ⚑{markerCount > 0 ? ` ${markerCount}` : ''}
+              <Icon name="flag" size={13} />
+              {markerCount > 0 && <span style={markerCountStyle}>{markerCount}</span>}
             </button>
             {onToggleDraw && (
               <button
@@ -73,11 +83,12 @@ export function RecordingPill({
                 aria-label="Toggle annotation drawing"
                 aria-pressed={drawMode}
               >
-                ✎
+                <Icon name="pen" size={13} />
               </button>
             )}
             <button type="button" onClick={onStop} style={stopButton}>
-              ⏹ Stop
+              <Icon name="stop" size={11} />
+              Stop
             </button>
           </>
         )}

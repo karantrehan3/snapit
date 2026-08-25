@@ -1,4 +1,5 @@
 import React, { lazy, Suspense } from 'react'
+import './styles/tokens.css'
 import { createRoot } from 'react-dom/client'
 import { Overlay } from './Overlay'
 import { Settings } from '@renderer/features/settings/Settings'

@@ -16,10 +16,10 @@ export const toolbarBar: CSSProperties = {
   alignItems: 'center',
   gap: 4,
   padding: '6px 8px',
-  background: 'rgba(30, 30, 32, 0.95)',
+  background: 'var(--glass-solid)',
   borderRadius: 8,
-  boxShadow: '0 4px 16px rgba(0, 0, 0, 0.4)',
-  font: '14px -apple-system, system-ui, sans-serif'
+  boxShadow: 'var(--shadow-toolbar)',
+  font: '14px var(--font)'
 }
 
 export const toolbarSep: CSSProperties = {
@@ -39,10 +39,10 @@ export function toolbarBtn(active: boolean, disabled = false): CSSProperties {
     border: 'none',
     borderRadius: 6,
     cursor: disabled ? 'default' : 'pointer',
-    color: '#fff',
+    color: 'var(--on-dark)',
     fontSize: 15,
     opacity: disabled ? 0.4 : 1,
-    background: active ? '#0a84ff' : 'rgba(255, 255, 255, 0.08)'
+    background: active ? 'var(--accent)' : 'var(--glass-fill-strong)'
   }
 }
 
@@ -53,7 +53,7 @@ export function toolbarSwatch(color: string, active: boolean): CSSProperties {
     borderRadius: '50%',
     cursor: 'pointer',
     background: color,
-    border: active ? '2px solid #fff' : '2px solid rgba(255, 255, 255, 0.25)'
+    border: active ? '2px solid var(--on-dark)' : '2px solid rgba(255, 255, 255, 0.25)'
   }
 }
 
@@ -81,7 +81,7 @@ export const palettePopover: CSSProperties = {
   gridTemplateColumns: 'repeat(7, 20px)',
   gap: 5,
   padding: 8,
-  background: 'rgba(40, 40, 42, 0.98)',
+  background: 'var(--glass-raised)',
   borderRadius: 8,
   boxShadow: '0 4px 16px rgba(0, 0, 0, 0.5)',
   zIndex: 10
@@ -94,7 +94,7 @@ export function paletteSwatch(color: string, active: boolean): CSSProperties {
     borderRadius: 4,
     cursor: 'pointer',
     background: color,
-    border: active ? '2px solid #0a84ff' : '1px solid rgba(255, 255, 255, 0.25)'
+    border: active ? '2px solid var(--accent)' : '1px solid rgba(255, 255, 255, 0.25)'
   }
 }
 
@@ -108,7 +108,7 @@ export function toolbarAction(bg: string): CSSProperties {
     border: 'none',
     borderRadius: 6,
     cursor: 'pointer',
-    color: '#fff',
+    color: 'var(--on-dark)',
     fontSize: 13,
     fontWeight: 600,
     whiteSpace: 'nowrap',
@@ -125,7 +125,7 @@ export function sizePreviewCircle(size: number): CSSProperties {
     width: size,
     height: size,
     borderRadius: '50%',
-    border: '2px solid #fff',
+    border: '2px solid var(--on-dark)',
     background: 'rgba(255, 255, 255, 0.15)',
     boxShadow: '0 0 0 1px rgba(0, 0, 0, 0.6)'
   }
@@ -138,8 +138,8 @@ export function sizePreviewGlyph(size: number): CSSProperties {
     placeItems: 'center',
     minWidth: size,
     height: size,
-    color: '#fff',
-    font: `600 ${size}px -apple-system, system-ui, sans-serif`,
+    color: 'var(--on-dark)',
+    font: `600 ${size}px var(--font)`,
     lineHeight: 1,
     textShadow: '0 0 3px rgba(0, 0, 0, 0.9)'
   }
@@ -154,7 +154,7 @@ export const sizePreviewLabel: CSSProperties = {
   padding: '1px 6px',
   borderRadius: 3,
   background: 'rgba(0, 0, 0, 0.7)',
-  color: '#fff',
-  font: '11px -apple-system, system-ui, sans-serif',
+  color: 'var(--on-dark)',
+  font: '11px var(--font)',
   whiteSpace: 'nowrap'
 }

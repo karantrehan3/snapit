@@ -10,6 +10,7 @@ import {
   toolbarSep,
   toolbarSwatch
 } from '../annotate/styles'
+import { Icon } from '@renderer/components/Icon'
 import { LIVE_TOOLS } from './types'
 import type { LiveAnnotations } from './useLiveAnnotations'
 import { strokeRange } from './styles'
@@ -50,7 +51,7 @@ export function LiveToolbar({ anno, style, barRef }: Props): ReactElement {
           onClick={() => anno.setTool(t.tool)}
           style={toolbarBtn(anno.tool === t.tool)}
         >
-          {t.label}
+          <Icon name={t.icon} />
         </button>
       ))}
 

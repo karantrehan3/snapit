@@ -21,9 +21,9 @@ describe('shared annotation palettes', () => {
 })
 
 describe('LIVE_TOOLS', () => {
-  it('has a unique tool, label and title per entry', () => {
+  it('has a unique tool, icon and title per entry', () => {
     expect(new Set(LIVE_TOOLS.map((t) => t.tool)).size).toBe(LIVE_TOOLS.length)
-    expect(new Set(LIVE_TOOLS.map((t) => t.label)).size).toBe(LIVE_TOOLS.length)
+    expect(new Set(LIVE_TOOLS.map((t) => t.icon)).size).toBe(LIVE_TOOLS.length)
     expect(new Set(LIVE_TOOLS.map((t) => t.title)).size).toBe(LIVE_TOOLS.length)
   })
 
