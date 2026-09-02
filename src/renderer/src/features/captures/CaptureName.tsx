@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactElement } from 'react'
+import { Icon } from '@renderer/components/Icon'
 import { errorMessage } from '@renderer/lib/errorMessage'
 import { detailName } from './styles'
 
@@ -69,9 +70,17 @@ export function CaptureName({
 
   if (!editing) {
     return (
-      <button type="button" style={trigger} title="Rename this capture" onClick={start}>
-        {name}
-      </button>
+      // The slot takes the header's spare width; the control takes only the name's, so
+      // hovering the empty half of the header does not light up a rename target.
+      <span style={wrap}>
+        <button type="button" data-rename style={trigger} title="Rename this capture" onClick={start}>
+          <span style={triggerName}>{name}</span>
+          {/* The only thing that says this name is editable, and only while pointed at. */}
+          <span data-pencil style={pencil}>
+            <Icon name="pen" size={13} />
+          </span>
+        </button>
+      </span>
     )
   }
 
@@ -106,9 +115,21 @@ export function CaptureName({
   )
 }
 
-/** Looks like the text it replaces until it is hovered, so the header stays quiet. */
+/**
+ * Looks like the text it replaces until it is hovered, so the header stays quiet.
+ *
+ * "Until it is hovered" is the whole affordance, and it lives in tokens.css under
+ * `[data-rename]` — an inline style object cannot express a hover state, and a name that
+ * is editable is indistinguishable from one that is not until something says so.
+ */
 const trigger: CSSProperties = {
   ...detailName,
+  // Shrink to the name rather than filling the slot, so the hover is on the name.
+  flex: '0 1 auto',
+  maxWidth: '100%',
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
   padding: '2px 6px',
   margin: '0 -6px',
   borderRadius: 'var(--r-sm)',
@@ -117,6 +138,16 @@ const trigger: CSSProperties = {
   textAlign: 'left',
   cursor: 'text'
 }
+
+/** The name keeps the ellipsis; the pencil must not be what gets truncated. */
+const triggerName: CSSProperties = {
+  minWidth: 0,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap'
+}
+
+const pencil: CSSProperties = { flex: 'none', display: 'flex', color: 'var(--ink-3)' }
 
 const wrap: CSSProperties = { flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 10 }
 

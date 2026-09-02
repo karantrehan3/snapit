@@ -265,6 +265,27 @@
 }
 
 /*
+ * The rename affordance, in `features/captures/CaptureName.tsx`.
+ *
+ * A name you can edit looks exactly like one you cannot, and the control was styled to
+ * "look like the text it replaces until it is hovered" — with no hover state anywhere,
+ * because an inline style object cannot have one. The pencil is what says it: dimmed
+ * until pointed at, and shown on keyboard focus too, since that is the other way in.
+ */
+[data-rename]:hover {
+  background: var(--surface-sunken);
+  border-color: var(--rule);
+}
+[data-rename] [data-pencil] {
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+[data-rename]:hover [data-pencil],
+[data-rename]:focus-visible [data-pencil] {
+  opacity: 1;
+}
+
+/*
  * `components/Button.tsx` and `components/Chip.tsx` set these attributes; everything
  * about them that is not a hover, focus or press state lives with the component. Keyed
  * on the same two attributes the component takes as props, so the pair is readable
