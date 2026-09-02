@@ -36,31 +36,44 @@ export const sidebar: CSSProperties = {
 }
 
 /**
- * Room for the traffic lights, which sit over the sidebar on a frameless-looking window.
- * 46px because that is the height of the content's own bar beside it, and a wordmark
- * that does not line up with the bar next to it is the first thing anyone notices.
+ * The lockup's strip.
+ *
+ * It used to hold a 62px spacer for the traffic lights, which put the lockup at a left
+ * edge nothing else shared. The home window is framed — the lights are in the title bar,
+ * above this, not over it — so the spacer was arbitrary. Centred instead: the lockup is
+ * the one thing up here that is not a control, and it has the strip to itself.
+ *
+ * 68 rather than the 46 that matched the content bar beside it. Lining the wordmark up
+ * with the route title across the divider is worth something, but not a logo wedged
+ * between two edges: at 46 a 34px mark left 6px of air, which reads as a mistake rather
+ * than as restraint. 17 above and below is the padding a mark this size asks for, and
+ * the divider it now misses is 202px away.
  */
 export const brand: CSSProperties = {
   flex: 'none',
-  height: 46,
+  height: 68,
   display: 'flex',
   alignItems: 'center',
+  justifyContent: 'center',
   gap: 9,
-  padding: '0 14px'
+  padding: '0 10px'
 }
 
 /**
- * snapit's own icon, at a size where it is actually a logo.
+ * snapit's own mark, at a size where it is actually a logo.
  *
- * 20px read as a grey smudge: the artwork has its own padding inside the square, so the
- * mark inside it was about twelve pixels of red. 28 with the radius the icon already has
- * gives it the room the wordmark beside it has.
+ * 34 is 34 now. Every earlier number here was compensating for the artwork: `appIcon`
+ * inlined the macOS app icon whole, 9% transparent margin included, so 20 drew twelve
+ * pixels of red and 40 drew a 33px mark inside a 40px box that nothing lined up with.
+ * The data URL is cropped to the mark itself, so this is the size on screen.
+ *
+ * No border radius: the artwork's corners are already rounded, with transparency outside
+ * them.
  */
 export const mark: CSSProperties = {
   flex: 'none',
-  width: 28,
-  height: 28,
-  borderRadius: 7,
+  width: 34,
+  height: 34,
   objectFit: 'contain',
   display: 'block'
 }

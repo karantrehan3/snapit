@@ -103,11 +103,17 @@ const page: CSSProperties = {
   userSelect: 'none'
 }
 
+/**
+ * The radius is here for the shadow, which follows the border box rather than the
+ * artwork's alpha. 19 is the macOS squircle's own corner at this size (22.5% of the
+ * mark), so the two now agree — before the icon was cropped, this drew a rounded
+ * rectangle floating four pixels clear of the logo inside it.
+ */
 const badge: CSSProperties = {
   width: 84,
   height: 84,
   objectFit: 'contain',
-  borderRadius: 20,
+  borderRadius: 19,
   boxShadow: '0 8px 22px rgba(0, 0, 0, 0.18)'
 }
 

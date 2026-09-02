@@ -49,9 +49,7 @@ export function Sidebar({
 }): ReactElement {
   return (
     <div style={sidebar}>
-      {/* The traffic lights sit over this strip, so nothing goes to their left. */}
       <div style={brand}>
-        <span style={{ width: 62 }} />
         <img src={APP_ICON} alt="" style={mark} />
         <span style={brandName}>snapit</span>
       </div>
