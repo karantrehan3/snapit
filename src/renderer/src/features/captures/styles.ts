@@ -73,7 +73,12 @@ export const title: CSSProperties = {
   letterSpacing: '-0.01em'
 }
 
-export const filters: CSSProperties = { display: 'flex', gap: 6 }
+/**
+ * Wraps, because there are six of these and the pane is 380px. They were three when it
+ * was one row, and a chip that runs off the edge of the pane is a filter nobody knows is
+ * there — the header taking a second line is the cheaper of the two costs.
+ */
+export const filters: CSSProperties = { display: 'flex', flexWrap: 'wrap', gap: 6 }
 
 export const scroller: CSSProperties = { flex: 1, minHeight: 0, overflowY: 'auto', padding: '0 0 16px' }
 
@@ -322,4 +327,77 @@ export const nothingTitle: CSSProperties = {
   fontSize: 'var(--t-strong)',
   fontWeight: 600,
   color: 'var(--ink-2)'
+}
+
+/**
+ * Browse mode: the whole pane as tiles.
+ *
+ * The list is right that "which one was the bug" is read down a column — but it cannot
+ * answer "which screenshot was it", because a row has room for a name and a 76px
+ * thumbnail and a still capture *is* its pixels. So the pane has two modes rather than
+ * one compromise: rows to work through findings, tiles to find a picture.
+ */
+export const browsePane: CSSProperties = {
+  flex: 1,
+  minWidth: 0,
+  display: 'flex',
+  flexDirection: 'column',
+  minHeight: 0,
+  background: 'var(--surface)'
+}
+
+export const browseHeader: CSSProperties = {
+  flex: 'none',
+  display: 'flex',
+  alignItems: 'center',
+  gap: 12,
+  padding: '14px 18px 12px',
+  borderBottom: '1px solid var(--surface-edge)'
+}
+
+/**
+ * `auto-fill` with a minimum rather than a fixed column count: the pane's width is the
+ * window's minus the sidebar, and a grid that keeps four columns at any width gives
+ * tiles the size of the thing they are meant to show only by accident.
+ */
+export const browseGrid: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fill, minmax(212px, 1fr))',
+  gap: 14,
+  margin: 0,
+  padding: '4px 18px 20px',
+  listStyle: 'none'
+}
+
+/** A tile is its picture; the name and facts sit under it, quiet. */
+export function tile(selected: boolean): CSSProperties {
+  return {
+    boxSizing: 'border-box',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+    width: '100%',
+    padding: 8,
+    borderRadius: 'var(--r-lg)',
+    border: `1px solid ${selected ? 'var(--focus)' : 'transparent'}`,
+    background: selected ? 'var(--selected)' : 'transparent',
+    textAlign: 'left',
+    cursor: 'pointer'
+  }
+}
+
+export const tileBody: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }
+
+/**
+ * The findings edge, moved to the top of a tile.
+ *
+ * Rows carry severity on the left because they are read down a column; tiles are read
+ * across, so the same information has to sit where a scan crosses it.
+ */
+export function tileFindings(findings: boolean): CSSProperties {
+  return {
+    height: 2,
+    borderRadius: 2,
+    background: findings ? 'var(--danger-ink)' : 'transparent'
+  }
 }

@@ -32,6 +32,7 @@ export type IconName =
   | 'chevron-right'
   | 'chevron-left'
   | 'grid'
+  | 'list'
   | 'chart'
   | 'gear'
   | 'info'
@@ -122,6 +123,11 @@ const PATHS: Record<IconName, ReactElement> = {
   'chevron-down': <path d="M6 9.5l6 6 6-6" />,
   'chevron-right': <path d="M9.5 6l6 6-6 6" />,
   'chevron-left': <path d="M14.5 6l-6 6 6 6" />,
+  list: (
+    <>
+      <path d="M4 6.5h16M4 12h16M4 17.5h16" />
+    </>
+  ),
   grid: (
     <>
       <rect x="3.5" y="3.5" width="7" height="7" rx="1.5" />

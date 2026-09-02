@@ -1,29 +1,22 @@
-import type { ReactElement } from 'react'
+import type { ReactElement, ReactNode } from 'react'
 import type { LibraryEntry } from '@preload/index'
 import { Button } from '@renderer/components/Button'
-import { Chip } from '@renderer/components/Chip'
 import { KeyCap } from '@renderer/components/KeyCap'
+import { CaptureFilters } from './CaptureFilters'
 import { CaptureRow } from './CaptureRow'
 import type { DayGroup, Filter } from '@renderer/lib/capture'
-import {
-  dayHeading,
-  empty,
-  emptyTitle,
-  filters,
-  footer,
-  list,
-  listHeader,
-  listPane,
-  scroller,
-  title
-} from './styles'
+import { dayHeading, empty, emptyTitle, footer, list, listHeader, listPane, scroller, title } from './styles'
 
 /**
  * The capture list: the half of the home window that stays put.
  *
- * A list rather than a grid of cards, because the question someone opens this to answer
- * is "which one was the bug", and that is read down a column of findings — a uniform
- * grid makes you hunt. Days are sticky headers so a long scroll never loses its place.
+ * A list rather than a grid, because the question someone opens this to answer is "which
+ * one was the bug", and that is read down a column of findings — a uniform grid makes you
+ * hunt. Days are sticky headers so a long scroll never loses its place.
+ *
+ * The grid it argues against exists too, as browse mode, and the argument still holds:
+ * that view answers a different question ("which screenshot was it") which this one
+ * cannot, because a row has no room to show a capture.
  *
  * The per-capture actions used to live on each row. They are on the detail beside it
  * now, which is a straight improvement: five icon buttons per row in a column this
@@ -39,7 +32,8 @@ export function CaptureList({
   selected,
   onFilter,
   onSelect,
-  onOpenExternally
+  onOpenExternally,
+  viewToggle
 }: {
   groups: DayGroup[]
   loading: boolean
@@ -51,24 +45,19 @@ export function CaptureList({
   onFilter: (f: Filter) => void
   onSelect: (path: string) => void
   onOpenExternally: (entry: LibraryEntry) => void
+  /** The rows/browse switch, owned by the route because both views wear it. */
+  viewToggle?: ReactNode
 }): ReactElement {
   const shown = groups.reduce((n, g) => n + g.entries.length, 0)
 
   return (
     <div style={listPane}>
       <header style={listHeader}>
-        <h1 style={title}>Captures</h1>
-        <div style={filters}>
-          <FilterChip id="all" active={filter} onPick={onFilter} count={counts.all}>
-            All
-          </FilterChip>
-          <FilterChip id="problems" active={filter} onPick={onFilter} count={counts.problems}>
-            Problems
-          </FilterChip>
-          <FilterChip id="session" active={filter} onPick={onFilter} count={counts.session}>
-            Web
-          </FilterChip>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <h1 style={title}>Captures</h1>
+          {viewToggle}
         </div>
+        <CaptureFilters filter={filter} counts={counts} onFilter={onFilter} />
       </header>
 
       <div style={scroller}>
@@ -96,26 +85,6 @@ export function CaptureList({
 
       <footer style={footer}>Captures are files on this machine; nothing here has left it.</footer>
     </div>
-  )
-}
-
-function FilterChip({
-  id,
-  active,
-  count,
-  onPick,
-  children
-}: {
-  id: Filter
-  active: Filter
-  count: number
-  onPick: (f: Filter) => void
-  children: string
-}): ReactElement {
-  return (
-    <Chip selected={active === id} count={count} onClick={() => onPick(id)}>
-      {children}
-    </Chip>
   )
 }
 

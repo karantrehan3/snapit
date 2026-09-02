@@ -1,10 +1,16 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
 import type { LibraryEntry } from '@preload/index'
+import { Button } from '@renderer/components/Button'
 import { CaptureList } from './CaptureList'
 import { CaptureDetail } from './CaptureDetail'
-import { applyFilter, groupByDay, hasFindings, type Filter } from '@renderer/lib/capture'
+import { CaptureFilters } from './CaptureFilters'
+import { CaptureGrid } from './CaptureGrid'
+import { applyFilter, filterCounts, groupByDay, resolveSelection, type Filter } from '@renderer/lib/capture'
 import type { RouteProps } from '@renderer/features/shell/routes'
-import { columns } from './styles'
+import { browseHeader, browsePane, columns, title } from './styles'
+
+/** Rows to work through findings; tiles to find a picture. See `CaptureGrid`. */
+type View = 'rows' | 'grid'
 
 /**
  * The Captures route: the list, and the capture.
@@ -27,12 +33,23 @@ import { columns } from './styles'
  * 500 in it is a held-down arrow key rather than forty round trips through a browser.
  * Enter and double-click still open the report externally, which is now an escape hatch
  * to a real browser's devtools rather than the only way to read anything.
+ *
+ * Two views, because the list answers one question well and another not at all. Rows
+ * find the capture that broke; tiles find the screenshot you took — a 76px sliver of a
+ * still identifies nothing, and the folder holds as many stills as recordings.
  */
 export function Captures({ focusCapture }: RouteProps): ReactElement {
   const [entries, setEntries] = useState<LibraryEntry[] | null>(null)
   const [filter, setFilter] = useState<Filter>('all')
   const [selected, setSelected] = useState<string | null>(null)
   const [listOpen, setListOpen] = useState(true)
+  const [view, setView] = useState<View>('rows')
+  /**
+   * A capture snapit was told to open that the library has not listed yet — see
+   * `resolveSelection`. Holding it is what makes a recording open *itself* on save
+   * rather than whichever capture was open before.
+   */
+  const [pending, setPending] = useState<string | null>(null)
 
   const load = useCallback(() => {
     void window.snapit.listLibrary().then(setEntries)
@@ -44,12 +61,15 @@ export function Captures({ focusCapture }: RouteProps): ReactElement {
     return window.snapit.onLibraryChanged(load)
   }, [load])
 
-  // Arrived here from a named capture elsewhere — the Overview's Recent list, or its
-  // resume card. Clearing the filter too, or the capture asked for may not be in it.
+  // Arrived here from a named capture elsewhere — a recording that has just saved, the
+  // Overview's Recent list, or its resume card. Clearing the filter too, or the capture
+  // asked for may not be in it. Browse mode gives way as well: being sent to a capture
+  // means being sent to read it.
   useEffect(() => {
     if (!focusCapture) return
     setFilter('all')
-    setSelected(focusCapture)
+    setView('rows')
+    setPending(focusCapture)
   }, [focusCapture])
 
   const all = entries ?? []
@@ -70,11 +90,14 @@ export function Captures({ focusCapture }: RouteProps): ReactElement {
   )
 
   // A home that opens on nothing is a list again, so it opens on the newest capture.
-  // Also covers the selected one being filtered out or deleted from under the detail.
+  // Also covers the selected one being filtered out or deleted from under the detail,
+  // and holds the selection for a capture that is still being written. The rule is
+  // `resolveSelection`, which is where it can be tested.
   useEffect(() => {
-    if (shown.length === 0) setSelected(null)
-    else if (!shown.some((e) => e.path === selected)) setSelected(shown[0].path)
-  }, [shown, selected])
+    const next = resolveSelection({ shown, listed: all, selected, pending })
+    if (next.selected !== selected) setSelected(next.selected)
+    if (next.pending !== pending) setPending(next.pending)
+  }, [shown, all, selected, pending])
 
   const openExternally = useCallback((entry: LibraryEntry) => {
     // The report in a real browser, with its devtools — the one thing the frame cannot
@@ -101,10 +124,50 @@ export function Captures({ focusCapture }: RouteProps): ReactElement {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [shown, index, step, openExternally])
 
-  const counts = {
-    all: all.length,
-    problems: all.filter(hasFindings).length,
-    session: all.filter((e) => e.kind === 'session' || e.steps > 0).length
+  const counts = useMemo(() => filterCounts(all), [all])
+
+  const viewToggle = (
+    <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
+      <Button
+        size="sm"
+        variant={view === 'rows' ? 'secondary' : 'ghost'}
+        icon="list"
+        label="Rows"
+        onClick={() => setView('rows')}
+      />
+      <Button
+        size="sm"
+        variant={view === 'grid' ? 'secondary' : 'ghost'}
+        icon="grid"
+        label="Browse"
+        onClick={() => setView('grid')}
+      />
+    </div>
+  )
+
+  if (view === 'grid') {
+    return (
+      <div style={browsePane}>
+        <header style={browseHeader}>
+          <h1 style={title}>Captures</h1>
+          <CaptureFilters filter={filter} counts={counts} onFilter={setFilter} />
+          {viewToggle}
+        </header>
+        <CaptureGrid
+          groups={groups}
+          loading={entries === null}
+          total={all.length}
+          selected={selected}
+          onSelect={(path) => {
+            setSelected(path)
+            // A tile is a way in, not a place to stay: reading is the row view's job.
+            setView('rows')
+          }}
+          onOpenExternally={openExternally}
+          onClearFilter={() => setFilter('all')}
+        />
+      </div>
+    )
   }
 
   return (
@@ -120,6 +183,7 @@ export function Captures({ focusCapture }: RouteProps): ReactElement {
           onFilter={setFilter}
           onSelect={setSelected}
           onOpenExternally={openExternally}
+          viewToggle={viewToggle}
         />
       )}
       <CaptureDetail

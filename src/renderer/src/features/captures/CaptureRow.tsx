@@ -24,11 +24,13 @@ const FALLBACK_ICON: Record<LibraryEntry['kind'], IconName> = {
   session: 'globe'
 }
 
-export type ThumbSize = 'none' | 'small' | 'large'
+export type ThumbSize = 'none' | 'small' | 'large' | 'fill'
 
-const THUMB: Record<Exclude<ThumbSize, 'none'>, { w: number; h: number; icon: number }> = {
+/** `fill` takes the width it is given and keeps 16:9, which is what a tile wants. */
+const THUMB: Record<Exclude<ThumbSize, 'none'>, { w: number | string; h?: number; icon: number }> = {
   small: { w: 76, h: 46, icon: 15 },
-  large: { w: 132, h: 78, icon: 20 }
+  large: { w: 132, h: 78, icon: 20 },
+  fill: { w: '100%', icon: 24 }
 }
 
 export function CaptureRow({
@@ -96,7 +98,13 @@ export function Thumb({
   const duration = humanDuration(entry.durationMs)
 
   return (
-    <span style={{ ...thumb, width: box.w, height: box.h }}>
+    <span
+      style={{
+        ...thumb,
+        width: box.w,
+        ...(box.h === undefined ? { aspectRatio: '16 / 9' } : { height: box.h })
+      }}
+    >
       {preview ? (
         <img src={preview} alt="" style={thumbImage} />
       ) : (

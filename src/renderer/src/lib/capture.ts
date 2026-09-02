@@ -134,10 +134,135 @@ export function metaLine(entry: LibraryEntry): string {
   return [KIND_LABEL[entry.kind], metaFacts(entry)].filter(Boolean).join(' · ')
 }
 
-export type Filter = 'all' | 'problems' | 'session'
+/**
+ * The same facts for a tile, split across two lines.
+ *
+ * A tile is about 212px wide, which is not enough for `metaLine` — it truncated mid-way
+ * through the size and dropped the time entirely. So: what it is and how long it runs
+ * first, then the details you only want once you have found it.
+ */
+export function tileFacts(entry: LibraryEntry): { what: string; detail: string } {
+  return {
+    what: [
+      KIND_LABEL[entry.kind],
+      humanDuration(entry.durationMs),
+      entry.steps > 0 ? `${entry.steps} step${entry.steps === 1 ? '' : 's'}` : ''
+    ]
+      .filter(Boolean)
+      .join(' · '),
+    detail: [
+      timeLabel(entry.capturedAt),
+      humanBytes(entry.bytes),
+      entry.markers > 0 ? `${entry.markers} marker${entry.markers === 1 ? '' : 's'}` : ''
+    ]
+      .filter(Boolean)
+      .join(' · ')
+  }
+}
+
+/**
+ * What the library can be narrowed to.
+ *
+ * `problems` is the question the list exists to answer, so it stays first. The rest are
+ * what a capture *is*, because the folder holds four different objects — a recording, a
+ * GIF, a still, and a browser session that happens to contain a recording — and when you
+ * are looking for one of them the other three are noise.
+ */
+export type Filter = 'all' | 'problems' | 'recording' | 'gif' | 'screenshot' | 'session'
+
+export const FILTER_LABEL: Record<Filter, string> = {
+  all: 'All',
+  problems: 'Problems',
+  recording: 'Videos',
+  gif: 'GIFs',
+  screenshot: 'Shots',
+  session: 'Web'
+}
+
+/** The chip order. `all` and `problems` lead; the kinds follow in the order they matter. */
+export const FILTER_ORDER: Filter[] = ['all', 'problems', 'recording', 'gif', 'screenshot', 'session']
+
+const extensionOf = (path: string | null): string => {
+  const tail = (path ?? '').toLowerCase().split('/').pop() ?? ''
+  const dot = tail.lastIndexOf('.')
+  return dot === -1 ? '' : tail.slice(dot + 1)
+}
+
+/**
+ * A GIF is a recording as far as the library is concerned — `kindFor` only separates
+ * stills — so the container is the only thing that can tell them apart, and it matters:
+ * a GIF has no sound, no seeking and no report worth reading.
+ */
+export const isGif = (entry: LibraryEntry): boolean => extensionOf(entry.mediaPath) === 'gif'
+
+/**
+ * A capture that collected from a browser.
+ *
+ * `kind` cannot answer this: a web session with video reads as a recording, and only a
+ * session whose window could not be found reads as `session`. Steps are the tell — a
+ * collector that ran wrote a trail — which does mean a session where nobody clicked
+ * anything counts as a plain recording. That is the same rule the Web filter has always
+ * used, and it is wrong in a case nobody has: a capture with no actions has nothing in
+ * it that a recording does not.
+ */
+export const isWebSession = (entry: LibraryEntry): boolean => entry.kind === 'session' || entry.steps > 0
+
+export function matchesFilter(entry: LibraryEntry, filter: Filter): boolean {
+  switch (filter) {
+    case 'problems':
+      return hasFindings(entry)
+    // A web session is a recording with a browser attached; it has its own chip, so it
+    // does not also answer to this one.
+    case 'recording':
+      return entry.kind === 'recording' && !isGif(entry) && !isWebSession(entry)
+    case 'gif':
+      return isGif(entry)
+    case 'screenshot':
+      return entry.kind === 'screenshot'
+    case 'session':
+      return isWebSession(entry)
+    default:
+      return true
+  }
+}
 
 export function applyFilter(entries: readonly LibraryEntry[], filter: Filter): LibraryEntry[] {
-  if (filter === 'problems') return entries.filter(hasFindings)
-  if (filter === 'session') return entries.filter((e) => e.kind === 'session' || e.steps > 0)
-  return [...entries]
+  return entries.filter((entry) => matchesFilter(entry, filter))
+}
+
+/** How many each chip would show. A chip that would empty the list says so up front. */
+export function filterCounts(entries: readonly LibraryEntry[]): Record<Filter, number> {
+  const counts = {} as Record<Filter, number>
+  for (const filter of FILTER_ORDER) {
+    counts[filter] = entries.reduce((n, entry) => n + (matchesFilter(entry, filter) ? 1 : 0), 0)
+  }
+  return counts
+}
+
+/**
+ * Which capture the detail should be showing.
+ *
+ * `pending` is a capture snapit was told to open — the one just recorded, or a row
+ * clicked on the Overview — which may not be in the library listing yet, because the
+ * folder scan that will include it is still running. Holding the selection through that
+ * gap is the whole point: falling back to "the newest one listed" meant a recording you
+ * had just saved opened the *previous* capture and stayed there, since by the time the
+ * scan landed the old selection was valid again.
+ */
+export function resolveSelection(args: {
+  shown: readonly LibraryEntry[]
+  listed: readonly LibraryEntry[]
+  selected: string | null
+  pending: string | null
+}): { selected: string | null; pending: string | null } {
+  const { shown, listed, selected, pending } = args
+  if (pending !== null) {
+    // Listed but filtered out is still an answer: the caller clears the filter alongside
+    // asking for it, so this only holds while the scan is genuinely behind.
+    if (listed.some((e) => e.path === pending)) return { selected: pending, pending: null }
+    return { selected, pending }
+  }
+  if (shown.length === 0) return { selected: null, pending: null }
+  if (!shown.some((e) => e.path === selected)) return { selected: shown[0].path, pending: null }
+  return { selected, pending: null }
 }

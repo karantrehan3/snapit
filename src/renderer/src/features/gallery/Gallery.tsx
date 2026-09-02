@@ -281,6 +281,7 @@ const ICONS: IconName[] = [
   'star',
   'film',
   'image',
+  'list',
   'folder',
   'trash',
   'clipboard',

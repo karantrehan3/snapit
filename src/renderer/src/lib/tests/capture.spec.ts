@@ -3,11 +3,15 @@ import type { LibraryEntry } from '@preload/index'
 import {
   applyFilter,
   dayLabel,
+  filterCounts,
+  isGif,
+  resolveSelection,
   groupByDay,
   humanBytes,
   humanDuration,
   metaLine,
-  relativeTime
+  relativeTime,
+  tileFacts
 } from '@renderer/lib/capture'
 
 const NOW = new Date('2026-08-25T14:00:00')
@@ -151,6 +155,110 @@ describe('applyFilter', () => {
     const original = [...entries]
     applyFilter(entries, 'problems')
     expect(entries).toEqual(original)
+  })
+
+  it('separates the four things the folder actually holds', () => {
+    const mixed = [
+      entry({ path: 'video', mediaPath: '/save/a/a.mp4' }),
+      entry({ path: 'gif', mediaPath: '/save/b/b.gif' }),
+      entry({ path: 'shot', kind: 'screenshot', mediaPath: '/save/c.png' }),
+      entry({ path: 'web', mediaPath: '/save/d/d.mp4', steps: 4 })
+    ]
+    expect(applyFilter(mixed, 'recording').map((e) => e.path)).toEqual(['video'])
+    expect(applyFilter(mixed, 'gif').map((e) => e.path)).toEqual(['gif'])
+    expect(applyFilter(mixed, 'screenshot').map((e) => e.path)).toEqual(['shot'])
+    expect(applyFilter(mixed, 'session').map((e) => e.path)).toEqual(['web'])
+  })
+
+  it('reads a GIF off its container, since the library calls it a recording', () => {
+    // kindFor only separates stills, so kind cannot tell these apart — and a GIF has no
+    // sound, no seeking and no report worth reading.
+    expect(isGif(entry({ mediaPath: '/save/a/a.gif' }))).toBe(true)
+    expect(isGif(entry({ mediaPath: '/save/a/a.GIF' }))).toBe(true)
+    expect(isGif(entry({ mediaPath: '/save/a/a.mp4' }))).toBe(false)
+    expect(isGif(entry({ mediaPath: null }))).toBe(false)
+    // A folder with a dot in its name and no media must not read as a GIF.
+    expect(isGif(entry({ mediaPath: null, path: '/save/v1.2/gif' }))).toBe(false)
+  })
+})
+
+describe('tileFacts', () => {
+  it('splits the facts so a 212px tile does not truncate them', () => {
+    const facts = tileFacts(entry({ steps: 13, markers: 2 }))
+    expect(facts.what).toBe('Recording · 1:04 · 13 steps')
+    expect(facts.detail).toContain('1.5 MB')
+    expect(facts.detail).toContain('2 markers')
+  })
+
+  it('says nothing a still does not have', () => {
+    const facts = tileFacts(entry({ kind: 'screenshot', durationMs: null, bytes: 240_000 }))
+    expect(facts.what).toBe('Screenshot')
+    expect(facts.detail).toContain('234 KB')
+  })
+})
+
+describe('filterCounts', () => {
+  it('counts every chip, so one that would empty the list says so first', () => {
+    const counts = filterCounts([
+      entry({ path: 'video' }),
+      entry({ path: 'gif', mediaPath: '/save/b/b.gif' }),
+      entry({ path: 'broken', consoleErrors: 1 })
+    ])
+    expect(counts.all).toBe(3)
+    expect(counts.recording).toBe(2)
+    expect(counts.gif).toBe(1)
+    expect(counts.problems).toBe(1)
+    expect(counts.screenshot).toBe(0)
+  })
+})
+
+describe('resolveSelection', () => {
+  const listed = [entry({ path: 'newest' }), entry({ path: 'older' })]
+
+  it('opens the newest when nothing is selected', () => {
+    expect(resolveSelection({ shown: listed, listed, selected: null, pending: null }).selected).toBe('newest')
+  })
+
+  it('leaves a valid selection alone', () => {
+    expect(resolveSelection({ shown: listed, listed, selected: 'older', pending: null }).selected).toBe(
+      'older'
+    )
+  })
+
+  it('falls back to the newest when the selected capture is gone', () => {
+    expect(resolveSelection({ shown: listed, listed, selected: 'deleted', pending: null }).selected).toBe(
+      'newest'
+    )
+  })
+
+  it('holds the selection for a capture the scan has not listed yet', () => {
+    // The bug this exists for: a recording saves, snapit asks for it by path, and the
+    // folder scan that will include it is still running. Falling back to "newest listed"
+    // opened the *previous* capture — and then stayed there, because by the time the scan
+    // landed that selection was valid again.
+    const held = resolveSelection({ shown: listed, listed, selected: 'older', pending: 'brand-new' })
+    expect(held).toEqual({ selected: 'older', pending: 'brand-new' })
+
+    const arrived = [entry({ path: 'brand-new' }), ...listed]
+    expect(
+      resolveSelection({ shown: arrived, listed: arrived, selected: 'older', pending: 'brand-new' })
+    ).toEqual({ selected: 'brand-new', pending: null })
+  })
+
+  it('takes a pending capture that is listed but filtered out of view', () => {
+    // The caller clears the filter alongside asking, so this only decides which of the
+    // two state updates wins — and the answer is the capture that was asked for.
+    expect(resolveSelection({ shown: [], listed, selected: null, pending: 'older' })).toEqual({
+      selected: 'older',
+      pending: null
+    })
+  })
+
+  it('selects nothing when there is nothing', () => {
+    expect(resolveSelection({ shown: [], listed: [], selected: 'gone', pending: null })).toEqual({
+      selected: null,
+      pending: null
+    })
   })
 })
 
