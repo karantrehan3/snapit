@@ -22,6 +22,8 @@ const state = vi.hoisted(() => ({
   frames: [] as { closed: boolean }[],
   /** Lets a test trigger the encoder's async error callback, as a bad config does. */
   fireError: null as ((e: unknown) => void) | null,
+  /** Set to make the fake audio source fail, as an unsupported AAC profile does. */
+  audioFailure: null as Error | null,
   outputBytes: new Uint8Array([1, 2, 3, 4]).buffer as ArrayBuffer | null
 }))
 
@@ -35,7 +37,7 @@ vi.mock('mediabunny', () => {
     async add(): Promise<void> {}
   }
   class MediaStreamAudioTrackSource {
-    errorPromise = new Promise<void>(() => {})
+    errorPromise = state.audioFailure ? Promise.reject(state.audioFailure) : new Promise<void>(() => {})
     constructor(
       public track: unknown,
       public config: unknown
@@ -111,7 +113,11 @@ class FakeVideoFrame {
 
 const canvas = { width: 1920, height: 1246 } as unknown as HTMLCanvasElement
 
-async function makeEncoder(audioTrack: unknown = null, quality?: 'high' | 'balanced' | 'small') {
+async function makeEncoder(
+  audioTrack: unknown = null,
+  quality?: 'high' | 'balanced' | 'small',
+  onAudioLost?: (reason: string) => void
+) {
   const { createMp4Encoder } = await import('../mp4Encoder')
   return createMp4Encoder({
     canvas,
@@ -119,7 +125,8 @@ async function makeEncoder(audioTrack: unknown = null, quality?: 'high' | 'balan
     height: 1246,
     fps: 30,
     audioTrack: audioTrack as never,
-    ...(quality ? { quality } : {})
+    ...(quality ? { quality } : {}),
+    ...(onAudioLost ? { onAudioLost } : {})
   })
 }
 
@@ -135,6 +142,7 @@ beforeEach(() => {
   state.audioTracks = []
   state.frames = []
   state.fireError = null
+  state.audioFailure = null
   state.outputBytes = new Uint8Array([1, 2, 3, 4]).buffer
   vi.stubGlobal('VideoEncoder', FakeVideoEncoder)
   vi.stubGlobal('VideoFrame', FakeVideoFrame)
@@ -293,6 +301,18 @@ describe('createMp4Encoder — teardown and audio', () => {
     enc.abort()
     await enc.addFrame(0)
     expect(state.encodeCalls).toHaveLength(0)
+  })
+
+  it('reports the reason when the audio source fails, instead of only logging it', async () => {
+    // The failure this exists for: mediabunny drops an audio track that produced no
+    // packets and finalizes anyway, so a rejected errorPromise was the only sign that a
+    // recording had come back silent — and it went to the console.
+    state.audioFailure = new Error('mp4a.40.29 is not supported by this browser')
+    const told: string[] = []
+    await makeEncoder({ kind: 'audio' }, undefined, (reason) => told.push(reason))
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(told).toEqual(['mp4a.40.29 is not supported by this browser'])
   })
 
   it('adds an audio track only when one is supplied', async () => {

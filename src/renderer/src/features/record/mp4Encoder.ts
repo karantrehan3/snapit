@@ -36,6 +36,14 @@ export type Mp4EncoderOptions = {
   audioTrack: MediaStreamAudioTrack | null
   /** Quality preset driving the quantizer and the bitrate fallback. */
   quality?: QualityPreset
+  /**
+   * Called when the audio dies mid-recording, with the reason.
+   *
+   * mediabunny drops an audio track that produced no packets and finalizes the file
+   * without it, so this failure is otherwise invisible: the recording saves, plays, and
+   * happens to be silent.
+   */
+  onAudioLost?: (reason: string) => void
 }
 
 /**
@@ -75,7 +83,7 @@ export async function pickPlan(
  * to AAC itself, so there is no second encoder to keep in sync here.
  */
 export async function createMp4Encoder(opts: Mp4EncoderOptions): Promise<Mp4Encoder> {
-  const { canvas, width, height, fps, audioTrack, quality = DEFAULT_QUALITY } = opts
+  const { canvas, width, height, fps, audioTrack, quality = DEFAULT_QUALITY, onAudioLost } = opts
   if (typeof VideoEncoder === 'undefined') throw new Error('WebCodecs VideoEncoder unavailable')
 
   const plan = await pickPlan(width, height, fps, quality)
@@ -85,9 +93,11 @@ export async function createMp4Encoder(opts: Mp4EncoderOptions): Promise<Mp4Enco
   if (audioTrack) {
     const audioSource = new MediaStreamAudioTrackSource(audioTrack, { codec: 'aac', bitrate: AUDIO_BITRATE })
     // mediabunny reports its internal audio failures only here; unhandled, they stay silent.
-    void audioSource.errorPromise.catch((e) =>
-      console.error(`[snapit] audio source error: ${errorMessage(e)}`)
-    )
+    void audioSource.errorPromise.catch((e) => {
+      const reason = errorMessage(e)
+      console.error(`[snapit] audio source error: ${reason}`)
+      onAudioLost?.(reason)
+    })
     output.addAudioTrack(audioSource)
   }
   await output.start()

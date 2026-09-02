@@ -47,6 +47,8 @@ export type RetroEncoderOptions = {
    * timestamps are already measured against. Audio is aligned onto the same origin.
    */
   startPerfMs: number
+  /** Called when the audio dies mid-recording, with the reason. See Mp4EncoderOptions. */
+  onAudioLost?: (reason: string) => void
 }
 
 /** Interleaved f32 is what AudioSample takes back, so copy it out in that layout. */
@@ -70,7 +72,16 @@ const INTERLEAVED: AudioSampleFormat = 'f32'
  * produced these files.
  */
 export async function createRetroEncoder(opts: RetroEncoderOptions): Promise<Mp4Encoder> {
-  const { canvas, width, height, fps, audioTrack, quality = DEFAULT_QUALITY, window: retroWindow } = opts
+  const {
+    canvas,
+    width,
+    height,
+    fps,
+    audioTrack,
+    quality = DEFAULT_QUALITY,
+    window: retroWindow,
+    onAudioLost
+  } = opts
   if (typeof VideoEncoder === 'undefined') throw new Error('WebCodecs VideoEncoder unavailable')
 
   const plan = await pickPlan(width, height, fps, quality)
@@ -118,6 +129,7 @@ export async function createRetroEncoder(opts: RetroEncoderOptions): Promise<Mp4
     if (!Ctor) {
       // Better a silent recording than a failed one; the caller already has the video.
       console.warn('[snapit] MediaStreamTrackProcessor unavailable — recording without audio')
+      onAudioLost?.('This build cannot read audio off a capture track.')
     } else {
       const reader = new Ctor({ track: audioTrack }).readable.getReader()
       audioReader = reader
@@ -152,7 +164,9 @@ export async function createRetroEncoder(opts: RetroEncoderOptions): Promise<Mp4
             value.close()
           }
         } catch (e) {
-          console.error(`[snapit] audio capture stopped: ${errorMessage(e)}`)
+          const reason = errorMessage(e)
+          console.error(`[snapit] audio capture stopped: ${reason}`)
+          onAudioLost?.(reason)
         }
       })()
     }

@@ -9,6 +9,7 @@ import { createMp4Encoder, type Mp4Encoder } from './mp4Encoder'
 import { createRetroEncoder } from './retroEncoder'
 import { KEEP_EVERYTHING } from './retroBuffer'
 import { DEFAULT_RETRO } from './retroWindow'
+import { mixAudio } from './audioMix'
 import { drawAnnotations } from '../annotate-live/composite'
 import { useLatestRef } from '@renderer/lib/useLatestRef'
 import { errorMessage as msg } from '@renderer/lib/errorMessage'
@@ -238,15 +239,26 @@ export function useRecorder({ drawMode, getAnnotationCanvas }: AnnotationOptions
     rafRef.current = requestAnimationFrame(tick)
   }
 
-  // One audio track: pass through if single source, mix via WebAudio if both.
-  const mixAudio = (tracks: MediaStreamAudioTrack[]): MediaStreamAudioTrack | null => {
-    if (tracks.length === 0) return null
-    if (tracks.length === 1) return tracks[0]
-    const ctx = new AudioContext()
-    audioCtxRef.current = ctx
-    const dest = ctx.createMediaStreamDestination()
-    tracks.forEach((t) => ctx.createMediaStreamSource(new MediaStream([t])).connect(dest))
-    return dest.stream.getAudioTracks()[0]
+  /**
+   * The encoder takes one track, so the sources are mixed down to one — at a sample rate
+   * we choose rather than the one the audio device happens to be running. See audioMix.
+   */
+  const oneAudioTrack = (tracks: MediaStreamAudioTrack[]): MediaStreamAudioTrack | null => {
+    const mix = mixAudio(tracks)
+    if (!mix) return null
+    audioCtxRef.current = mix.context
+    return mix.track
+  }
+
+  /**
+   * Reported, not just logged. A recording that came back silent is discovered on
+   * playback, by which point the thing being narrated has been and gone.
+   */
+  const audioLost = (reason: string): void => {
+    window.snapit.reportProblem(
+      'Recording without sound',
+      `snapit could not encode this capture's audio, so it is silent. ${reason}`
+    )
   }
 
   const start = async (params: RecordParams): Promise<void> => {
@@ -294,7 +306,7 @@ export function useRecorder({ drawMode, getAnnotationCanvas }: AnnotationOptions
           )
         }
       }
-      const audio = mixAudio(audioTracks)
+      const audio = oneAudioTrack(audioTracks)
 
       const startPerfMs = performance.now()
       // The buffered encoder defers muxing so the front of the recording can be
@@ -302,7 +314,15 @@ export function useRecorder({ drawMode, getAnnotationCanvas }: AnnotationOptions
       // being discarded, which is the common case.
       const encoder =
         retroWindow === KEEP_EVERYTHING
-          ? await createMp4Encoder({ canvas, width: out.w, height: out.h, fps, audioTrack: audio, quality })
+          ? await createMp4Encoder({
+              canvas,
+              width: out.w,
+              height: out.h,
+              fps,
+              audioTrack: audio,
+              quality,
+              onAudioLost: audioLost
+            })
           : await createRetroEncoder({
               canvas,
               width: out.w,
@@ -311,7 +331,8 @@ export function useRecorder({ drawMode, getAnnotationCanvas }: AnnotationOptions
               audioTrack: audio,
               quality,
               window: retroWindow,
-              startPerfMs
+              startPerfMs,
+              onAudioLost: audioLost
             })
       // Stop pressed while we were setting up: unwind instead of starting a recording
       // nobody is waiting for.
