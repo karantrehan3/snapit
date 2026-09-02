@@ -12,6 +12,7 @@ import { actionLabel } from './collector/actions'
 import { summariseFailedRequests } from './mcp/summarise'
 import { reportRequests } from './reportRequests'
 import { actionsToSpec } from './specgen'
+import { LANDING_TITLE } from './collector/landing'
 import { startCollector, type CollectedSession, type CollectorHandle } from './collector/session'
 
 /**
@@ -90,7 +91,7 @@ async function findLaunchedWindow(): Promise<string | null> {
         types: ['window'],
         thumbnailSize: { width: 0, height: 0 }
       })
-      const match = sources.find((s) => s.name.includes('snapit — collecting'))
+      const match = sources.find((s) => s.name.includes(LANDING_TITLE))
       if (match) return match.id
     } catch (err) {
       console.warn('[snapit] could not list windows to find the collector browser:', err)
@@ -125,7 +126,7 @@ async function markProfile(profileDir: string): Promise<void> {
   if (existsSync(prefs)) return
   try {
     await mkdir(dirname(prefs), { recursive: true })
-    await writeFile(prefs, JSON.stringify({ profile: { name: 'snapit — collecting' } }))
+    await writeFile(prefs, JSON.stringify({ profile: { name: LANDING_TITLE } }))
   } catch (err) {
     console.warn('[snapit] could not name the collector profile:', err)
   }

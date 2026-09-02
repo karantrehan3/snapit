@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { LANDING_PAGE, cdpEndpoint, chromeCandidates, launchArgs } from '../chrome'
+import { cdpEndpoint, chromeCandidates, launchArgs } from '../chrome'
 
 describe('chromeCandidates', () => {
   it('offers real Chromium locations per platform', () => {
@@ -59,32 +59,5 @@ describe('launchArgs', () => {
 describe('cdpEndpoint', () => {
   it('addresses loopback by IP, not by a name that could resolve elsewhere', () => {
     expect(cdpEndpoint(47333)).toBe('http://127.0.0.1:47333')
-  })
-})
-
-describe('LANDING_PAGE', () => {
-  const decoded = decodeURIComponent(LANDING_PAGE.replace(/^data:text\/html,/, ''))
-
-  it('is a self-contained data URL, so nothing is written to disk', () => {
-    expect(LANDING_PAGE.startsWith('data:text/html,')).toBe(true)
-    expect(decoded).not.toMatch(/<(script|link)\b/i)
-    expect(decoded).not.toMatch(/https?:\/\//)
-  })
-
-  it('answers the question the browser cannot: which window is being collected', () => {
-    // A fresh profile looks like any other Chrome, and reproducing a bug in the wrong
-    // window produces an empty trail with nothing to explain it.
-    expect(decoded).toContain("This is snapit's browser")
-    expect(decoded).toContain('this window')
-  })
-
-  it('tells the user that setup is discarded, which is why it is safe to sign in', () => {
-    expect(decoded).toContain('Start capture')
-    expect(decoded).toContain('thrown away')
-    expect(decoded).toContain('Stop and save')
-  })
-
-  it('is opened by the launcher as the start URL', () => {
-    expect(launchArgs({ port: 1, profileDir: '/p', startUrl: LANDING_PAGE })).toContain(LANDING_PAGE)
   })
 })

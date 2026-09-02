@@ -1,9 +1,12 @@
 import { spawn, type ChildProcess } from 'child_process'
 import { existsSync } from 'fs'
-import { mkdir } from 'fs/promises'
+import { mkdir, writeFile } from 'fs/promises'
+import { join } from 'path'
+import { pathToFileURL } from 'url'
 import { chromium, type Browser, type BrowserContext, type CDPSession, type Page } from 'playwright-core'
 import { harFromMessages } from 'chrome-har'
-import { LANDING_PAGE, cdpEndpoint, chromeCandidates, launchArgs } from './chrome'
+import { cdpEndpoint, chromeCandidates, launchArgs } from './chrome'
+import { LANDING_FILE, renderLanding } from './landing'
 import { redactHar } from './redact'
 import {
   MAX_BODIES,
@@ -165,13 +168,22 @@ export async function startCollector(opts: CollectorOptions): Promise<CollectorH
   const { profileDir } = opts
   await mkdir(profileDir, { recursive: true })
 
+  // Written fresh into the profile every launch: the address bar gets a path instead of
+  // three kilobytes of percent-encoded markup, and the copy still cannot go stale.
+  const landingPath = join(profileDir, LANDING_FILE)
+  await writeFile(landingPath, renderLanding(), 'utf-8')
+
   // Launch blank and navigate only once CDP is attached. Chrome starts fetching the
   // moment it has a URL, and Network.enable is per-session — handing it the target URL
   // up front loses every request the first page load makes, which is most of them.
-  const child: ChildProcess = spawn(chromePath, launchArgs({ port, profileDir, startUrl: LANDING_PAGE }), {
-    stdio: 'ignore',
-    detached: false
-  })
+  const child: ChildProcess = spawn(
+    chromePath,
+    launchArgs({ port, profileDir, startUrl: pathToFileURL(landingPath).href }),
+    {
+      stdio: 'ignore',
+      detached: false
+    }
+  )
   const state = { killed: false }
   child.on('exit', () => {
     state.killed = true
