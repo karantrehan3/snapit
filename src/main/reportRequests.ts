@@ -96,7 +96,7 @@ export type ReportRequest = {
   httpVersion?: string
   serverIp?: string
   payload?: RequestPayload
-  /** The start of the response body. Only failures carry one; see `collector/har.ts`. */
+  /** The start of the response body, for the entries that earned one; see `collector/har.ts`. */
   body?: string
   requestHeaders: HeaderPair[]
   responseHeaders: HeaderPair[]
@@ -106,7 +106,10 @@ export type ReportRequest = {
 
 /** Enough to see the content type, the cache directives and the CORS story. */
 export const MAX_HEADERS = 30
-/** A body is here to identify the failure. The HAR beside it holds the whole thing. */
+/**
+ * A body is here to identify the response, not to read it — a failure's message, or the
+ * shape of the payload an API returned. The HAR beside it holds the whole thing.
+ */
 const MAX_BODY_CHARS = 600
 const MAX_URL_CHARS = 500
 
