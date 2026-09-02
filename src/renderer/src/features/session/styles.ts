@@ -64,3 +64,10 @@ export const detail: CSSProperties = {
 export const warning: CSSProperties = { color: 'var(--warning)', fontSize: 12 }
 
 export const actions: CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }
+
+/**
+ * The audio toggles, kept together and away from the buttons that end or start the
+ * session — a mis-click on Stop costs the whole setup, so it should not sit flush
+ * against a toggle.
+ */
+export const audioGroup: CSSProperties = { display: 'flex', alignItems: 'center', gap: 6 }

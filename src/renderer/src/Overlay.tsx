@@ -59,7 +59,12 @@ export function Overlay(): ReactElement | null {
       {session.mode === 'screenshot' ? (
         <ScreenshotOverlay frame={session.frame} workArea={session.workArea} onReady={onReady} />
       ) : session.mode === 'session' ? (
-        <SessionBar phase={session.phase} videoUnavailable={session.videoUnavailable} onReady={onReady} />
+        <SessionBar
+          phase={session.phase}
+          prefs={session.prefs}
+          videoUnavailable={session.videoUnavailable}
+          onReady={onReady}
+        />
       ) : session.mode === 'gif' ? (
         <GifOverlay
           source={session.source}

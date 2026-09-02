@@ -138,6 +138,8 @@ export type CaptureSession = (
   | {
       mode: 'session'
       phase: SessionPhase
+      /** Last time's audio settings: the bar offers them before the capture starts. */
+      prefs: CapturePrefs
       /** The browser window could not be found, so this capture will have no video. */
       videoUnavailable?: boolean
     }

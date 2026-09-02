@@ -132,7 +132,7 @@ type CaptureSession = (
   | { mode: 'gif'; source: DisplaySource; prefs: CapturePrefs }
   // Chrome only: the browser is what the user is looking at, and this is the bar that
   // says snapit is collecting from it and offers the one action worth taking.
-  | { mode: 'session'; phase: SessionPhase; videoUnavailable?: boolean }
+  | { mode: 'session'; phase: SessionPhase; prefs: CapturePrefs; videoUnavailable?: boolean }
 ) & { workArea: WorkArea }
 
 /** `display.workArea` is in screen coordinates; shift it to be window-relative. */
@@ -689,6 +689,9 @@ function showSessionBar(videoUnavailable = false): void {
   session = {
     mode: 'session',
     phase,
+    // The bar carries the audio toggles for a capture that starts itself, so it needs
+    // the same prefs the record bar opens with.
+    prefs: getSettings().capture,
     workArea: windowWorkArea(display),
     ...(videoUnavailable ? { videoUnavailable } : {})
   }
