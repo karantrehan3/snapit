@@ -5,7 +5,14 @@ import { chromium, type Browser, type BrowserContext, type CDPSession, type Page
 import { harFromMessages } from 'chrome-har'
 import { LANDING_PAGE, cdpEndpoint, chromeCandidates, launchArgs } from './chrome'
 import { redactHar } from './redact'
-import { MAX_BODIES, attachResponseBodies, isFailedStatus, trimHarBefore, type ResponseBody } from './har'
+import {
+  MAX_BODIES,
+  attachResponseBodies,
+  bodyFitsBudget,
+  trimHarBefore,
+  wantsBody,
+  type ResponseBody
+} from './har'
 import {
   BINDING_NAME,
   INJECTED_SCRIPT,
@@ -35,6 +42,19 @@ const MAX_CONSOLE_ENTRIES = 5000
  * and the snapshot is the old DOM; too long and fast clicking blurs two actions together.
  */
 const SETTLE_MS = 250
+/**
+ * How long `stop` waits for response bodies still in flight.
+ *
+ * Each body is a separate `Network.getResponseBody` round trip fired when loading
+ * finishes, and stopping tears the CDP session down — so without this the last requests
+ * lose their bodies. Measured live: stopping immediately after the final request lost
+ * every one of thirteen. That is the case that matters, not an edge one, because the
+ * reason someone presses Stop is that they just watched the request fail.
+ *
+ * A cap rather than an open wait: the bodies are a nicety and the bundle is not, so a
+ * browser that has stopped answering must not hold up writing the capture.
+ */
+const BODY_DRAIN_MS = 2000
 
 /** The CDP events chrome-har needs to reconstruct a HAR. */
 const NETWORK_EVENTS = [
@@ -125,6 +145,12 @@ async function waitForCdp(endpoint: string, signal: { killed: boolean }): Promis
   throw new Error(`Chrome's debugging port did not come up within ${READY_TIMEOUT_MS}ms`)
 }
 
+/** Wait for everything, or for the cap, whichever comes first. Never rejects. */
+async function drain(work: readonly Promise<unknown>[], capMs: number): Promise<void> {
+  if (work.length === 0) return
+  await Promise.race([Promise.allSettled(work), new Promise((r) => setTimeout(r, capMs))])
+}
+
 /** Best-effort readable text for a console argument, without evaluating anything in the page. */
 function describeArg(arg: { value?: unknown; description?: string; type?: string }): string {
   if (arg.description) return arg.description
@@ -157,10 +183,16 @@ export async function startCollector(opts: CollectorOptions): Promise<CollectorH
   const consoleEntries: ConsoleEntry[] = []
   const navigations: NavigationEntry[] = []
   let actions: ActionRecord[] = []
-  // Bodies for failed requests only, fetched separately because CDP events never carry
-  // them. Keyed by request id, which is what chrome-har puts on each HAR entry.
+  // Response bodies, fetched separately because CDP events never carry them. Keyed by
+  // request id, which is what chrome-har puts on each HAR entry.
   const bodies: Record<string, ResponseBody> = {}
-  const failedRequestIds = new Set<string>()
+  // Request id → status, for the ones worth a body. The status is kept because the size
+  // is not known until loadingFinished, and whether the size matters depends on it.
+  const wantedBodies = new Map<string, number>()
+  /** Body fetches still in flight, so `stop` can drain them before closing the session. */
+  const pendingBodies = new Set<Promise<void>>()
+  /** One per attached page, kept so `stop` can flush each one's queued events. */
+  const cdpSessions = new Set<CDPSession>()
   /** Wall clock of the capture's start; requests before it belong to setup. */
   let captureFromMs = 0
   const attached = new WeakSet<Page>()
@@ -190,22 +222,26 @@ export async function startCollector(opts: CollectorOptions): Promise<CollectorH
       console.warn('[snapit] could not attach CDP to a page:', err)
       return
     }
+    cdpSessions.add(cdp)
 
     for (const event of [...NETWORK_EVENTS, ...PAGE_EVENTS]) {
       cdp.on(event as never, (params: unknown) => messages.push({ method: event, params }))
     }
 
-    // Note which requests failed as their responses arrive, then fetch the body once
-    // loading has finished — asking earlier can return a partial body or nothing.
+    // Note which responses are worth a body as they arrive, then fetch once loading has
+    // finished — asking earlier can return a partial body or nothing, and the size that
+    // decides whether to bother is only known at the end.
     cdp.on('Network.responseReceived', (e) => {
-      if (isFailedStatus(e.response?.status) && failedRequestIds.size < MAX_BODIES) {
-        failedRequestIds.add(e.requestId)
+      if (wantsBody(e.type, e.response?.status) && wantedBodies.size < MAX_BODIES) {
+        wantedBodies.set(e.requestId, e.response?.status ?? 0)
       }
     })
 
     cdp.on('Network.loadingFinished', (e) => {
-      if (!failedRequestIds.has(e.requestId) || bodies[e.requestId]) return
-      void cdp
+      const status = wantedBodies.get(e.requestId)
+      if (status === undefined || bodies[e.requestId]) return
+      if (!bodyFitsBudget(e.encodedDataLength, status)) return
+      const fetching = cdp
         .send('Network.getResponseBody', { requestId: e.requestId })
         .then((r) => {
           bodies[e.requestId] = { text: r.body, base64Encoded: r.base64Encoded }
@@ -214,6 +250,8 @@ export async function startCollector(opts: CollectorOptions): Promise<CollectorH
           // Chrome evicts bodies aggressively, and a navigation drops them all. A
           // missing body is not worth failing a capture over.
         })
+        .finally(() => pendingBodies.delete(fetching))
+      pendingBodies.add(fetching)
     })
 
     cdp.on('Runtime.consoleAPICalled', (e) => {
@@ -324,7 +362,7 @@ export async function startCollector(opts: CollectorOptions): Promise<CollectorH
     consoleEntries.length = 0
     navigations.length = 0
     actions = []
-    failedRequestIds.clear()
+    wantedBodies.clear()
     for (const key of Object.keys(bodies)) delete bodies[key]
     startedAt = new Date()
     startedPerf = Date.now()
@@ -338,6 +376,17 @@ export async function startCollector(opts: CollectorOptions): Promise<CollectorH
     const durationMs = since()
     // Let any in-flight snapshot finish, so the last action is not left bare.
     await Promise.race([snapshots, new Promise((r) => setTimeout(r, SETTLE_MS * 4))])
+    // A CDP session is one ordered stream, so a reply cannot overtake an event queued
+    // before it: a round trip per page delivers any `loadingFinished` still on the wire.
+    // Those are what decide whether a body is asked for at all, so flushing them has to
+    // come before draining — a body never requested is one no amount of waiting finds.
+    await drain(
+      [...cdpSessions].map((cdp) => cdp.send('Network.enable').catch(() => undefined)),
+      BODY_DRAIN_MS
+    )
+    // Then the bodies themselves, for the same reason and with more at stake: closing
+    // the browser below disconnects the session they are being fetched over.
+    await drain([...pendingBodies], BODY_DRAIN_MS)
     try {
       // Disconnects the CDP client; it does not close a browser we spawned ourselves.
       await browser?.close()

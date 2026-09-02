@@ -1,8 +1,8 @@
 import { useEffect, useRef, type ReactElement } from 'react'
-import { Icon } from '@renderer/components/Icon'
+import { Button } from '@renderer/components/Button'
 import type { SessionPhase } from '@preload/index'
 import { useBarPointer } from './useBarPointer'
-import { actions, bar, copy, detail, headline, primary, secondary, statusDot, warning } from './styles'
+import { actions, bar, copy, detail, headline, statusDot, warning } from './styles'
 
 /**
  * What is on screen while snapit collects from a browser it launched.
@@ -54,23 +54,30 @@ export function SessionBar({
 
         <div style={actions}>
           {capturing ? (
-            <button type="button" style={primary} onClick={() => window.snapit.stopWebCapture()}>
-              <Icon name="stop" size={12} />
+            <Button
+              variant="danger"
+              tone="glass"
+              size="lg"
+              icon="stop"
+              onClick={() => window.snapit.stopWebCapture()}
+            >
               Stop and save
-            </button>
+            </Button>
           ) : (
             <>
-              <button
-                type="button"
-                style={secondary}
+              <Button
+                tone="glass"
+                size="lg"
                 onClick={() => window.snapit.stopWebCapture()}
                 title="Ends the session now and saves whatever setup collected"
               >
                 Stop
-              </button>
-              <button type="button" style={primary} onClick={() => window.snapit.beginWebCapture()}>
+              </Button>
+              {/* Red before anything is being kept, because pressing it is what starts
+                  keeping it — the colour is about the consequence, not the state. */}
+              <Button variant="danger" tone="glass" size="lg" onClick={() => window.snapit.beginWebCapture()}>
                 <span style={{ fontSize: 10 }}>●</span> Start capture
-              </button>
+              </Button>
             </>
           )}
         </div>

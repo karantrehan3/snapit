@@ -1,4 +1,10 @@
 import { humanBytes, humanDuration, type CaptureMeta } from './bundle'
+import { REPORT_STYLES } from './reportStyles'
+import { isFailedStatus } from './collector/har'
+import { isErrorLevel, isNotableLevel } from './collector/levels'
+import { networkPanel } from './reportNetwork'
+import { NETWORK_SCRIPT } from './reportNetworkScript'
+import { keepMostTelling, type ReportRequest } from './reportRequests'
 
 /**
  * Renders a capture bundle's `report.html`: the capture, and the context needed to act
@@ -33,17 +39,35 @@ export function escapeHtml(value: string): string {
 /** Long lists are truncated rather than turning the report into a wall. */
 const MAX_ROWS = 200
 
-const ERROR_LEVELS = new Set(['error', 'uncaught'])
-const WARNING_LEVELS = new Set(['warning', 'warn'])
-
 export type ReportConsoleLine = { atMs: number; level: string; text: string }
 export type ReportAction = { atMs: number; label: string }
-export type ReportRequest = { method: string; status: number; url: string; body?: string }
 
 export type ReportData = {
   console?: ReportConsoleLine[]
   actions?: ReportAction[]
-  failedRequests?: ReportRequest[]
+  /** Every request the collector saw, not only the failures. See `reportRequests.ts`. */
+  requests?: ReportRequest[]
+}
+
+/**
+ * One of the bundle's sibling files, carried inside the page instead of beside it.
+ * `href` is a data URI; without one the file was too large to inline and is named
+ * anyway, because a reader should know what exists rather than what fitted.
+ */
+export type ReportAttachment = { name: string; bytes: number; href?: string }
+
+export type ReportOptions = {
+  /**
+   * What the media element points at. Defaults to the media's bare filename, which is
+   * correct inside a bundle folder; the single-file export passes a data URI. `null`
+   * leaves the media out altogether — see `standalone.ts`, where a recording too large
+   * to inline is dropped rather than silently producing an unsendable file.
+   */
+  mediaSrc?: string | null
+  /** Why the media is missing, when it was left out on purpose. */
+  mediaOmitted?: string
+  /** Downloadable copies of the sibling JSON, for a page with no folder around it. */
+  attachments?: ReportAttachment[]
 }
 
 const VIDEO_EXTS = ['mp4', 'webm']
@@ -79,16 +103,22 @@ export function collapseConsole(lines: readonly ReportConsoleLine[]): CollapsedL
 }
 
 /** A timestamp, as a button that seeks the recording when there is one to seek. */
-function stamp(atMs: number, seek: number | null): string {
-  const label = escapeHtml(humanDuration(atMs))
+function stamp(atMs: number | null, seek: number | null): string {
+  // A dash rather than 0:00: an entry whose clock could not be read has no place on the
+  // timeline, and putting it at the start would be a claim rather than an absence.
+  const label = atMs === null ? '&mdash;' : escapeHtml(humanDuration(atMs))
   return seek === null
     ? `<span class="at">${label}</span>`
     : `<button type="button" class="at" data-at="${seek.toFixed(3)}">${label}</button>`
 }
 
-function mediaTag(meta: CaptureMeta): string {
+function mediaTag(meta: CaptureMeta, opts: ReportOptions): string {
   if (!meta.media) return ''
-  const src = escapeHtml(meta.media.file)
+  if (opts.mediaSrc === null) {
+    const why = opts.mediaOmitted ?? 'The recording is not in this file.'
+    return `<p class="panel absent">${escapeHtml(why)}</p>`
+  }
+  const src = escapeHtml(opts.mediaSrc ?? meta.media.file)
   const tag = VIDEO_EXTS.includes(meta.media.ext)
     ? `<video controls preload="metadata" src="${src}"></video>`
     : `<img src="${src}" alt="Screen capture" />`
@@ -110,20 +140,30 @@ function displayRows(meta: CaptureMeta): string {
     .join('')
 }
 
+type SectionOptions = {
+  /** A control rendered under the heading — the problems-only checkbox. */
+  extra?: string
+  /** The sibling file holding the rows this list had to drop. */
+  source?: string
+}
+
 /**
  * A section built from a capped list, or nothing at all when the list is empty.
  * `id` is the anchor the summary bar jumps to.
  */
-function listSection(id: string, title: string, items: string[], extra = ''): string {
+function listSection(id: string, title: string, items: string[], opts: SectionOptions = {}): string {
   if (items.length === 0) return ''
   const shown = items.slice(0, MAX_ROWS)
+  const dropped = items.length - shown.length
+  // Naming the file works whether it sits beside this page or is attached to it: the
+  // single-file export carries the same names.
   const more =
-    items.length > shown.length
-      ? `<li class="more">… ${items.length - shown.length} more, see the JSON beside this file</li>`
+    dropped > 0
+      ? `<li class="more">… ${dropped} more, see ${escapeHtml(opts.source || 'the JSON beside this file')}</li>`
       : ''
   return (
     `<section class="panel lines ${id}" id="${id}">` +
-    `<h2>${escapeHtml(title)}</h2>${extra}` +
+    `<h2>${escapeHtml(title)}</h2>${opts.extra ?? ''}` +
     `<ol>${shown.join('')}${more}</ol></section>`
   )
 }
@@ -184,18 +224,30 @@ function stepsSection(actions: ReportAction[] | undefined, offsetMs: number | un
       `<li><span class="n">${i + 1}</span>${stamp(a.atMs, videoTimeSec(a.atMs, offsetMs))}` +
       `<span class="did">${escapeHtml(a.label)}</span></li>`
   )
-  return listSection('steps', 'Steps to reproduce', items)
+  return listSection('steps', 'Steps to reproduce', items, { source: 'actions.json' })
 }
 
-/** 5xx is the bug, 4xx is usually the symptom, 0 is the request that never landed. */
-function statusClass(status: number): string {
-  return status === 0 || status >= 500 ? 'sev-error' : 'sev-warn'
+/**
+ * The chatter filter, shared by the console and the network list.
+ *
+ * A checkbox and a sibling selector, with no script behind it: a session with no video
+ * has to ship no JavaScript at all, and a control that needs some would break that for
+ * the two lists most likely to need one.
+ */
+function problemFilter(hidden: number): string {
+  if (hidden <= 0) return ''
+  return (
+    `<label class="filter"><input type="checkbox" checked />` +
+    `<span>Problems only <em>(${hidden} hidden)</em></span></label>`
+  )
 }
 
 function severityClass(level: string): string {
-  if (ERROR_LEVELS.has(level)) return 'sev-error'
-  return WARNING_LEVELS.has(level) ? 'sev-warn' : 'sev-mute'
+  if (isErrorLevel(level)) return 'sev-error'
+  return isWarningOnly(level) ? 'sev-warn' : 'sev-mute'
 }
+
+const isWarningOnly = (level: string): boolean => isNotableLevel(level) && !isErrorLevel(level)
 
 /**
  * Console output, chronological, with everything below warning hidden behind a filter
@@ -210,7 +262,7 @@ function severityClass(level: string): string {
 function consoleSection(lines: ReportConsoleLine[] | undefined, offsetMs: number | undefined): string {
   if (!lines?.length) return ''
   const collapsed = collapseConsole(lines).sort((a, b) => a.atMs - b.atMs)
-  const notable = collapsed.filter((l) => ERROR_LEVELS.has(l.level) || WARNING_LEVELS.has(l.level))
+  const notable = collapsed.filter((l) => isNotableLevel(l.level))
   const items = collapsed.map((l) => {
     const times = l.count > 1 ? `<span class="times">×${l.count}</span>` : ''
     return (
@@ -220,29 +272,60 @@ function consoleSection(lines: ReportConsoleLine[] | undefined, offsetMs: number
     )
   })
   // No filter when there is nothing to filter down to — an empty list is worse than the
-  // chatter. It is a CSS-only checkbox, so a session with no video still needs no script.
-  const hidden = collapsed.length - notable.length
-  const filter =
-    notable.length > 0 && hidden > 0
-      ? `<label class="filter"><input type="checkbox" checked />` +
-        `<span>Problems only <em>(${hidden} hidden)</em></span></label>`
-      : ''
-  return listSection('console', 'Console', items, filter)
+  // chatter.
+  const filter = notable.length > 0 ? problemFilter(collapsed.length - notable.length) : ''
+  return listSection('console', 'Console', items, { extra: filter, source: 'console.json' })
 }
 
-function requestsSection(requests: ReportRequest[] | undefined): string {
-  if (!requests?.length) return ''
-  const items = requests.map(
-    (r) =>
-      `<li class="${statusClass(r.status)}">` +
-      `<span class="lvl">${escapeHtml(String(r.status || 'failed'))}</span>` +
-      `<span class="at">${escapeHtml(r.method)}</span>` +
-      `<span class="text"><span class="url">${escapeHtml(r.url)}</span>` +
-      // The body of a 500 is usually the actual reason; a URL alone rarely is.
-      (r.body ? `<span class="body">${escapeHtml(r.body)}</span>` : '') +
-      `</span></li>`
+/**
+ * Network and Console, as two tabs over one panel.
+ *
+ * `:target` rather than a checkbox or a script, for one reason worth the CSS: the counts
+ * in the summary bar are already links to `#requests` and `#console`, so with `:target`
+ * driving the tabs those links keep working and now switch to the right one on the way.
+ * A radio input would have needed a second mechanism to stay in step with them.
+ *
+ * The first pane shows when nothing is targeted, which is how the page opens.
+ */
+function lowerTabs(network: string, console_: string, counts: { requests: number; console: number }): string {
+  if (!network && !console_) return ''
+  if (!network || !console_) return network || console_
+  const tab = (href: string, label: string, count: number): string =>
+    `<a href="#${href}" data-tab="${href}">${escapeHtml(label)}<b>${count}</b></a>`
+  return (
+    `<div class="lower">` +
+    `<nav class="lower-tabs">` +
+    tab('requests', 'Network', counts.requests) +
+    tab('console', 'Console', counts.console) +
+    `</nav>${network}${console_}</div>`
   )
-  return listSection('requests', 'Failed requests', items)
+}
+
+/**
+ * The sibling files, carried inside the page.
+ *
+ * Only the single-file export has these. A bundle's report says the JSON is beside it
+ * because it is; a page that has been emailed somewhere has no beside, and the HAR is
+ * the half of a bug report a developer actually opens in another tool.
+ */
+function attachmentsSection(attachments: ReportAttachment[] | undefined): string {
+  if (!attachments?.length) return ''
+  const items = attachments
+    .map((a) => {
+      // The href is a data URI built from base64, whose alphabet holds nothing HTML
+      // treats specially — the name beside it is arbitrary and is escaped.
+      const label = a.href
+        ? `<a download="${escapeHtml(a.name)}" href="${a.href}">${escapeHtml(a.name)}</a>`
+        : `<span class="url">${escapeHtml(a.name)}</span>`
+      const size = a.href ? humanBytes(a.bytes) : `${humanBytes(a.bytes)} — too large to attach`
+      return `<li>${label}<span class="times">${escapeHtml(size)}</span></li>`
+    })
+    .join('')
+  return (
+    `<section class="panel lines files"><h2>Attached data</h2>` +
+    `<ol>${items}</ol>` +
+    `<p class="facts">Saved from this page — nothing is fetched.</p></section>`
+  )
 }
 
 type Stat = { id: string; count: number; label: string; bad: boolean }
@@ -265,166 +348,24 @@ function summaryBar(stats: Stat[]): string {
   return `<nav class="summary">${links}</nav>`
 }
 
-const STYLES = `
-  :root {
-    --bg: #f5f6f8; --card: #ffffff; --edge: #e3e7ec; --rule: #eef1f5;
-    --ink: #10151b; --ink-2: #5a6472; --ink-3: #8c95a3;
-    --err: #c4342a; --err-soft: rgba(196, 52, 42, 0.08);
-    --warn: #96650b; --warn-soft: rgba(150, 101, 11, 0.09);
-    --focus: #0a6ed1;
-    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
-    color-scheme: light dark;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #0e1116; --card: #161a20; --edge: #262c34; --rule: #1e242b;
-      --ink: #e9ecf1; --ink-2: #a3adba; --ink-3: #767f8c;
-      --err: #ff6a5c; --err-soft: rgba(255, 106, 92, 0.11);
-      --warn: #e3a53f; --warn-soft: rgba(227, 165, 63, 0.11);
-      --focus: #4c9dff;
-    }
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; padding: 1.75rem 1.25rem 5rem; background: var(--bg); color: var(--ink);
-    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-    -webkit-font-smoothing: antialiased;
-  }
-  main { max-width: 78rem; margin: 0 auto; }
-  a { color: inherit; }
-  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+/**
+ * The last line, which has to stay true in both shapes. Inside a bundle the JSON is
+ * beside the page; in a single file it is attached to it, and saying otherwise would
+ * send a reader looking through a folder that does not exist.
+ */
+function footerText(opts: ReportOptions): string {
+  const where = opts.attachments?.length
+    ? 'the full console, network and action data are attached above'
+    : 'the full console, network and action data sit beside this page as JSON'
+  return `Everything in this report came from this machine. Credentials were stripped before it was written; ${where}.`
+}
 
-  header { margin-bottom: 1.25rem; }
-  .kicker {
-    display: flex; align-items: center; gap: .5rem; margin: 0 0 .35rem;
-    font: 500 11px var(--mono); letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3);
-  }
-  .kicker .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--err); }
-  h1 {
-    margin: 0; font-size: clamp(1.35rem, 1.1rem + 1vw, 1.9rem); font-weight: 600;
-    letter-spacing: -.02em; line-height: 1.15; overflow-wrap: anywhere;
-  }
-  .when { margin: .3rem 0 0; color: var(--ink-2); font-size: 13px; }
-
-  .summary { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .9rem; }
-  .summary a {
-    display: inline-flex; align-items: baseline; gap: .35rem; text-decoration: none;
-    padding: .3rem .65rem; border: 1px solid var(--edge); border-radius: 999px;
-    background: var(--card); color: var(--ink-2); font-size: 12.5px;
-  }
-  .summary a b { font: 600 14px var(--mono); color: var(--ink); }
-  .summary a.bad { border-color: var(--err); background: var(--err-soft); color: var(--err); }
-  .summary a.bad b { color: var(--err); }
-  .summary a:hover { border-color: var(--ink-3); }
-
-  .split {
-    display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
-    gap: 1.25rem; align-items: start;
-  }
-  .solo { display: grid; gap: 1.25rem; max-width: 52rem; }
-  .media-col { position: sticky; top: 1rem; display: flex; flex-direction: column; gap: 1rem; }
-  .timeline-col { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
-  /*
-   * One column: the timeline runs underneath the media rather than beside it, so
-   * sticking the whole column would float the markers and the environment table over
-   * it. Only the player sticks — it is the one thing a timestamp needs on screen — and
-   * it keeps a solid background because it now scrolls over the content below it.
-   */
-  @media (max-width: 62rem) {
-    .split { grid-template-columns: minmax(0, 1fr); }
-    .media-col { position: static; }
-    .media-col figure { position: sticky; top: .5rem; z-index: 1; }
-    .media-col video, .media-col img { max-height: 38vh; }
-  }
-
-  figure {
-    margin: 0; background: #05070a; border: 1px solid var(--edge); border-radius: 12px;
-    overflow: hidden; box-shadow: 0 1px 2px rgba(0, 0, 0, .05), 0 12px 28px -18px rgba(0, 0, 0, .5);
-  }
-  video, img { display: block; width: 100%; height: auto; max-height: 72vh; object-fit: contain; }
-
-  .panel { background: var(--card); border: 1px solid var(--edge); border-radius: 12px; }
-  details.env { overflow: hidden; }
-  details.env > summary {
-    cursor: pointer; padding: .7rem .9rem; list-style: none;
-    font: 600 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2);
-  }
-  details.env > summary::-webkit-details-marker { display: none; }
-  details.env > summary::after { content: ' \\25BE'; color: var(--ink-3); }
-  details.env[open] > summary { border-bottom: 1px solid var(--rule); }
-  details.env[open] > summary::after { content: ' \\25B4'; }
-  table { border-collapse: collapse; width: 100%; }
-  th, td {
-    text-align: left; padding: .45rem .9rem; border-bottom: 1px solid var(--rule);
-    vertical-align: top; font-size: 13px;
-  }
-  tr:last-child th, tr:last-child td { border-bottom: 0; }
-  th { font-weight: 500; color: var(--ink-2); white-space: nowrap; width: 1%; }
-  td { font-variant-numeric: tabular-nums; }
-
-  .lines { padding: .85rem .9rem 1rem; scroll-margin-top: 1rem; }
-  .lines h2 {
-    margin: 0; font-size: 11px; font-weight: 600; letter-spacing: .09em;
-    text-transform: uppercase; color: var(--ink-3);
-  }
-  .lines ol {
-    margin: .55rem 0 0; padding: 0; list-style: none;
-    display: flex; flex-direction: column; gap: 1px;
-  }
-  .lines li {
-    display: flex; align-items: baseline; gap: .55rem; padding: .32rem .45rem;
-    border-radius: 6px; border-left: 2px solid transparent;
-  }
-  .lines li:hover { background: var(--rule); }
-  .lines .more { color: var(--ink-3); font-size: 12px; }
-  .text, .did { min-width: 0; overflow-wrap: anywhere; }
-  .n {
-    flex: none; min-width: 1.25rem; color: var(--ink-3);
-    font: 500 11px var(--mono); font-variant-numeric: tabular-nums;
-  }
-  .at, .lvl, .times { font: 500 12px var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .at { flex: none; color: var(--ink-3); }
-  .lvl { flex: none; color: var(--ink-3); text-transform: uppercase; font-size: 10.5px; letter-spacing: .04em; }
-  .times { margin-left: auto; color: var(--ink-3); font-size: 11px; }
-  .url { display: block; }
-  .body {
-    display: block; margin-top: .3rem; padding: .4rem .55rem; border-radius: 6px;
-    background: var(--rule); color: var(--ink-2); font: 12px var(--mono); white-space: pre-wrap;
-  }
-  .note { color: var(--ink); }
-
-  /* Severity earns colour; everything else stays quiet so it can be scanned past. */
-  .sev-error { background: var(--err-soft); border-left-color: var(--err); }
-  .sev-error .lvl { color: var(--err); }
-  .sev-error:hover { background: var(--err-soft); }
-  .sev-warn { background: var(--warn-soft); border-left-color: var(--warn); }
-  .sev-warn .lvl { color: var(--warn); }
-  .sev-warn:hover { background: var(--warn-soft); }
-
-  /* The line the playhead is on. */
-  .lines li.now { background: var(--rule); border-left-color: var(--focus); }
-  .lines li.now .at { color: var(--focus); }
-
-  button.at {
-    color: var(--ink-2); background: transparent; border: 1px solid var(--edge);
-    border-radius: 5px; padding: .05rem .35rem; cursor: pointer; font-size: 11.5px;
-  }
-  button.at:hover { border-color: var(--focus); color: var(--focus); }
-
-  .filter {
-    display: inline-flex; align-items: center; gap: .4rem; margin-top: .4rem;
-    color: var(--ink-2); font-size: 12px; cursor: pointer; user-select: none;
-  }
-  .filter em { color: var(--ink-3); font-style: normal; }
-  /* CSS-only, so a report with no video still carries no script at all. */
-  .console:has(.filter input:checked) li.sev-mute { display: none; }
-
-  footer { margin-top: 1.5rem; color: var(--ink-3); font-size: 12px; max-width: 52rem; }
-`
-
-export function renderReport(meta: CaptureMeta, data: ReportData = {}): string {
+export function renderReport(meta: CaptureMeta, data: ReportData = {}, opts: ReportOptions = {}): string {
   const isSession = meta.capture.kind === 'browser-session'
-  const seekable = meta.media !== null && VIDEO_EXTS.includes(meta.media.ext)
+  // A recording left out of a single-file export is not seekable, and nothing may claim
+  // otherwise: every data-at on the page would point at a player that is not there.
+  const media = opts.mediaSrc === null ? null : meta.media
+  const seekable = media !== null && VIDEO_EXTS.includes(media.ext)
   // Only convert onto the video clock when there is a video to seek.
   const offsetMs = seekable ? meta.capture.recordingOffsetMs : undefined
   const source = meta.capture.source
@@ -452,8 +393,8 @@ export function renderReport(meta: CaptureMeta, data: ReportData = {}): string {
     displayRows(meta)
   ].join('')
 
-  const errorCount = collapseConsole(data.console ?? []).filter((l) => ERROR_LEVELS.has(l.level)).length
-  const failed = data.failedRequests?.length ?? 0
+  const errorCount = collapseConsole(data.console ?? []).filter((l) => isErrorLevel(l.level)).length
+  const failed = data.requests?.filter((r) => isFailedStatus(r.status)).length ?? 0
   const stats: Stat[] = [
     { id: 'console', count: errorCount, label: `console error${errorCount === 1 ? '' : 's'}`, bad: true },
     { id: 'requests', count: failed, label: `failed request${failed === 1 ? '' : 's'}`, bad: true },
@@ -462,11 +403,23 @@ export function renderReport(meta: CaptureMeta, data: ReportData = {}): string {
   ]
   const wentWrong = errorCount + failed > 0
 
-  const timeline = [
-    stepsSection(data.actions, offsetMs),
-    requestsSection(data.failedRequests),
-    consoleSection(data.console, offsetMs)
-  ].join('')
+  const timeline = stepsSection(data.actions, offsetMs)
+  /*
+   * Network and Console share the full width of the page below the two columns, one tab
+   * each. Both are things a reader works in rather than scans, both want more room than
+   * half a page, and only one is being read at a time.
+   *
+   * The cost is that the console no longer sits beside the player. The seek buttons still
+   * work — the script scrolls the video back into view — but it is a jump rather than a
+   * glance, which is the trade the tabs buy.
+   */
+  const network = networkPanel(keepMostTelling(data.requests ?? [], MAX_ROWS), (atMs) =>
+    videoTimeSec(atMs, offsetMs)
+  )
+  const lower = lowerTabs(network, consoleSection(data.console, offsetMs), {
+    requests: data.requests?.length ?? 0,
+    console: collapseConsole(data.console ?? []).length
+  })
   // Markers ride with the player rather than the timeline: they are already on the
   // video's clock, they are the one list the person recording wrote themselves, and a
   // recording whose only context is its markers then needs no second column at all.
@@ -477,13 +430,14 @@ export function renderReport(meta: CaptureMeta, data: ReportData = {}): string {
   const env =
     `<details class="panel env"${timeline ? '' : ' open'}><summary>Environment</summary>` +
     `<table><tbody>${rows}</tbody></table></details>`
-  const aside = `${mediaTag(meta)}${markers}${env}`
+  const aside = `${mediaTag(meta, opts)}${markers}${env}${attachmentsSection(opts.attachments)}`
   // With nothing on a timeline there is no second column to justify — a plain recording
   // gets its media at a readable width instead of half a page of white space.
-  const body = timeline
-    ? `<div class="split"><div class="media-col">${aside}</div>` +
-      `<div class="timeline-col">${timeline}</div></div>`
-    : `<div class="solo">${aside}</div>`
+  const body =
+    (timeline
+      ? `<div class="split"><div class="media-col">${aside}</div>` +
+        `<div class="timeline-col">${timeline}</div></div>`
+      : `<div class="solo">${aside}</div>`) + lower
 
   const file = meta.media ? ` · ${meta.media.file}` : ''
   const when = `${new Date(meta.capturedAt).toLocaleString()} · ${humanDuration(meta.capture.durationMs)}`
@@ -494,7 +448,7 @@ export function renderReport(meta: CaptureMeta, data: ReportData = {}): string {
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>${escapeHtml(title)}</title>
-<style>${STYLES}</style>
+<style>${REPORT_STYLES}</style>
 </head>
 <body>
 <main>
@@ -505,9 +459,9 @@ export function renderReport(meta: CaptureMeta, data: ReportData = {}): string {
     ${summaryBar(stats)}
   </header>
   ${body}
-  <footer>Everything in this report came from this machine. Credentials were stripped before it was written; the full console, network and action data sit beside this page as JSON.</footer>
+  <footer>${escapeHtml(footerText(opts))}</footer>
 </main>
-${seekable ? SEEK_SCRIPT : ''}
+${seekable ? SEEK_SCRIPT : ''}${network ? NETWORK_SCRIPT : ''}
 </body>
 </html>
 `

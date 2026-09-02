@@ -1,6 +1,14 @@
 import { describe, it, expect } from 'vitest'
 import type { LibraryEntry } from '@preload/index'
-import { applyFilter, dayLabel, groupByDay, humanBytes, humanDuration, metaLine } from '../format'
+import {
+  applyFilter,
+  dayLabel,
+  groupByDay,
+  humanBytes,
+  humanDuration,
+  metaLine,
+  relativeTime
+} from '@renderer/lib/capture'
 
 const NOW = new Date('2026-08-25T14:00:00')
 
@@ -143,5 +151,29 @@ describe('applyFilter', () => {
     const original = [...entries]
     applyFilter(entries, 'problems')
     expect(entries).toEqual(original)
+  })
+})
+
+describe('relativeTime', () => {
+  const now = new Date('2026-09-03T12:00:00')
+  const ago = (ms: number): string => relativeTime(new Date(now.getTime() - ms).toISOString(), now)
+
+  it('answers how long ago, not what time', () => {
+    // A clock reading sat two columns from durations like "0:36" and read as one.
+    expect(ago(10_000)).toBe('just now')
+    expect(ago(18 * 60_000)).toBe('18 minutes ago')
+    expect(ago(60 * 60_000)).toBe('1 hour ago')
+    expect(ago(5 * 3600_000)).toBe('5 hours ago')
+    expect(ago(2 * 86_400_000)).toBe('2 days ago')
+  })
+
+  it('hands over to the date once "ago" stops being a handle', () => {
+    // Past a week nobody counts days; that is `dayLabel`'s argument and it wins.
+    expect(ago(30 * 86_400_000)).toBe(dayLabel(new Date(now.getTime() - 30 * 86_400_000).toISOString(), now))
+  })
+
+  it('says something for a clock that is wrong or a date that is not one', () => {
+    expect(ago(-60_000)).toBe('just now')
+    expect(relativeTime('not a date', now)).toBe('')
   })
 })

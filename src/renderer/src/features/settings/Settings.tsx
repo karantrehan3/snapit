@@ -1,7 +1,9 @@
-import { useEffect, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react'
+import { useEffect, useState, type CSSProperties, type ReactElement } from 'react'
 import type { Settings as SettingsType } from '@preload/index'
+import { Button } from '@renderer/components/Button'
+import { Field, inputStyle } from '@renderer/components/Field'
 import { HotkeyInput } from './HotkeyInput'
-import { browseStyle, closeStyle, inputStyle, pageStyle, saveStyle } from './styles'
+import { pageStyle } from './styles'
 
 /**
  * Settings window: edit the capture hotkeys, the default save folder, and whether
@@ -35,8 +37,6 @@ export function Settings(): ReactElement {
 
   return (
     <div style={pageStyle}>
-      <h2 style={{ margin: '0 0 16px', fontSize: 17 }}>snapit Settings</h2>
-
       <Field label="Screenshot hotkey">
         <HotkeyInput value={settings.screenshotHotkey} onChange={(v) => patch({ screenshotHotkey: v })} />
       </Field>
@@ -51,36 +51,57 @@ export function Settings(): ReactElement {
 
       <Field label="Save folder">
         <input readOnly value={settings.saveDir} style={inputStyle} />
-        <button type="button" onClick={() => void browse()} style={browseStyle}>
+        <Button size="sm" onClick={() => void browse()}>
           Browse…
-        </button>
+        </Button>
       </Field>
 
-      <Field label="Recordings">
+      <Field
+        label="Recordings"
+        hint="Keeps the recording with a details page you can open in any browser. The video file itself is named exactly as it would be on its own."
+      >
         <label style={checkboxRow}>
           <input
             type="checkbox"
             checked={settings.bundleRecordings}
             onChange={(e) => patch({ bundleRecordings: e.target.checked })}
           />
-          <span>
-            Save as a report folder
-            <span style={hintStyle}>
-              Keeps the recording with a details page you can open in any browser. The video file itself is
-              named exactly as it would be on its own.
-            </span>
-          </span>
+          Save as a report folder
         </label>
       </Field>
 
+      {/* The record bar has these too, but a web capture starts itself and never shows
+          one — so this was the only audio setting with nowhere to be changed. */}
+      <Field
+        label="Audio"
+        hint="Used by every recording, including a web app capture, which starts without a setup bar to ask you."
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+          <label style={checkboxRow}>
+            <input
+              type="checkbox"
+              checked={settings.capture.mic}
+              onChange={(e) => patch({ capture: { ...settings.capture, mic: e.target.checked } })}
+            />
+            Your microphone — narrate the bug while you reproduce it
+          </label>
+          <label style={checkboxRow}>
+            <input
+              type="checkbox"
+              checked={settings.capture.systemAudio}
+              onChange={(e) => patch({ capture: { ...settings.capture, systemAudio: e.target.checked } })}
+            />
+            System audio — whatever the machine is playing
+          </label>
+        </div>
+      </Field>
+
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 24 }}>
-        <button type="button" onClick={() => void save()} style={saveStyle}>
+        <Button variant="primary" onClick={() => void save()}>
           Save
-        </button>
-        <button type="button" onClick={() => window.close()} style={closeStyle}>
-          Close
-        </button>
-        {saved && <span style={{ color: '#34c759', fontSize: 13 }}>Saved ✓</span>}
+        </Button>
+        <Button onClick={() => window.close()}>Close</Button>
+        {saved && <span style={{ color: 'var(--success)', fontSize: 'var(--t-body)' }}>Saved ✓</span>}
       </div>
     </div>
   )
@@ -88,19 +109,8 @@ export function Settings(): ReactElement {
 
 const checkboxRow: CSSProperties = {
   display: 'flex',
-  alignItems: 'flex-start',
+  alignItems: 'center',
   gap: 8,
-  fontSize: 13,
+  fontSize: 'var(--t-body)',
   cursor: 'pointer'
-}
-
-const hintStyle: CSSProperties = { display: 'block', color: '#6b6b70', fontSize: 12, marginTop: 3 }
-
-function Field({ label, children }: { label: string; children: ReactNode }): ReactElement {
-  return (
-    <div style={{ marginBottom: 14 }}>
-      <div style={{ fontSize: 12, color: '#6b6b70', marginBottom: 5 }}>{label}</div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>{children}</div>
-    </div>
-  )
 }

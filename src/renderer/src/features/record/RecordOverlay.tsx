@@ -91,14 +91,18 @@ export function RecordOverlay({
 
   // Snapit opened the window and knows what to record, so the setup panel would only be
   // asking the user to confirm a choice already made for them. Start straight away.
+  //
+  // Audio comes from the saved prefs like every other recording. It used to be hardcoded
+  // off here, which made every web capture silent — and narrating the bug while you
+  // reproduce it is most of why anyone records one.
   const startedAuto = useRef(false)
   useEffect(() => {
     if (!auto || startedAuto.current) return
     startedAuto.current = true
     void recorder.start({
       selectedId: auto.sourceId,
-      systemAudio: false,
-      mic: false,
+      systemAudio,
+      mic,
       fps,
       regionMode: false,
       box: null,

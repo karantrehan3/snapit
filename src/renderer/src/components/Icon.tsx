@@ -29,6 +29,16 @@ export type IconName =
   | 'redo'
   | 'close'
   | 'chevron-down'
+  | 'chevron-right'
+  | 'chevron-left'
+  | 'grid'
+  | 'chart'
+  | 'gear'
+  | 'info'
+  | 'sidebar'
+  | 'plus'
+  | 'play'
+  | 'external'
   | 'speaker'
   | 'mic'
   | 'flag'
@@ -41,6 +51,7 @@ export type IconName =
   | 'folder'
   | 'trash'
   | 'clipboard'
+  | 'share'
   | 'alert'
   | 'check'
   | 'mute'
@@ -109,6 +120,56 @@ const PATHS: Record<IconName, ReactElement> = {
   ),
   close: <path d="M6 6l12 12M18 6L6 18" />,
   'chevron-down': <path d="M6 9.5l6 6 6-6" />,
+  'chevron-right': <path d="M9.5 6l6 6-6 6" />,
+  'chevron-left': <path d="M14.5 6l-6 6 6 6" />,
+  grid: (
+    <>
+      <rect x="3.5" y="3.5" width="7" height="7" rx="1.5" />
+      <rect x="13.5" y="3.5" width="7" height="7" rx="1.5" />
+      <rect x="3.5" y="13.5" width="7" height="7" rx="1.5" />
+      <rect x="13.5" y="13.5" width="7" height="7" rx="1.5" />
+    </>
+  ),
+  // Bars rather than a line: what the Analytics route actually draws is counts per day.
+  chart: (
+    <>
+      <path d="M4 20.5h16" />
+      <rect x="5.5" y="12" width="3.5" height="6" rx="0.8" />
+      <rect x="10.5" y="7.5" width="3.5" height="10.5" rx="0.8" />
+      <rect x="15.5" y="10" width="3.5" height="8" rx="0.8" />
+    </>
+  ),
+  gear: (
+    <>
+      <circle cx="12" cy="12" r="3.2" />
+      <path d="M12 3.6v2.2M12 18.2v2.2M3.6 12h2.2M18.2 12h2.2M6.1 6.1l1.6 1.6M16.3 16.3l1.6 1.6M17.9 6.1l-1.6 1.6M7.7 16.3l-1.6 1.6" />
+    </>
+  ),
+  info: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 11v5.5" />
+      <circle cx="12" cy="7.75" r="0.9" fill="currentColor" stroke="none" />
+    </>
+  ),
+  plus: <path d="M12 5v14M5 12h14" />,
+  // A pane beside a narrower one: the control that collapses the capture list.
+  sidebar: (
+    <>
+      <rect x="3" y="4.5" width="18" height="15" rx="2" />
+      <path d="M9.5 4.5v15" />
+    </>
+  ),
+  // Filled, because it is the one control on a player and an outline of it reads as a
+  // shape rather than as the button you press.
+  play: <path d="M8 5.5l11 6.5-11 6.5z" fill="currentColor" stroke="none" />,
+  external: (
+    <>
+      <path d="M13.5 4.5H19.5V10.5" />
+      <path d="M19.5 4.5L11 13" />
+      <path d="M17 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-10A1.5 1.5 0 0 1 4 18.5v-10A1.5 1.5 0 0 1 5.5 7H10" />
+    </>
+  ),
   speaker: (
     <>
       <path d="M4 9.5h3.5L12 5.5v13L7.5 14.5H4z" />
@@ -188,6 +249,13 @@ const PATHS: Record<IconName, ReactElement> = {
       <path d="M9 4.5h6v3H9z" />
       <path d="M9 6H6.5A1.5 1.5 0 0 0 5 7.5v11A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5v-11A1.5 1.5 0 0 0 17.5 6H15" />
       <path d="M8.5 12h7M8.5 15.5h4.5" />
+    </>
+  ),
+  share: (
+    <>
+      <path d="M12 3.5v11" />
+      <path d="M8 7.5l4-4 4 4" />
+      <path d="M7.5 11.5H6A1.5 1.5 0 0 0 4.5 13v6A1.5 1.5 0 0 0 6 20.5h12a1.5 1.5 0 0 0 1.5-1.5v-6a1.5 1.5 0 0 0-1.5-1.5h-1.5" />
     </>
   )
 }

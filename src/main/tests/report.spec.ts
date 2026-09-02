@@ -1,6 +1,22 @@
 import { describe, it, expect } from 'vitest'
 import { buildMeta, type MetaInput } from '../bundle'
 import { collapseConsole, escapeHtml, renderReport, videoTimeSec } from '../report'
+import type { ReportRequest } from '../reportRequests'
+
+/** A request as the report receives it, with only the interesting fields spelled out. */
+const req = (over: Partial<ReportRequest> = {}): ReportRequest => ({
+  atMs: 0,
+  method: 'GET',
+  status: 200,
+  url: 'https://api.test/thing',
+  name: 'thing',
+  domain: 'api.test',
+  group: 'xhr',
+  requestHeaders: [],
+  responseHeaders: [],
+  redactedHeaders: 0,
+  ...over
+})
 
 const base = (over: Partial<MetaInput> = {}): MetaInput => ({
   capturedAt: new Date('2026-08-22T12:31:07.000Z'),
@@ -57,7 +73,7 @@ describe('renderReport', () => {
 
   it('displays a captured URL without turning it into a request', () => {
     const html = renderReport(buildMeta(base()), {
-      failedRequests: [{ method: 'GET', status: 500, url: 'https://api.test/orders' }]
+      requests: [req({ status: 500, url: 'https://api.test/orders' })]
     })
     expect(html).toContain('https://api.test/orders')
     expectFetchesNothing(html)
@@ -120,7 +136,7 @@ describe('renderReport — browser session', () => {
       { atMs: 8000, level: 'error', text: 'Cannot read properties of null' }
     ],
     actions: [{ atMs: 500, label: 'Click button “Place order”' }],
-    failedRequests: [{ method: 'POST', status: 500, url: 'https://api.test/orders' }]
+    requests: [req({ method: 'POST', status: 500, url: 'https://api.test/orders' })]
   })
 
   it('renders no media element when there is nothing to play', () => {
@@ -132,7 +148,7 @@ describe('renderReport — browser session', () => {
   it('shows the repro steps, failed requests and console', () => {
     expect(html).toContain('Steps to reproduce')
     expect(html).toContain('Click button “Place order”')
-    expect(html).toContain('Failed requests')
+    expect(html).toContain('Network')
     expect(html).toContain('https://api.test/orders')
     expect(html).toContain('Cannot read properties of null')
   })
@@ -157,9 +173,13 @@ describe('renderReport — browser session', () => {
     expect(html).toContain('1 failed of 30 requests')
   })
 
-  it('is still self-contained, and has no marker script to justify one', () => {
+  it('is still self-contained, and ships only the script the panel needs', () => {
+    // A report with no video used to carry no script at all. A sortable, filterable
+    // Network table cannot be expressed in CSS, so the rule is now "a script when there
+    // is something to drive" — and there is still no *seek* script without a player.
     expectFetchesNothing(html)
-    expect(html).not.toMatch(/<script/)
+    expect(html).toContain("querySelector('.netpanel')")
+    expect(html).not.toContain("document.querySelector('video')")
   })
 
   it('escapes console text, which is arbitrary output from the page', () => {
@@ -176,7 +196,7 @@ describe('renderReport — recording still works', () => {
     const html = renderReport(buildMeta(base()))
     expect(html).toContain('<video')
     expect(html).not.toContain('Steps to reproduce')
-    expect(html).not.toContain('Failed requests')
+    expect(html).not.toContain('<h2>Network</h2>')
   })
 })
 
@@ -262,6 +282,243 @@ describe('renderReport — a session that also recorded', () => {
   })
 })
 
+describe('renderReport — the Network panel', () => {
+  const meta = buildMeta({ ...base(), recordingOffsetMs: 20_000 })
+
+  it('shows every request as a table row, successes included', () => {
+    const html = renderReport(meta, {
+      requests: [req({ atMs: 1000, url: 'https://api.test/ok' }), req({ atMs: 2000, status: 500 })]
+    })
+    expect(html).toContain('class="panel netpanel"')
+    expect(html).toContain('https://api.test/ok')
+    expect(html.match(/<tr data-i=/g)).toHaveLength(2)
+  })
+
+  it('carries the sort keys and filter haystack the script needs', () => {
+    // The script moves markup that is already there rather than rebuilding from JSON,
+    // so a row that cannot be sorted or found is a row the panel breaks on.
+    const html = renderReport(meta, {
+      requests: [req({ atMs: 3000, status: 404, bytes: 678, durationMs: 120, group: 'css' })]
+    })
+    expect(html).toContain('data-group="css"')
+    expect(html).toContain('data-fail="1"')
+    expect(html).toContain('data-status="404"')
+    expect(html).toContain('data-bytes="678"')
+    expect(html).toContain('data-time="120"')
+    expect(html).toContain('data-find="https://api.test/thing thing api.test get 404"')
+  })
+
+  it('offers only the type chips the capture actually has', () => {
+    const html = renderReport(meta, { requests: [req({ group: 'js' }), req({ atMs: 1, group: 'img' })] })
+    expect(html).toContain('data-group="js"')
+    expect(html).toContain('data-group="img"')
+    expect(html).not.toContain('data-group="font"')
+  })
+
+  it('seeks the recording from a row, the way a console line already did', () => {
+    // 30s of session minus a 20s offset is 10s of video.
+    const html = renderReport(meta, { requests: [req({ atMs: 30_000, status: 500 })] })
+    expect(html).toContain('data-at="10.000"')
+  })
+
+  it('leaves a request with no readable timestamp off the timeline', () => {
+    const html = renderReport(meta, { requests: [req({ atMs: null, status: 500 })] })
+    expect(html).toContain('&mdash;')
+    expect(html).toContain('data-at=""')
+  })
+
+  it('opens onto General, response and request headers', () => {
+    const html = renderReport(meta, {
+      requests: [
+        req({
+          status: 500,
+          serverIp: '10.0.0.1',
+          httpVersion: 'h2',
+          requestHeaders: [{ name: 'content-type', value: 'application/json' }],
+          responseHeaders: [{ name: 'x-request-id', value: 'abc' }],
+          redactedHeaders: 3
+        })
+      ]
+    })
+    expect(html).toContain('<h4>General</h4>')
+    expect(html).toContain('<dt>Remote address</dt><dd>10.0.0.1</dd>')
+    expect(html).toContain('<dt>content-type</dt><dd>application/json</dd>')
+    expect(html).toContain('<dt>x-request-id</dt><dd>abc</dd>')
+    expect(html).toContain('3 headers removed')
+  })
+
+  it('lists every measured phase on the Timing tab, and says TLS is not additive', () => {
+    const html = renderReport(meta, {
+      requests: [
+        req({
+          status: 500,
+          durationMs: 1296,
+          timings: { blocked: 4, dns: 1, connect: 584, ssl: 306, send: 1, wait: 700, receive: 6 }
+        })
+      ]
+    })
+    expect(html).toContain('Queued / stalled')
+    expect(html).toContain('Waiting for response')
+    expect(html).toContain('TLS is counted inside the initial connection')
+  })
+
+  it('omits a phase the HAR did not measure rather than drawing it as zero', () => {
+    const html = renderReport(meta, {
+      requests: [
+        req({
+          status: 500,
+          timings: { blocked: -1, dns: -1, connect: -1, ssl: -1, send: 2, wait: 30, receive: 4 }
+        })
+      ]
+    })
+    expect(html).not.toContain('DNS lookup')
+    expect(html).toContain('Request sent')
+  })
+
+  it('explains an empty Response tab instead of showing a blank box', () => {
+    // Three different reasons a body is missing, and the pane says which.
+    const asset = renderReport(meta, { requests: [req({ status: 200, group: 'js' })] })
+    expect(asset).toContain('not for its scripts, styles and images')
+
+    const tooBig = renderReport(meta, { requests: [req({ status: 200, group: 'xhr' })] })
+    expect(tooBig).toContain('too large to keep')
+
+    const failed = renderReport(meta, { requests: [req({ status: 500 })] })
+    expect(failed).toContain('No response body was captured')
+
+    const withBody = renderReport(meta, { requests: [req({ status: 500, body: '{"e":1}' })] })
+    expect(withBody).toContain('<pre class="net-body">{&quot;e&quot;:1}</pre>')
+  })
+
+  it('shows the payload that was sent, already redacted', () => {
+    const html = renderReport(meta, {
+      requests: [
+        req({
+          method: 'POST',
+          payload: { mimeType: 'application/json', params: [{ name: 'email', value: 'a@b.c' }] }
+        })
+      ]
+    })
+    expect(html).toContain('<dt>email</dt><dd>a@b.c</dd>')
+    const none = renderReport(meta, { requests: [req()] })
+    expect(none).toContain('This request had no body.')
+  })
+
+  it('summarises what the panel is showing, and names the file that holds the rest', () => {
+    const html = renderReport(meta, {
+      requests: [req({ bytes: 1024, durationMs: 10 }), req({ atMs: 5000, bytes: 1024, durationMs: 20 })]
+    })
+    expect(html).toContain('2 requests')
+    expect(html).toContain('2.0 KB transferred')
+    expect(html).toContain('<code>network.har</code>')
+    expect(html).toContain('DevTools → Network')
+  })
+
+  it('ships the panel script only when there are requests to drive', () => {
+    const withPanel = renderReport(meta, { requests: [req()] })
+    expect(withPanel).toContain('.netpanel')
+    expect(withPanel).toContain("querySelector('.netpanel')")
+    const withoutPanel = renderReport(meta, { console: [{ atMs: 1, level: 'error', text: 'boom' }] })
+    expect(withoutPanel).not.toContain("querySelector('.netpanel')")
+  })
+
+  it('escapes a header value, which is arbitrary text from a server', () => {
+    const html = renderReport(meta, {
+      requests: [req({ status: 500, responseHeaders: [{ name: 'x-evil', value: '<img src=x>' }] })]
+    })
+    expect(html).not.toContain('<img src=x')
+    expect(html).toContain('&lt;img src=x&gt;')
+  })
+
+  it('escapes a URL into the data attributes the script reads', () => {
+    const html = renderReport(meta, { requests: [req({ url: 'https://api.test/"><script>x</script>' })] })
+    expect(html).not.toContain('"><script>x')
+  })
+})
+
+describe('renderReport — Network and Console as tabs', () => {
+  const meta = buildMeta({ ...base(), recordingOffsetMs: 20_000 })
+  const both = renderReport(meta, {
+    requests: [req({ status: 500 }), req({ atMs: 1 })],
+    console: [
+      { atMs: 10, level: 'error', text: 'boom' },
+      { atMs: 20, level: 'log', text: 'chatter' }
+    ]
+  })
+
+  it('puts both in one panel with a tab each, counted', () => {
+    expect(both).toContain('<nav class="lower-tabs">')
+    expect(both).toContain('href="#requests" data-tab="requests">Network<b>2</b>')
+    expect(both).toContain('href="#console" data-tab="console">Console<b>2</b>')
+  })
+
+  it('drives them from :target, so the summary counts switch tabs as well as scroll', () => {
+    // The chips at the top already link to #requests and #console. A checkbox or a
+    // script would have needed a second mechanism kept in step with them.
+    expect(both).toContain('href="#console"')
+    expect(both).toContain('.lower > section:target { display: block; }')
+    expect(both).toContain('.lower:not(:has(> section:target)) > section:first-of-type')
+  })
+
+  it('skips the tab strip when there is only one of them', () => {
+    // The stylesheet carries the .lower-tabs rules either way; only the markup differs.
+    const netOnly = renderReport(meta, { requests: [req()] })
+    expect(netOnly).toContain('class="panel netpanel"')
+    expect(netOnly).not.toContain('<nav class="lower-tabs">')
+
+    const consoleOnly = renderReport(meta, { console: [{ atMs: 1, level: 'error', text: 'boom' }] })
+    expect(consoleOnly).toContain('<h2>Console</h2>')
+    expect(consoleOnly).not.toContain('<nav class="lower-tabs">')
+  })
+
+  it('leaves the steps beside the player and moves everything else below', () => {
+    expect(both.indexOf('timeline-col')).toBeLessThan(both.indexOf('lower-tabs'))
+    expect(both).not.toContain('<div class="timeline-col"><section class="panel lines console"')
+  })
+})
+
+describe('renderReport — the single-file export', () => {
+  it('points the player at whatever the caller supplies', () => {
+    const html = renderReport(buildMeta(base()), {}, { mediaSrc: 'data:video/mp4;base64,AAAA' })
+    expect(html).toContain('src="data:video/mp4;base64,AAAA"')
+    expect(html).not.toContain('src="snapit-2026-08-22_14-31-07.mp4"')
+  })
+
+  it('says where the recording went instead of showing a player that plays nothing', () => {
+    const html = renderReport(buildMeta(base()), {}, { mediaSrc: null, mediaOmitted: 'Left it out.' })
+    expect(html).not.toContain('<video')
+    expect(html).toContain('Left it out.')
+  })
+
+  it('claims nothing is seekable once the recording is gone', () => {
+    // Every data-at would point at a player that is not on the page.
+    const html = renderReport(
+      buildMeta({ ...base(), recordingOffsetMs: 0, markers: [{ atMs: 1000, note: 'here' }] }),
+      { actions: [{ atMs: 5000, label: 'Click' }] },
+      { mediaSrc: null }
+    )
+    expect(html).not.toContain('data-at')
+    expect(html).not.toContain('<script')
+  })
+
+  it('lists the attached files and stops claiming they sit beside the page', () => {
+    const html = renderReport(
+      buildMeta(base()),
+      {},
+      { attachments: [{ name: 'network.har', bytes: 2048, href: 'data:application/json;base64,AA' }] }
+    )
+    expect(html).toContain('download="network.har"')
+    expect(html).toContain('attached above')
+    expect(html).not.toContain('sit beside this page')
+  })
+
+  it('names a file it could not attach rather than pretending it never existed', () => {
+    const html = renderReport(buildMeta(base()), {}, { attachments: [{ name: 'network.har', bytes: 9e8 }] })
+    expect(html).toContain('too large to attach')
+    expect(html).not.toContain('download="network.har"')
+  })
+})
+
 describe('collapseConsole', () => {
   it('folds identical messages into one line with a count', () => {
     const collapsed = collapseConsole([
@@ -296,7 +553,7 @@ describe('renderReport — reading it', () => {
   it('leads with what went wrong, not with the display configuration', () => {
     const html = renderReport(meta, {
       console: [{ atMs: 10, level: 'error', text: 'boom' }],
-      failedRequests: [{ method: 'POST', status: 500, url: 'https://api.test/orders' }],
+      requests: [req({ method: 'POST', status: 500, url: 'https://api.test/orders' })],
       actions: [{ atMs: 5, label: 'Click' }]
     })
     // The counts are anchors as well as a summary, so one element does both jobs.
@@ -340,14 +597,16 @@ describe('renderReport — reading it', () => {
   })
 
   it('marks a failed request by whether it is the bug or the symptom', () => {
+    // Chrome paints every failure the same red. A 404 for a favicon and a 500 on the
+    // checkout are not the same news, and the report is read by someone triaging.
     const html = renderReport(meta, {
-      failedRequests: [
-        { method: 'POST', status: 500, url: 'https://api.test/orders' },
-        { method: 'GET', status: 404, url: 'https://api.test/favicon.ico' }
+      requests: [
+        req({ method: 'POST', status: 500, url: 'https://api.test/orders' }),
+        req({ atMs: 1, status: 404, url: 'https://api.test/favicon.ico' })
       ]
     })
-    expect(html).toContain('class="sev-error"')
-    expect(html).toContain('class="sev-warn"')
+    expect(html).toContain('class="bad worst"')
+    expect(html).toContain('class="bad"')
   })
 
   it('moves the highlight down the timeline as the recording plays', () => {

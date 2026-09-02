@@ -47,7 +47,7 @@ export function statusDot(capturing: boolean): CSSProperties {
     height: 8,
     borderRadius: '50%',
     flex: 'none',
-    background: capturing ? 'var(--danger)' : '#ffb340',
+    background: capturing ? 'var(--danger)' : 'var(--warning)',
     ...(capturing ? { animation: 'snapitPulse 1.4s ease-out infinite' } : {})
   }
 }
@@ -61,35 +61,6 @@ export const detail: CSSProperties = {
 }
 
 /** Shown when the browser window could not be identified, so there will be no video. */
-export const warning: CSSProperties = { color: '#ffb340', fontSize: 12 }
+export const warning: CSSProperties = { color: 'var(--warning)', fontSize: 12 }
 
 export const actions: CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }
-
-export const primary: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 7,
-  height: 34,
-  padding: '0 16px',
-  border: 'none',
-  borderRadius: 'var(--r-lg)',
-  cursor: 'pointer',
-  background: 'var(--danger)',
-  color: 'var(--on-dark)',
-  font: '700 13px var(--font)',
-  whiteSpace: 'nowrap'
-}
-
-export const secondary: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  height: 34,
-  padding: '0 12px',
-  borderRadius: 'var(--r-lg)',
-  border: '1px solid var(--glass-edge)',
-  background: 'var(--glass-fill)',
-  color: 'var(--on-dark-2)',
-  font: '600 13px var(--font)',
-  cursor: 'pointer',
-  whiteSpace: 'nowrap'
-}

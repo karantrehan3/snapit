@@ -1,8 +1,8 @@
 import { existsSync } from 'fs'
-import { mkdir, writeFile } from 'fs/promises'
+import { mkdir, rmdir, writeFile } from 'fs/promises'
 import { release } from 'os'
 import { basename, dirname, join } from 'path'
-import { app, desktopCapturer, shell } from 'electron'
+import { app, desktopCapturer } from 'electron'
 import { BUNDLE_FILES, buildMeta, bundleDir, type CollectedSummary, type Marker } from './bundle'
 import { captureBaseName } from './filename'
 import { currentDisplays } from './displays'
@@ -10,6 +10,7 @@ import { renderReport, type ReportAction, type ReportConsoleLine } from './repor
 import { getSettings } from './settings'
 import { actionLabel } from './collector/actions'
 import { summariseFailedRequests } from './mcp/summarise'
+import { reportRequests } from './reportRequests'
 import { actionsToSpec } from './specgen'
 import { startCollector, type CollectedSession, type CollectorHandle } from './collector/session'
 
@@ -205,10 +206,33 @@ export async function stopBrowserSession(): Promise<string | null> {
   const open = session
   const handle = open?.collector
   if (!open || !handle) return null
-  // Stopping during setup still writes a bundle; it just holds whatever setup did,
-  // which is better than silently discarding a session someone ran.
   open.collector = null
   session = null
+
+  /*
+   * Stopping during setup is a cancel, and a cancel leaves nothing behind.
+   *
+   * This used to write a bundle anyway, on the reasoning that discarding a session
+   * somebody ran was worse than keeping a thin one. That was wrong about what setup is:
+   * setup is explicitly the part that gets thrown away — signing in, navigating, getting
+   * to the broken page — and `beginCapture` throws it away even when the session
+   * continues. So a session stopped before it ever started has nothing in it that was
+   * ever meant to be kept, and writing it produces a capture with a real name, a real
+   * timestamp and a step count, sitting in the library looking like evidence.
+   *
+   * The folder goes too, but only with `rmdir`, which fails on a directory that is not
+   * empty. Nothing is written until below, so it will be empty — and if it somehow is
+   * not, the right answer is to keep whatever is in there rather than delete it.
+   */
+  if (open.phase === 'setup' && open.recording === null) {
+    await handle.stop()
+    try {
+      await rmdir(open.dir)
+    } catch {
+      // Not empty, or already gone. Either way there is nothing safe to remove.
+    }
+    return null
+  }
 
   const collected = await handle.stop()
   const { dir } = open
@@ -273,14 +297,18 @@ export async function stopBrowserSession(): Promise<string | null> {
       text: c.text
     }))
     const actions: ReportAction[] = collected.actions.map((a) => ({ atMs: a.atMs, label: actionLabel(a) }))
+    // The HAR's timestamps are absolute; everything else in the bundle counts from the
+    // capture's origin, so they are converted onto that clock here and nowhere else.
+    const requests = reportRequests(collected.har, Date.parse(meta.capturedAt))
     await writeFile(
       join(dir, BUNDLE_FILES.report),
-      renderReport(meta, { console: consoleLines, actions, failedRequests: failed })
+      renderReport(meta, { console: consoleLines, actions, requests })
     )
   } catch (err) {
     console.error('[snapit] session data saved, but its report could not be written:', err)
   }
 
-  shell.showItemInFolder(join(dir, BUNDLE_FILES.report))
+  // Deliberately does not reveal anything: where the bundle goes on screen is the
+  // caller's decision, and `index.ts` shows it in the app.
   return dir
 }

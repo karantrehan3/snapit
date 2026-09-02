@@ -69,6 +69,10 @@ async function handleMcpRequest(
   appVersion: string,
   hooks: McpHooks
 ): Promise<void> {
+  // Recorded before anything can fail, because a request that arrived at all is proof
+  // an agent is configured and pointed at this machine.
+  lastRequestAt = Date.now()
+
   const headerSessionId = req.headers['mcp-session-id']
   const sessionId = typeof headerSessionId === 'string' ? headerSessionId : undefined
   const existing = sessionId ? sessions.get(sessionId) : undefined
@@ -113,6 +117,23 @@ export function startMcpServer(appVersion: string, hooks: McpHooks): void {
     console.log(`[snapit] MCP server listening on ${mcpUrl(mcpPort)}`)
   })
 }
+
+/**
+ * Whether Claude Code is actually using snapit, and when it last did.
+ *
+ * `sessions.size` alone was the wrong question and reported the wrong answer. The
+ * transport is streamable HTTP: a client posts, gets its reply, and the session is torn
+ * down — so between calls there is nothing open, and a perfectly well configured Claude
+ * Code showed as "not attached" the entire time it was not mid-request.
+ *
+ * So this reports both: sessions open this instant, and when a request was last served.
+ * The second is what someone actually means by "is it connected".
+ */
+export type McpActivity = { sessions: number; lastRequestAt: number | null }
+
+let lastRequestAt: number | null = null
+
+export const mcpActivity = (): McpActivity => ({ sessions: sessions.size, lastRequestAt })
 
 /** Stop the local MCP server and close all sessions. */
 export function stopMcpServer(): void {

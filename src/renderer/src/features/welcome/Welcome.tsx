@@ -1,25 +1,10 @@
 import { useCallback, useEffect, useState, type ReactElement } from 'react'
 import type { ScreenPermission } from '@preload/index'
+import { Button } from '@renderer/components/Button'
 import { Icon, type IconName } from '@renderer/components/Icon'
-import {
-  actions,
-  card,
-  done,
-  hotkey,
-  hotkeyRow,
-  intro,
-  keycap,
-  page,
-  permBody,
-  permCard,
-  permHead,
-  permIcon,
-  primary,
-  secondary,
-  sectionLabel,
-  title,
-  what
-} from './styles'
+import { KeyCap, keyRow } from '@renderer/components/KeyCap'
+import { Panel, panelBody } from '@renderer/components/Panel'
+import { actions, card, done, hotkey, hotkeyRow, intro, page, sectionLabel, title, what } from './styles'
 
 /**
  * First run.
@@ -59,29 +44,27 @@ export function Welcome(): ReactElement {
           what the console and network did, and a page you can send to whoever needs it.
         </p>
 
-        <div style={permCard(granted)}>
-          <div style={permHead}>
-            <span style={permIcon(granted)}>
-              <Icon name={granted ? 'check' : 'alert'} size={15} />
-            </span>
-            {granted ? 'Screen Recording is on' : 'snapit needs Screen Recording'}
-          </div>
-          <p style={permBody}>
+        {/* The panel changes meaning while someone is looking at it, which is why the
+            tone is derived rather than fixed. */}
+        <Panel
+          tone={granted ? 'success' : 'warning'}
+          icon={granted ? 'check' : 'alert'}
+          heading={granted ? 'Screen Recording is on' : 'snapit needs Screen Recording'}
+        >
+          <p style={panelBody}>
             {granted
               ? 'Everything works. You can close this and press a hotkey whenever you need one.'
               : 'macOS will not let any application see the screen without it, and snapit cannot tell the difference between a screen it may not read and a black one — so captures come out black with nothing to explain why.'}
           </p>
           {!granted && (
             <div style={actions}>
-              <button type="button" style={primary} onClick={() => window.snapit.openScreenSettings()}>
+              <Button variant="primary" onClick={() => window.snapit.openScreenSettings()}>
                 Open System Settings
-              </button>
-              <button type="button" style={secondary} onClick={check}>
-                Check again
-              </button>
+              </Button>
+              <Button onClick={check}>Check again</Button>
             </div>
           )}
-        </div>
+        </Panel>
 
         <p style={sectionLabel}>The three hotkeys</p>
         <Hotkey
@@ -99,9 +82,9 @@ export function Welcome(): ReactElement {
         </p>
 
         <div style={done}>
-          <button type="button" style={primary} onClick={() => window.snapit.finishWelcome()}>
+          <Button variant="primary" onClick={() => window.snapit.finishWelcome()}>
             {granted ? 'Start using snapit' : 'Continue anyway'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -121,11 +104,9 @@ function Hotkey({
 }): ReactElement {
   return (
     <div style={hotkeyRow}>
-      <span style={hotkey}>
+      <span style={{ ...keyRow, ...hotkey }}>
         {keys.map((k) => (
-          <kbd key={k} style={keycap}>
-            {k}
-          </kbd>
+          <KeyCap key={k}>{k}</KeyCap>
         ))}
       </span>
       <Icon name={icon} size={15} />

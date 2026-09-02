@@ -1,9 +1,10 @@
-import { readdir, readFile, stat } from 'fs/promises'
+import { readdir, readFile, rename, stat } from 'fs/promises'
 import { basename, dirname, join, resolve, sep } from 'path'
 import { nativeImage, shell } from 'electron'
 import { BUNDLE_FILES } from './bundle'
 import { isCaptureFile, pickBundleMedia } from './mcp/captures'
 import { bundleEntry, fileEntry, sortEntries, type LibraryEntry } from './libraryEntry'
+import { checkCaptureName } from './captureName'
 
 /**
  * Reading the save folder for the library window.
@@ -143,6 +144,36 @@ export function assertInside(saveDir: string, path: string): string {
     throw new Error('That capture is not inside the snapit save folder.')
   }
   return target
+}
+
+/**
+ * Rename a capture: its folder, or its file.
+ *
+ * Nothing inside a bundle refers to the folder by name — `report.html` addresses its
+ * media by bare filename and `meta.json` never records where it lives — so the rename is
+ * the whole operation. That is also why it is safe: no file has to be rewritten, so
+ * there is no half-renamed state to recover from.
+ *
+ * Both paths go through `assertInside`: the one from the renderer, and the one being
+ * built, because a validated name is still a name someone else validated.
+ */
+export async function renameCapture(saveDir: string, path: string, requested: string): Promise<string> {
+  const from = assertInside(saveDir, path)
+  const folder = dirname(from)
+  let siblings: string[] = []
+  try {
+    siblings = await readdir(folder)
+  } catch {
+    // An unreadable folder cannot be checked for collisions, and `rename` would fail
+    // anyway — let it, with its own message.
+  }
+  const check = checkCaptureName(requested, basename(from), siblings)
+  if (!check.ok) throw new Error(check.why)
+
+  const to = assertInside(saveDir, join(folder, check.name))
+  if (to === from) return from
+  await rename(from, to)
+  return to
 }
 
 /**

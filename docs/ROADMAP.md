@@ -1,7 +1,7 @@
 # snapit — Roadmap
 
 > Supersedes the Phase 3–4 roadmap in [`DESIGN.md`](DESIGN.md), which is stale.
-> Last updated: 2026-08-21. Current release: 3.2.0.
+> Last updated: 2026-09-03. Current release: 3.2.0.
 
 ## Direction
 
@@ -185,9 +185,18 @@ Two leaks the live runs caught that reasoning had not:
   carried their password in plain text — a second route entirely from the action trail, which
   redacts properly. All typed values are now stripped from snapshots.
 
-**Still open:** response bodies are absent from the HAR (`chrome-har` does not fetch them; it needs
-`Network.getResponseBody`, worth doing for `status >= 400` only), and a recording and a session still
-write separate bundles rather than one.
+~~**Still open:** response bodies are absent from the HAR, and a recording and a session write
+separate bundles.~~ **Both closed.** One bundle per session since 2026-08-23. Bodies arrived for
+failures on 2026-08-23 and widened on 2026-08-31 to every XHR/fetch under 32 KB — resource type
+first, size second, the line Jam draws. `STATUS.md` has the measurements.
+
+**Verified end to end 2026-09-03**, against real Chrome over CDP with a loopback fixture making one
+request of every shape the policy sorts on. It caught a third leak that reasoning had not, in the
+same family as the first two: `stop()` disconnected before the response bodies it had asked for came
+back, and before the events that decide whether to ask. Stopping straight after the last request lost
+all of them — invisible from the tray, where a human takes seconds to click, and exactly what
+`stop_browser_session` does when an agent is driving. `stop()` now flushes and drains, both capped.
+See `STATUS.md`.
 
 ### M1.4 — MCP surface
 
@@ -222,6 +231,142 @@ context in every session that connects.
 
 No Jira/Linear/Slack integrations, as planned. Whoever files the ticket is already signed in to it,
 and a paste costs them one keystroke against an OAuth flow and a token to keep alive here.
+
+### M1.6 — Sharing a capture
+
+**The tension, before it is resolved.** A capture is a folder, and everything in it is addressed by
+relative path, so it works where it was written and nowhere else. The only way to hand one to
+somebody today is Copy as Markdown, which drops the video, the timeline and the network. That is a
+real gap — and closing it looks exactly like the thing this roadmap refuses. "Cloud upload,
+shareable URLs" is listed under Not in scope, and "cloud bug reports with shareable links" is one of
+the three fights to refuse.
+
+**Recommendation: build the file, keep refusing the service.** What Scope discipline is protecting
+is not sharing, it is not operating infrastructure — an account system, a bucket, a retention
+policy, and a PII posture over QA environments that mirror production. None of that is required to
+put a whole report in someone else's hands. A single self-contained `.html` reaches the recipient
+with no server, no account and nothing leaving the machine except the file the user sent
+themselves. It makes the existing position — "the bundle is the shareable unit" — true, where today
+the bundle is shareable only in the sense that a folder can be zipped and reassembled by someone who
+knows what to do with it.
+
+So the refusal narrows to what it always meant, and nothing in it is reversed: snapit does not
+upload, does not mint URLs, does not host, and never learns who opened a report. `Not in scope`
+keeps "cloud upload" and "customer-facing recording links" and loses nothing.
+
+The cost is honest and it is size. Base64 inflates the recording by a third, and the recording is
+almost all of the file — measured numbers and the thresholds derived from them are in
+`STATUS.md`. Above the threshold the export offers to leave the video out rather than producing an
+attachment nobody can send.
+
+**Built (2026-08-25).** Library → Share. One `.html` holding the video as a data URI, the report,
+and `meta.json` / `console.json` / `network.har` / `actions.json` / `generated.spec.ts` as
+download links off data URIs, so the recipient can still hand the HAR to a viewer or the trail to
+their own agent. The media is streamed through a base64 encoder into the output file rather than
+`readFile` → `toString('base64')`: measured on a 167 MB recording, 215 MB of resident memory
+against 1.15 GB, and 280 ms against 1598 ms. The peak does not grow with the recording — a 560 MB
+one costs the same 213 MB.
+
+### M1.7 — A link, without snapit operating a service
+
+Not built. Proposed only, and deliberately: it needs a decision, and the single file may well make
+it unnecessary.
+
+The single file solves distribution the way an attachment does. What it does not solve is the case
+where the destination only takes a URL — a Jira description, a Slack channel where a 30 MB
+attachment is refused, a PR comment. Jam's answer is its own cloud. snapit's, if it wants one at
+all, is to upload the same file to infrastructure the user already trusts and already pays for:
+
+| Target                  | What snapit would need           | What it costs                                     |
+| ----------------------- | -------------------------------- | ------------------------------------------------- |
+| User's S3 bucket        | Credentials, a PUT, a URL scheme | A credential in settings, and the AWS SDK         |
+| GitHub gist             | A token, `gh gist create`        | Gists are not private enough for a QA environment |
+| Internal share / WebDAV | A path, or a PUT with basic auth | Nothing; it is a file copy                        |
+
+The honest costs, in order:
+
+1. **A stored credential.** snapit holds no user secret today beyond its own MCP token. An S3 key in
+   `settings.json` is a new class of thing to protect, and the first thing an attacker with read
+   access to the machine would want.
+2. **Support surface without control.** A bucket with the wrong CORS or ACL produces a link that
+   works for the user and 403s for everyone else, and snapit gets blamed for it.
+3. **The retention problem moves, it does not go away.** A report with a real session's URLs and
+   error bodies now sits at a guessable URL for as long as the bucket keeps it, and snapit has no
+   way to expire it.
+4. **It is one line from being the service.** Once uploading exists, "just host it for people who
+   have no bucket" is a small feature request and a large reversal.
+
+How often is the wall actually hit? Measured on the captures in the save folder, a browser session
+with a recording exports at 4 MB and a session without one at 1 MB. The 25 MB line is five or six
+minutes of recording, and a bug report is rarely that. So the honest expectation is that the file
+covers most of it, and M1.7 exists for the Jira description that takes no attachment at all.
+
+Recommendation: do not build it until someone hits the wall. If they do, the cheapest version that
+is not a reversal is a **user-supplied upload command** — a shell template in settings
+(`aws s3 cp {file} s3://bucket/{name} && echo https://…/{name}`) that snapit runs and whose stdout
+it treats as the link. snapit stores no credential, implements no protocol, and supports no bucket;
+the user's own tooling does all four. It is also the version that works for the internal share and
+the artifact store nobody has heard of.
+
+Two costs that version carries and the table above does not. It puts an arbitrary shell command in
+`settings.json` and runs it, which is a code-execution surface — self-inflicted, but a file anything
+on the machine can write is now a file that runs things. And it fits badly with notarization: a
+hardened runtime and a sandbox are exactly the things that make spawning the user's `aws` binary
+awkward, and notarization is already the last item on this roadmap. Decide M1.7 after it, not
+before.
+
+### M1.8 — A home for reviewing
+
+**Built (2026-09-03).** The library window became a home: the capture list on the left, the capture
+itself beside it. Until now snapit had no surface of its own for the thing it exists to produce — you
+made a capture in snapit and reviewed it in Chrome, so the moment the work got interesting you left.
+
+**This is not the hosted version, and nothing here reverses M1.6 or M1.7.** No upload, no URL, no
+account. The shape borrows from Jam and Loom; the hosting does not. The report is rendered from the
+bundle on this machine and shown in a frame on a local scheme.
+
+The decision worth knowing about is that the report is **framed**, not rebuilt in React. Rebuilding
+would mean two renderers for one thing — the sortable Network table with its four detail tabs, the
+console with its repeat collapsing, the seek script, the sticky player — kept in step by hand. What
+framing gives up is that the app cannot put its own controls around the player, since the player is
+inside the frame; what it buys is that the in-app view cannot drift from the file a Share sends,
+because both come from the same `renderReport` call. `STATUS.md` has the full comparison, the
+sandbox the frame runs under, and the two silent bugs that had to be fixed to make it work.
+
+It also retired the report-staleness wart. `report.html` is still written once at capture time and
+still never rewritten — a window that reads a capture must not mutate it — but nothing in the app
+reads that file any more, and as of M1.10 a shared _folder_ re-renders too.
+
+**Extended 2026-09-03 into the app shell it should have been.** The first pass built a two-pane
+window and left the other four windows and the menu-bar navigation in place, which was the wrong
+shape: snapit is one window now, with Overview, Captures, Analytics, Checks (listed, not built),
+Claude Code, Settings and About as routes. The tray is actions only. First run and the image editor
+are still windows, deliberately. `STATUS.md` has the reasoning and the measurements.
+
+### M1.9 — Analytics across captures
+
+**Built (2026-09-03).** The one question snapit can answer and DevTools cannot: DevTools has the
+session that is open, snapit has all of them. So the page leads on **which endpoint failed in more
+than one capture**, not on how many captures exist.
+
+Local by construction — `analytics.ts` is pure and imports nothing that could reach the network.
+The decision was to build the local insight and leave a clean seam for opt-in telemetry without
+wiring any of it up; that seam is that a sender would be a separate module consuming this one's
+output, with its own setting and its own visible log. Nothing in `Not in scope` moves.
+
+Run against a real save folder it read 55 captures in 29 ms and surfaced a login endpoint failing
+across four separate sessions, which no single report showed. The endpoint normalisation is what
+makes that possible and is the part to be careful with — see `STATUS.md`.
+
+### M1.10 — Sharing a complete package
+
+**Built (2026-09-03).** M1.6's single file is right while it fits and stops fitting early: base64
+costs a third of the recording, so a 33-minute capture is 153 MB on disk and 204 MB as one page.
+Share now offers a `.zip` of the bundle as well, where the media is a file at its own size, and it
+needed no change to the report because `report.html` already addresses its media by bare filename.
+
+Still no upload, no link, no service. Both shapes are files the user sends by whatever means they
+were going to use anyway, so M1.6's argument and M1.7's refusal both stand unchanged.
 
 ---
 
@@ -322,7 +467,8 @@ Three fights to refuse:
 - **Automating a browser the agent controls** — Playwright MCP and chrome-devtools MCP own it, are
   first-party and free. Compose, never duplicate.
 - **Cloud bug reports with shareable links** — Jam and others own it. The bundle is the shareable
-  unit.
+  unit, and as of M1.6 it is one file that opens anywhere. Sharing is not the thing being refused;
+  operating a service is. Read M1.6 before reopening this.
 - **Generating tests by reading the diff** — wrong end of the problem; it inherits the agent's own
   misreading of intent. snapit starts from an observed human demonstration.
 

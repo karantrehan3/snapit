@@ -284,7 +284,14 @@ export function useRecorder({ drawMode, getAnnotationCanvas }: AnnotationOptions
           streamsRef.current.push(micStream)
           audioTracks.push(...micStream.getAudioTracks())
         } catch (e) {
+          // Reported, not just logged. Someone narrating a bug into a microphone that
+          // was never opened finds out when they play the recording back, by which
+          // point the bug has been and gone.
           console.error('[snapit] microphone unavailable, recording without it:', msg(e))
+          window.snapit.reportProblem(
+            'Recording without the microphone',
+            `snapit could not open it, so this capture has no narration. ${msg(e)}`
+          )
         }
       }
       const audio = mixAudio(audioTracks)

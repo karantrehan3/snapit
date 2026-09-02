@@ -145,7 +145,6 @@ export const linkButton: CSSProperties = {
   border: 'none',
   padding: '0 6px',
   color: 'var(--accent)',
-  font: 'inherit',
   fontWeight: 600,
   cursor: 'pointer',
   whiteSpace: 'nowrap'

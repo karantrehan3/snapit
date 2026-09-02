@@ -41,6 +41,30 @@ export const timeLabel = (iso: string): string => {
     : d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
 }
 
+/**
+ * `18 minutes ago`. For the Overview, where the question is how long ago rather than
+ * when.
+ *
+ * A clock reading was actively misleading there: "1:39" sat two columns from durations
+ * like "0:36" and read as one. Elapsed time cannot be confused with a length, and it is
+ * the more useful answer on a landing surface anyway.
+ */
+export function relativeTime(iso: string, now: Date = new Date()): string {
+  const then = Date.parse(iso)
+  if (Number.isNaN(then)) return ''
+  const secs = Math.round((now.getTime() - then) / 1000)
+  if (secs < 0) return 'just now'
+  if (secs < 45) return 'just now'
+  const mins = Math.round(secs / 60)
+  if (mins < 60) return `${mins} minute${mins === 1 ? '' : 's'} ago`
+  const hours = Math.round(mins / 60)
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`
+  const days = Math.round(hours / 24)
+  if (days < 7) return `${days} day${days === 1 ? '' : 's'} ago`
+  // Past a week the date is the useful handle, which is `dayLabel`'s whole argument.
+  return dayLabel(iso, now)
+}
+
 export type DayGroup = { label: string; entries: LibraryEntry[] }
 
 /**
@@ -88,13 +112,14 @@ export const KIND_LABEL: Record<LibraryEntry['kind'], string> = {
 export const hasFindings = (e: LibraryEntry): boolean => e.consoleErrors > 0 || e.failedRequests > 0
 
 /**
- * The line under a capture's name: what it is, then only the facts it actually has.
- * A screenshot with no duration and no steps should say "Screenshot · 240 KB", not
- * carry three empty fields to keep the columns even.
+ * Only the facts a capture actually has. A screenshot with no duration and no steps
+ * should say "240 KB", not carry three empty fields to keep the columns even.
+ *
+ * Separate from `metaLine` because the detail pane names the kind in a label of its own
+ * beside this, and "RECORDING · Recording · 0:58" is what happens when both do it.
  */
-export function metaLine(entry: LibraryEntry): string {
+export function metaFacts(entry: LibraryEntry): string {
   return [
-    KIND_LABEL[entry.kind],
     humanDuration(entry.durationMs),
     entry.steps > 0 ? `${entry.steps} step${entry.steps === 1 ? '' : 's'}` : '',
     entry.markers > 0 ? `${entry.markers} marker${entry.markers === 1 ? '' : 's'}` : '',
@@ -102,6 +127,11 @@ export function metaLine(entry: LibraryEntry): string {
   ]
     .filter(Boolean)
     .join(' · ')
+}
+
+/** The line under a capture's name in the list: what it is, then what it has. */
+export function metaLine(entry: LibraryEntry): string {
+  return [KIND_LABEL[entry.kind], metaFacts(entry)].filter(Boolean).join(' · ')
 }
 
 export type Filter = 'all' | 'problems' | 'session'

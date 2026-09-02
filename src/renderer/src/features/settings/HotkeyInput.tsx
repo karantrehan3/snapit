@@ -1,22 +1,17 @@
 import type { ReactElement } from 'react'
+import { KeyCap, keyRow } from '@renderer/components/KeyCap'
+import { hotkeyKeys } from '@renderer/lib/hotkey'
 import { useHotkeyRecorder } from './useHotkeyRecorder'
-import { fieldStyle, hintStyle, keycapStyle } from './styles'
+import { fieldStyle, hintStyle } from './styles'
 
-const MODIFIER_SYMBOLS: Record<string, string> = {
-  Command: '⌘',
-  Control: '⌃',
-  Alt: '⌥',
-  Shift: '⇧'
-}
-
-/** Render accelerator tokens as keycap chips, with mac symbols for modifiers. */
-function Keycaps({ tokens, dim = false }: { tokens: string[]; dim?: boolean }): ReactElement {
+/** Render accelerator tokens as keycap chips. Symbols come from `lib/hotkey.ts`. */
+function Keycaps({ tokens, held = false }: { tokens: string[]; held?: boolean }): ReactElement {
   return (
-    <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
-      {tokens.map((t, i) => (
-        <kbd key={`${t}-${i}`} style={keycapStyle(dim)}>
-          {MODIFIER_SYMBOLS[t] ?? t}
-        </kbd>
+    <span style={{ ...keyRow, gap: 4 }}>
+      {hotkeyKeys(tokens.join('+')).map((t, i) => (
+        <KeyCap key={`${t}-${i}`} held={held}>
+          {t}
+        </KeyCap>
       ))}
     </span>
   )
@@ -36,7 +31,7 @@ export function HotkeyInput({
     <button type="button" onClick={start} onBlur={stop} style={fieldStyle(recording)}>
       {recording ? (
         held.length ? (
-          <Keycaps tokens={held} dim />
+          <Keycaps tokens={held} held />
         ) : (
           <span style={hintStyle}>Press shortcut…</span>
         )

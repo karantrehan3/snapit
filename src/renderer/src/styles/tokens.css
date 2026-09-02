@@ -9,8 +9,25 @@
  *
  * Two families, because snapit really does have two contexts: chrome that floats over
  * someone else's screen (dark, translucent, must not compete with what is underneath)
- * and windows of our own (light, opaque, ordinary). Meaning colours are shared, so blue
+ * and windows of our own (opaque, ordinary). Meaning colours are shared, so blue
  * means "selected" and red means "recording" wherever they appear.
+ *
+ * ## The window family follows the system, and its values come from the report
+ *
+ * The window family used to be light and only light, which was survivable while a
+ * report was something you opened in a browser. The home window frames one — and
+ * `reportStyles.ts` declares `color-scheme: light dark`, precisely so a report looks
+ * right on whatever machine it is opened on. So on a Mac set to dark, snapit was a
+ * bright white slab wrapped around a correctly-dark artifact, with a one-pixel border
+ * between the two.
+ *
+ * The values below are therefore not a new palette. They are the report's own, hex for
+ * hex, in both schemes. Anything else would have to be justified as a deliberate
+ * difference between the window and the thing inside it, and there isn't one.
+ *
+ * The glass family does not follow the system. It floats over other people's screens,
+ * where the only thing that matters is not competing with what is underneath, and it is
+ * dark for that reason rather than out of preference.
  *
  * Annotation colours are NOT here: they are drawn by Konva onto a canvas, which cannot
  * resolve a CSS variable. They stay literal in features/annotate/types.ts.
@@ -33,14 +50,49 @@
   --on-dark-2: rgba(255, 255, 255, 0.72);
   --on-dark-3: rgba(255, 255, 255, 0.45);
 
-  /* Our own windows */
-  --surface: #f5f5f7;
+  /*
+   * Our own windows, light. `--rule` is the quiet line between rows of one list;
+   * `--surface-edge` is the louder one between regions. They were the same value
+   * before, which is why a list of forty captures read as forty boxes.
+   */
+  --surface: #f5f6f8;
   --surface-raised: #ffffff;
-  --surface-sunken: #f2f2f4;
-  --surface-edge: #c7c7cc;
-  --ink: #1c1c1e;
-  --ink-2: #6b6b70;
-  --ink-3: #8e8e93;
+  /* Recessed behind the content, so the content reads as the thing in front. */
+  --sidebar: #eceff3;
+  --surface-sunken: #eef1f5;
+  --surface-edge: #e3e7ec;
+  --rule: #eef1f5;
+  --ink: #10151b;
+  --ink-2: #5a6472;
+  --ink-3: #8c95a3;
+
+  /*
+   * The brand red, and the colour of anything you can act on.
+   *
+   * `#e84838` is not a choice — it is measured out of `build/icon.png`, where it is
+   * 221,460 of the icon's pixels. snapit's identity is black, white and that red, and the
+   * interactive colour used to be a blue borrowed from the report, which belonged to
+   * neither.
+   *
+   * **Red fills act; red ink warns; nothing else is red at all.** A filled red is an
+   * action — the right reading for a capture tool, since red has meant "record" on every
+   * device anyone has owned. Red as ink or an edge is severity: a failing count, a
+   * console error, the stripe down a broken capture's row.
+   *
+   * The third clause is the one that took a pass to learn. Pointing links, selection
+   * washes and folder sizes at the brand too made the whole window red, and a page where
+   * everything is emphasised has no emphasis — the CTA stopped being findable and the
+   * severity stripes stopped being alarming. So links are ink with an underline, and
+   * selection is a lift in surface. Black, white, and red where red means something.
+   */
+  --brand: #e84838;
+  --focus: #e84838;
+  --focus-hover: #d63b2c;
+  --focus-press: #c03024;
+  --focus-soft: #fdeae7;
+  --focus-edge: #f6cdc7;
+  /** Selection: a lift in surface, not a wash of the brand. */
+  --selected: #e9edf2;
 
   /* Meaning, shared by both families */
   --accent: #0a84ff;
@@ -50,6 +102,70 @@
   --danger: #ff3b30;
   --danger-bright: #ff453a;
   --success: #34c759;
+
+  /*
+   * The rest of each meaning: what it looks like pressed, and what it looks like as a
+   * tinted surface rather than a solid fill.
+   *
+   * Every value here was already in the code as a literal — the amber of the permission
+   * card, the blue edge of the update box, the darker red a finding's text is set in.
+   * `-soft` is a tint to sit behind text, `-soft-edge` its border, `-ink` text on it.
+   * A control needs all four to have a hover state that is not a filter over the whole
+   * button, which drags the label's contrast down with the background.
+   */
+  --accent-hover: #0071e3;
+  --accent-press: #0062c4;
+  --accent-soft-edge: #cfe4ff;
+  --danger-hover: #e5342a;
+  --danger-press: #c92b23;
+  --accent-tint-ink: #0a6ed1;
+  --danger-soft: rgba(196, 52, 42, 0.08);
+  --danger-soft-edge: rgba(196, 52, 42, 0.45);
+  --danger-ink: #c4342a;
+  --warning: #96650b;
+  --warning-strong: #96650b;
+  --warning-soft: rgba(150, 101, 11, 0.09);
+  --warning-soft-edge: rgba(150, 101, 11, 0.4);
+  --success-soft: rgba(52, 199, 89, 0.1);
+  --success-soft-edge: rgba(52, 199, 89, 0.45);
+
+  /* Values that must align in a column: durations, counts, sizes, clock times. */
+  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /*
+   * The type scale.
+   *
+   * There were fourteen distinct sizes across our own windows before this — 9.5, 10.5,
+   * 11, 11.5, 12, 12.5, 13, 13.5, 14, 15, 16, 19, 22, 26 — which is not a scale, it is
+   * every number somebody reached for. Half a pixel is not a hierarchy: nobody can tell
+   * 11.5 from 12, so the difference reads as inconsistency rather than as meaning.
+   *
+   * Six steps, each far enough from the next to be doing something:
+   *
+   * - `micro`   a badge burnt into a thumbnail, a keycap
+   * - `small`   meta lines, hints, status rows — everything read second
+   * - `body`    the base
+   * - `strong`  a route title, a panel heading
+   * - `title`   a page heading
+   * - `figure`  a number that is the point of its page
+   * - `display` first run, and only there
+   */
+  --t-micro: 10.5px;
+  --t-small: 12px;
+  --t-body: 13px;
+  --t-strong: 14px;
+  --t-title: 16px;
+  --t-figure: 20px;
+  --t-display: 26px;
+
+  /*
+   * The mat behind a capture's own pixels — a thumbnail tile, or a screenshot filling
+   * the detail pane. Near-black in both schemes on purpose: it sits behind an image
+   * whose background snapit does not know, and a white page needs an edge in light mode
+   * every bit as much as in dark. The report does the same thing with its `figure`.
+   */
+  --mat: #0d1116;
+  --on-mat-quiet: rgba(255, 255, 255, 0.38);
 
   /* Shape */
   --r-sm: 6px;
@@ -64,6 +180,61 @@
   --shadow-toolbar: 0 4px 16px rgba(0, 0, 0, 0.4);
 
   --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+
+  /* Tells the platform which way to paint scrollbars, form controls and the caret. */
+  color-scheme: light dark;
+}
+
+/*
+ * Our own windows, dark.
+ *
+ * Only the window family is redefined. The glass family is absent on purpose — it floats
+ * over other people's screens and is dark whichever way the system is set — and so are
+ * `--accent`, `--accent-fill` and `--accent-edge`, which the capture overlays are
+ * measured against.
+ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface: #0e1116;
+    --surface-raised: #161a20;
+    --sidebar: #0a0d11;
+    --surface-sunken: #1e242b;
+    --surface-edge: #262c34;
+    --rule: #1e242b;
+    --ink: #e9ecf1;
+    --ink-2: #a3adba;
+    --ink-3: #767f8c;
+
+    --brand: #f0574a;
+    --focus: #f0574a;
+    /* Lighter, not darker: on a dark ground a press has to come towards the viewer. */
+    --focus-hover: #f56d61;
+    --focus-press: #f98478;
+    --focus-soft: #2e1714;
+    --focus-edge: #4a221d;
+    --selected: #1e242b;
+
+    /*
+     * A filled button on a dark ground does not need to be as bright as one on white,
+     * and severity has to go lighter rather than darker to stay legible on it.
+     */
+    --accent-hover: #2f92ff;
+    --accent-press: #4c9dff;
+    --accent-soft-edge: #2c4260;
+    --accent-tint: #1d2b40;
+    --accent-tint-ink: #cfe0f7;
+    --danger-hover: #ff8377;
+    --danger-press: #ff9b91;
+    --danger-soft: rgba(255, 106, 92, 0.13);
+    --danger-soft-edge: rgba(255, 106, 92, 0.45);
+    --danger-ink: #ff6a5c;
+    --warning: #e3a53f;
+    --warning-strong: #e3a53f;
+    --warning-soft: rgba(227, 165, 63, 0.13);
+    --warning-soft-edge: rgba(227, 165, 63, 0.4);
+    --success-soft: rgba(52, 199, 89, 0.14);
+    --success-soft-edge: rgba(52, 199, 89, 0.4);
+  }
 }
 
 /*
@@ -71,8 +242,13 @@
  * styling existed anywhere in the app. An outline rather than a box-shadow because
  * inline styles win over a stylesheet, and most of these controls set their own shadow.
  */
+/*
+ * The ring takes the brand red, and `outline-offset` is what keeps it legible on the one
+ * surface it shares a colour with: offset by 2px it sits on the ground beside a red
+ * button rather than on the button itself.
+ */
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--brand);
   outline-offset: 2px;
 }
 
@@ -85,16 +261,68 @@
   background: var(--surface-sunken);
 }
 [data-row][data-selected='true']:hover {
-  background: var(--accent-tint);
+  background: var(--selected);
 }
-[data-action]:hover {
+
+/*
+ * `components/Button.tsx` and `components/Chip.tsx` set these attributes; everything
+ * about them that is not a hover, focus or press state lives with the component. Keyed
+ * on the same two attributes the component takes as props, so the pair is readable
+ * together: variant says what the control is for, tone says which family it is in.
+ */
+[data-btn]:not(:disabled):active {
+  transform: translateY(0.5px);
+}
+[data-btn='primary'][data-tone='window']:not(:disabled):hover {
+  background: var(--focus-hover);
+}
+[data-btn='primary'][data-tone='window']:not(:disabled):active {
+  background: var(--focus-press);
+}
+[data-btn='danger']:not(:disabled):hover {
+  background: var(--danger-hover);
+}
+[data-btn='danger']:not(:disabled):active {
+  background: var(--danger-press);
+}
+[data-btn='secondary'][data-tone='window']:not(:disabled):hover {
   border-color: var(--ink-3);
   color: var(--ink);
 }
-[data-action][data-danger='true']:hover {
+[data-btn='secondary'][data-tone='window'][data-danger='true']:not(:disabled):hover {
   border-color: var(--danger);
-  background: rgba(255, 59, 48, 0.08);
+  background: var(--danger-soft);
   color: var(--danger);
+}
+[data-btn='secondary'][data-tone='glass']:not(:disabled):hover {
+  background: var(--glass-fill-strong);
+  border-color: var(--glass-edge-strong);
+  color: var(--on-dark);
+}
+[data-btn='ghost'][data-tone='window']:not(:disabled):hover {
+  background: var(--surface-sunken);
+  color: var(--ink);
+}
+[data-btn='ghost'][data-tone='glass']:not(:disabled):hover {
+  background: var(--glass-fill);
+  color: var(--on-dark);
+}
+/* Ink, and underlined on hover: a link that took the brand red made every page red. */
+[data-btn='link']:not(:disabled):hover {
+  text-decoration: underline;
+}
+
+/* A chip is a filter, so its hover has to read as "not selected yet", not as pressed. */
+[data-chip='false'][data-tone='window']:hover {
+  border-color: var(--ink-3);
+  color: var(--ink);
+}
+[data-chip='false'][data-tone='glass']:hover {
+  background: var(--glass-fill-strong);
+  color: var(--on-dark);
+}
+[data-chip='true']:hover {
+  opacity: 0.88;
 }
 
 /* Controls inherit the app's font instead of the platform's form default. */

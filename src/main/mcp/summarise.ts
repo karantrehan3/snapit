@@ -1,4 +1,7 @@
 import { actionLabel, type ActionRecord, type SelectorCandidate } from '../collector/actions'
+import { isFailedStatus, looseEntries, statusOf } from '../collector/har'
+import { isErrorLevel, isNotableLevel } from '../collector/levels'
+import { clip, str } from '../untrusted'
 
 /**
  * Turning a collected session into something worth spending an agent's context on.
@@ -14,12 +17,6 @@ import { actionLabel, type ActionRecord, type SelectorCandidate } from '../colle
 /** Long enough to identify a failure, short enough that fifty of them still fit. */
 const MAX_TEXT = 300
 const DEFAULT_LIMIT = 30
-
-const ERROR_LEVELS = new Set(['error', 'uncaught'])
-const WARNING_LEVELS = new Set(['warning', 'warn'])
-
-const clip = (text: string, max = MAX_TEXT): string =>
-  text.length <= max ? text : `${text.slice(0, max)}...`
 
 /** `0:07` - every timestamp an agent sees, in the same shape a human would read. */
 export function clock(atMs: number): string {
@@ -41,13 +38,11 @@ export function summariseConsole(
   opts: { limit?: number; includeAll?: boolean } = {}
 ): ConsoleLine[] {
   const limit = opts.limit ?? DEFAULT_LIMIT
-  const wanted = opts.includeAll
-    ? entries
-    : entries.filter((e) => ERROR_LEVELS.has(e.level) || WARNING_LEVELS.has(e.level))
+  const wanted = opts.includeAll ? entries : entries.filter((e) => isNotableLevel(e.level))
 
   const byMessage = new Map<string, ConsoleLine>()
   for (const e of wanted) {
-    const text = clip(e.text ?? '')
+    const text = clip(e.text ?? '', MAX_TEXT)
     const key = `${e.level} ${text}`
     const seen = byMessage.get(key)
     if (seen) {
@@ -64,7 +59,7 @@ export function summariseConsole(
   }
 
   // Errors before warnings, then in the order they first happened.
-  const rank = (l: ConsoleLine): number => (ERROR_LEVELS.has(l.level) ? 0 : 1)
+  const rank = (l: ConsoleLine): number => (isErrorLevel(l.level) ? 0 : 1)
   return [...byMessage.values()].sort((a, b) => rank(a) - rank(b)).slice(0, limit)
 }
 
@@ -77,33 +72,25 @@ export type FailedRequest = {
   body?: string
 }
 
-type HarEntry = {
-  request?: { method?: string; url?: string }
-  response?: { status?: number; statusText?: string; content?: { text?: string } }
-}
-
 /** A body is for identifying the failure, not for reading in full — that is the HAR's job. */
 const BODY_PREVIEW = 600
 
 /** Server errors and outright failures. A 404 for a favicon is noise; a 500 is the bug. */
 export function summariseFailedRequests(har: unknown, limit = DEFAULT_LIMIT): FailedRequest[] {
-  const entries = (har as { log?: { entries?: HarEntry[] } })?.log?.entries
-  if (!Array.isArray(entries)) return []
-  return entries
-    .filter((e) => {
-      const status = e.response?.status
-      return typeof status === 'number' && (status === 0 || status >= 400)
-    })
+  return looseEntries(har)
+    .filter((e) => isFailedStatus(statusOf(e)))
     .slice(0, limit)
-    .map((e) => ({
-      method: e.request?.method ?? 'GET',
-      status: e.response?.status ?? 0,
-      url: clip(e.request?.url ?? '', 300),
-      ...(e.response?.statusText ? { statusText: e.response.statusText } : {}),
-      ...(e.response?.content?.text
-        ? { body: clip(e.response.content.text.replace(/\s+/g, ' ').trim(), BODY_PREVIEW) }
-        : {})
-    }))
+    .map((e) => {
+      const statusText = str(e.response?.statusText)
+      const body = str(e.response?.content?.text).replace(/\s+/g, ' ').trim()
+      return {
+        method: str(e.request?.method, 'GET'),
+        status: statusOf(e) ?? 0,
+        url: clip(str(e.request?.url), 300),
+        ...(statusText ? { statusText } : {}),
+        ...(body ? { body: clip(body, BODY_PREVIEW) } : {})
+      }
+    })
 }
 
 export type StepLine = { step: number; at: string; did: string }

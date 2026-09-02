@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest'
-import { MAX_BODY_CHARS, attachResponseBodies, isFailedStatus, trimHarBefore } from '../har'
+import {
+  MAX_BODY_BYTES,
+  MAX_BODY_CHARS,
+  attachResponseBodies,
+  bodyFitsBudget,
+  isFailedStatus,
+  trimHarBefore,
+  wantsBody
+} from '../har'
 
 describe('isFailedStatus', () => {
   it('treats 4xx and 5xx as failures', () => {
@@ -115,5 +123,52 @@ describe('trimHarBefore', () => {
   it('survives a malformed HAR', () => {
     expect(trimHarBefore({}, cutoff)).toEqual({})
     expect(trimHarBefore({ log: { entries: [] } }, cutoff).log.entries).toEqual([])
+  })
+})
+
+describe('wantsBody', () => {
+  it('keeps the calls an application makes on purpose', () => {
+    expect(wantsBody('XHR', 200)).toBe(true)
+    expect(wantsBody('Fetch', 200)).toBe(true)
+  })
+
+  it('skips the static assets that are most of the bytes and none of the bug', () => {
+    // Measured across seven real captures: 78 MB of the 89 MB of bodies is JavaScript.
+    expect(wantsBody('Script', 200)).toBe(false)
+    expect(wantsBody('Image', 200)).toBe(false)
+    expect(wantsBody('Stylesheet', 200)).toBe(false)
+    expect(wantsBody('Font', 200)).toBe(false)
+  })
+
+  it('keeps a failure whatever kind of thing it was', () => {
+    // A 500 serving an HTML error page is the reason the capture exists.
+    expect(wantsBody('Document', 500)).toBe(true)
+    expect(wantsBody('Image', 404)).toBe(true)
+    expect(wantsBody('Other', 0)).toBe(true)
+  })
+
+  it('reads the type case-insensitively, since CDP and HAR disagree on it', () => {
+    expect(wantsBody('xhr', 200)).toBe(true)
+    expect(wantsBody(undefined, 200)).toBe(false)
+  })
+})
+
+describe('bodyFitsBudget', () => {
+  it('takes anything under the cap', () => {
+    expect(bodyFitsBudget(1024, 200)).toBe(true)
+    expect(bodyFitsBudget(MAX_BODY_BYTES, 200)).toBe(true)
+  })
+
+  it('refuses a successful response over it', () => {
+    expect(bodyFitsBudget(MAX_BODY_BYTES + 1, 200)).toBe(false)
+  })
+
+  it('exempts failures, which are rare and are the point', () => {
+    expect(bodyFitsBudget(5_000_000, 500)).toBe(true)
+    expect(bodyFitsBudget(5_000_000, 0)).toBe(true)
+  })
+
+  it('fetches when the size is unknown rather than guessing it is huge', () => {
+    expect(bodyFitsBudget(undefined, 200)).toBe(true)
   })
 })

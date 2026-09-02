@@ -139,8 +139,10 @@ export function sizePreviewGlyph(size: number): CSSProperties {
     minWidth: size,
     height: size,
     color: 'var(--on-dark)',
-    font: `600 ${size}px var(--font)`,
-    lineHeight: 1,
+    // Line height rides inside the shorthand rather than beside it: `font` already
+    // sets line-height, and React warns on every rerender that updates one next to the
+    // other — which here is every tick of a ⌘+scroll.
+    font: `600 ${size}px/1 var(--font)`,
     textShadow: '0 0 3px rgba(0, 0, 0, 0.9)'
   }
 }

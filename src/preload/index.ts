@@ -46,8 +46,69 @@ export type LibraryEntry = {
   markers: number
 }
 
+/**
+ * What the home window's detail should show. Mirrors main's `CaptureView`.
+ *
+ * `report` is the capture's report, rendered on request and served on its own scheme so
+ * it can be framed without running inside this renderer. `media` is a capture with no
+ * report to render — a loose screenshot, which is most of them.
+ */
+export type CaptureView =
+  | { kind: 'report'; url: string }
+  | { kind: 'media'; url: string; media: 'video' | 'image' }
+
 /** Setup is collected and discarded; capturing is what reaches the report. */
 export type SessionPhase = 'setup' | 'capturing'
+
+/**
+ * What the shell's sidebar reports. Mirrors main's `ShellStatus`.
+ *
+ * Polled rather than pushed: a permission is granted in System Settings, in another
+ * application, and an agent attaching over MCP is not an event this process sees either.
+ */
+export type ShellStatus = {
+  screenPermission: ScreenPermission
+  /** Null when nothing is collecting. */
+  sessionPhase: SessionPhase | null
+  /**
+   * Whether Claude Code is using snapit. Not a live-socket count — the transport closes
+   * between calls, so that read "not attached" almost always. Mirrors main's `McpState`.
+   */
+  mcp:
+    | { state: 'live'; sessions: number }
+    | { state: 'idle'; sinceMs: number }
+    | { state: 'stale'; sinceMs: number }
+    | { state: 'never' }
+  saveDir: string
+  version: string
+}
+
+/** One failing endpoint, seen across every capture. Mirrors main's `FailingEndpoint`. */
+export type FailingEndpoint = {
+  endpoint: string
+  failures: number
+  captures: number
+  statuses: number[]
+  lastSeen: string
+}
+
+export type SlowEndpoint = { endpoint: string; samples: number; p95Ms: number; medianMs: number }
+
+/** What every capture together says. Mirrors main's `Analytics`. Local to this machine. */
+export type Analytics = {
+  captures: number
+  withFindings: number
+  bytes: number
+  consoleErrors: number
+  requests: number
+  failedRequests: number
+  firstCapturedAt: string | null
+  lastCapturedAt: string | null
+  byKind: Record<'screenshot' | 'recording' | 'session', number>
+  failingEndpoints: FailingEndpoint[]
+  slowest: SlowEndpoint[]
+  days: { day: string; captures: number; errors: number }[]
+}
 
 /** Mirrors main's CapturePrefs; the compiler catches drift where the two meet. */
 export type CapturePrefs = {
@@ -143,20 +204,80 @@ const api = {
   listLibrary: (): Promise<LibraryEntry[]> => ipcRenderer.invoke('library:list'),
   /** A capture's thumbnail as a data URL, or null when the platform cannot make one. */
   captureThumbnail: (path: string): Promise<string | null> => ipcRenderer.invoke('library:thumbnail', path),
+  /**
+   * Where to show a capture inside the app, and how. Rejects when there is nothing
+   * readable left, which the detail says on the page rather than showing an empty pane.
+   */
+  viewCapture: (path: string): Promise<CaptureView> => ipcRenderer.invoke('home:view', path),
   /** Open a capture in whatever the OS uses for it — the report, or the media itself. */
   openCapture: (path: string): Promise<string> => ipcRenderer.invoke('library:open', path),
   revealCapture: (path: string): void => ipcRenderer.send('library:reveal', path),
+  /**
+   * Rename a capture — its folder, or its file. Resolves to the new path; rejects with a
+   * message naming the rule that was broken, which the field shows as-is.
+   */
+  renameCapture: (path: string, name: string): Promise<string> =>
+    ipcRenderer.invoke('library:rename', path, name),
   copyCaptureMarkdown: (path: string): Promise<void> => ipcRenderer.invoke('library:copy-markdown', path),
+  /** Write the capture as one self-contained .html; resolves null if the user cancels. */
+  shareCapture: (path: string): Promise<string | null> => ipcRenderer.invoke('library:share', path),
   editCapture: (path: string): Promise<void> => ipcRenderer.invoke('library:edit', path),
   /** Confirmed by a native dialog in main; resolves false when the user backs out. */
   deleteCapture: (path: string, name: string): Promise<boolean> =>
     ipcRenderer.invoke('library:delete', path, name),
+  /**
+   * Fires when an image has been opened for editing, so the window shows the editor.
+   * The image itself is fetched with `getEditSession`, as it always was.
+   */
+  onEditImage: (cb: () => void): (() => void) => {
+    const handler = (): void => cb()
+    ipcRenderer.on('edit:opened', handler)
+    return () => ipcRenderer.removeListener('edit:opened', handler)
+  },
+  /** Fires when main has released the image, so the editor route steps aside. */
+  onEditClosed: (cb: () => void): (() => void) => {
+    const handler = (): void => cb()
+    ipcRenderer.on('edit:closed', handler)
+    return () => ipcRenderer.removeListener('edit:closed', handler)
+  },
+  /** Fires when a capture is saved, so the app can show it rather than Finder. */
+  onShowCapture: (cb: (path: string) => void): (() => void) => {
+    const handler = (_e: unknown, path: string): void => cb(path)
+    ipcRenderer.on('home:show-capture', handler)
+    return () => ipcRenderer.removeListener('home:show-capture', handler)
+  },
   /** Fires when a capture is written, so an open library does not go stale. */
   onLibraryChanged: (cb: () => void): (() => void) => {
     const handler = (): void => cb()
     ipcRenderer.on('library:changed', handler)
     return () => ipcRenderer.removeListener('library:changed', handler)
   },
+  /** What the shell's sidebar shows. Cheap enough to poll. */
+  shellStatus: (): Promise<ShellStatus> => ipcRenderer.invoke('shell:status'),
+  /**
+   * Everything the save folder says together. Reads every HAR in the window, so it is
+   * asked for when the Analytics route opens rather than on a timer.
+   */
+  readAnalytics: (): Promise<Analytics> => ipcRenderer.invoke('analytics:read'),
+  /** Reveal the save folder in Finder. */
+  openSaveFolder: (): void => ipcRenderer.send('app:open-save-folder'),
+  /** Pick an image from disk and open it in the editor window. */
+  openImageToEdit: (): Promise<void> => ipcRenderer.invoke('app:open-image'),
+  /** The `claude mcp add` line for this machine, token included. */
+  mcpSetupCommand: (): Promise<string> => ipcRenderer.invoke('mcp:setup-command'),
+  /** Confirmed by a native dialog in main; disconnects whatever held the old token. */
+  regenerateMcpToken: (): Promise<void> => ipcRenderer.invoke('mcp:regenerate'),
+  /** Put plain text on the clipboard. */
+  copyText: (text: string): void => ipcRenderer.send('app:copy-text', text),
+  /** Launch a browser snapit collects from. The one action with a right moment. */
+  startWebCapture: (): void => ipcRenderer.send('session:start'),
+  /**
+   * Start a capture from inside the app. The hotkeys do the same thing without the
+   * window; this is for the surface someone is already looking at.
+   *
+   * The window hides first, or snapit ends up in its own screenshot.
+   */
+  startCapture: (mode: 'screenshot' | 'record' | 'gif'): void => ipcRenderer.send('capture:start', mode),
   /** End setup and start keeping what the browser does. */
   beginWebCapture: (): void => ipcRenderer.send('session:begin-capture'),
   /** Stop the session and write its bundle. */
@@ -200,6 +321,12 @@ const api = {
   checkForUpdate: (): Promise<UpdateInfo | null> => ipcRenderer.invoke('app:check-update'),
   /** Open an external https URL in the user's browser (About links). */
   openExternal: (url: string): void => ipcRenderer.send('app:open-external', url),
+  /**
+   * Surface a failure the user can see, as a notification. For the ones a renderer
+   * discovers and main cannot — a microphone that would not open, an encoder that fell
+   * over — so they do not end up only in a console nobody has open.
+   */
+  reportProblem: (title: string, body: string): void => ipcRenderer.send('app:report-problem', title, body),
   /** Settings. */
   getSettings: (): Promise<Settings> => ipcRenderer.invoke('settings:get'),
   setSettings: (partial: Partial<Settings>): Promise<Settings> => ipcRenderer.invoke('settings:set', partial),

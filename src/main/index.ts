@@ -1,4 +1,4 @@
-import { basename, join, parse } from 'path'
+import { basename, dirname, join, parse } from 'path'
 import { existsSync } from 'fs'
 import { release } from 'os'
 import { mkdir, readFile, writeFile } from 'fs/promises'
@@ -48,7 +48,8 @@ import {
   type SessionPhase
 } from './captureSession'
 import { renderReport } from './report'
-import { assertInside, deleteCapture, listLibrary, thumbnailFor } from './library'
+import { assertInside, deleteCapture, listLibrary, renameCapture, thumbnailFor } from './library'
+import { shareCapture } from './share'
 import {
   EDITABLE_EXTENSIONS,
   bufferFromDataUrl,
@@ -56,8 +57,33 @@ import {
   mimeForPath,
   normalizeExt
 } from './imageFile'
+import { CAPTURE_SCHEME } from './captureUrl'
+import { mcpState } from './mcpStatus'
+import { forgetAnalytics, readAnalytics } from './analyticsSource'
+import { str } from './untrusted'
 import { TRAY_TEMPLATE_DATA_URL, TRAY_COLOUR_DATA_URL } from './trayIcon'
-import { startMcpServer, stopMcpServer, disconnectAllSessions, mcpSetupCommand } from './mcp/httpServer'
+import {
+  startMcpServer,
+  stopMcpServer,
+  disconnectAllSessions,
+  mcpSetupCommand,
+  mcpActivity
+} from './mcp/httpServer'
+import {
+  captureView,
+  installCaptureProtocol,
+  registerCaptureScheme,
+  revokeCaptureAccess
+} from './captureProtocol'
+import {
+  closeWindow,
+  loadRenderer,
+  notifyWindow,
+  openWindow,
+  watchForQuit,
+  whenClosed,
+  windowFor
+} from './windows'
 
 // NOTE: app.disableHardwareAcceleration() used to be called here on macOS 26+, because
 // Tahoe presents transparent full-screen windows so slowly the overlay took 2-3s to appear
@@ -124,9 +150,6 @@ type EditSession = { path: string; name: string; ext: string; mime: string; data
 
 let tray: Tray | null = null
 let overlayWindow: BrowserWindow | null = null
-let settingsWindow: BrowserWindow | null = null
-let aboutWindow: BrowserWindow | null = null
-let editorWindow: BrowserWindow | null = null
 let session: CaptureSession | null = null
 let editSession: EditSession | null = null
 // Image paths requested before the app is ready (macOS cold-start 'open-file').
@@ -157,13 +180,17 @@ function setMarkerHotkey(active: boolean): void {
 }
 // Start this mode once the current overlay is dismissed (the GIF → video switch).
 let pendingCaptureMode: CaptureMode | null = null
+/**
+ * The app hid itself to get out of the way of a capture it started, so it owes the user
+ * the window back. Only set when the capture came from the window — a hotkey press has
+ * nothing to restore.
+ */
+let restoreHomeAfterCapture = false
 // Latest available update (from GitHub), or null when up to date / not yet checked.
 let availableUpdate: UpdateInfo | null = null
 // Set while an MCP `pick_region` call is waiting on the user to finish a screenshot
 // capture (copy/save/save-as resolves it; Esc/dismiss without acting rejects it).
 let pendingMcpCapture: { resolve: (dataUrl: string) => void; reject: (err: Error) => void } | null = null
-let libraryWindow: BrowserWindow | null = null
-let welcomeWindow: BrowserWindow | null = null
 
 // Locks the packaged renderer to its own bundle: no remote script, no eval, no
 // plugins, no framing. data:/blob: cover the frozen-frame dataURL, source-picker
@@ -173,13 +200,17 @@ const CSP = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data:",
-  "media-src 'self' blob:",
+  `img-src 'self' data: ${CAPTURE_SCHEME}:`,
+  `media-src 'self' blob: ${CAPTURE_SCHEME}:`,
   "font-src 'self'",
   "connect-src 'self'",
   "object-src 'none'",
   "base-uri 'none'",
-  "frame-src 'none'"
+  // The home window frames a capture's report. It is the only thing this renderer may
+  // frame, and the scheme it arrives on is the only thing that may be framed — see
+  // `captureUrl.ts` for why it is a scheme and not an `srcdoc`, and
+  // `features/home/CaptureDetail.tsx` for what the frame's sandbox permits.
+  `frame-src ${CAPTURE_SCHEME}:`
 ].join('; ')
 
 /** A renderer-supplied value is only accepted as image bytes if it's an image dataURL. */
@@ -197,8 +228,10 @@ async function persistRecording(data: ArrayBuffer, ext: string, details: unknown
   const bytes = Buffer.from(data)
 
   const finish = (mediaPath: string): string => {
-    shell.showItemInFolder(mediaPath)
     refreshLibrary()
+    // The capture, not the folder it is in. `bundleRecordings` decides whether the
+    // library's entry is the folder or the loose file, so show whichever it listed.
+    showCaptureInApp(bundleRecordings ? dirname(mediaPath) : mediaPath)
     closeOverlayWindow()
     recordStartedAt = null
     recordSource = null
@@ -420,6 +453,12 @@ function requestInteractiveCapture(): Promise<string> {
 /** Dismiss the current capture: clear the renderer, hide the overlay (kept alive). */
 function closeOverlayWindow(): void {
   rejectPendingMcpCapture('Capture dismissed without saving.')
+  if (restoreHomeAfterCapture) {
+    restoreHomeAfterCapture = false
+    // `show` rather than `openWindow`: it was hidden, not closed, so its route and its
+    // scroll position are still there.
+    windowFor('home')?.show()
+  }
   setMarkerHotkey(false)
   session = null
   if (revealFallback) {
@@ -436,74 +475,47 @@ function closeOverlayWindow(): void {
   }
 }
 
-/**
- * Where captures live.
- *
- * Everything snapit made was findable only in Finder, which knows a bundle as a folder
- * of JSON and cannot say which capture holds the 500. Resizable, unlike the app's other
- * windows, because this one holds a list that grows.
- */
-function openLibraryWindow(): void {
-  if (libraryWindow) {
-    libraryWindow.focus()
-    return
-  }
-  libraryWindow = new BrowserWindow({
-    width: 1040,
-    height: 720,
-    minWidth: 560,
-    minHeight: 420,
-    title: 'snapit Library',
-    backgroundColor: '#f5f5f7',
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      sandbox: true,
-      spellcheck: false
-    }
-  })
-  libraryWindow.on('closed', () => {
-    libraryWindow = null
-  })
-  libraryWindow.once('ready-to-show', () => {
-    if (process.platform === 'darwin') app.focus({ steal: true })
-    libraryWindow?.focus()
-  })
-  loadRenderer(libraryWindow, 'library')
+/** Tell an open home window its list is stale, so a new capture appears without a reopen. */
+function refreshLibrary(): void {
+  forgetAnalytics()
+  notifyWindow('home', 'library:changed')
 }
 
-/** Tell an open library its list is stale, so a new capture appears without a reopen. */
-function refreshLibrary(): void {
-  libraryWindow?.webContents.send('library:changed')
+/**
+ * Show a finished capture in the app rather than in Finder.
+ *
+ * Every save used to end at `shell.showItemInFolder`, which answers "where is the file"
+ * — a question nobody has just after making a capture. What they want is to look at it,
+ * and snapit is now the place that shows it. Finder is still one click away on the
+ * capture itself.
+ *
+ * Deliberately not called when a screenshot goes to the clipboard: that path ends with
+ * the image already in the user's hands, on the way somewhere else, and interrupting it
+ * with a window is the opposite of helping.
+ */
+/**
+ * Leave the editor route and drop the image it was holding.
+ *
+ * The editor used to be a window, so finishing with it meant closing one. It is a route
+ * now, so finishing means telling the window to go back — and the image has to be
+ * released either way, or the next `edit:get` hands back the last one.
+ */
+function leaveEditor(): void {
+  editSession = null
+  notifyWindow('home', 'edit:closed')
+}
+
+function showCaptureInApp(capturePath: string): void {
+  openWindow('home')
+  // The window may have been created by that call and still be loading, so this is sent
+  // once it has something to receive it with.
+  const win = windowFor('home')
+  const send = (): void => notifyWindow('home', 'home:show-capture', capturePath)
+  if (win?.webContents.isLoading()) win.webContents.once('did-finish-load', send)
+  else send()
 }
 
 const SCREEN_SETTINGS_URL = 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'
-
-function openWelcomeWindow(): void {
-  if (welcomeWindow) {
-    welcomeWindow.focus()
-    return
-  }
-  welcomeWindow = new BrowserWindow({
-    width: 520,
-    height: 620,
-    resizable: false,
-    title: 'Welcome to snapit',
-    backgroundColor: '#f5f5f7',
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      sandbox: true,
-      spellcheck: false
-    }
-  })
-  welcomeWindow.on('closed', () => {
-    welcomeWindow = null
-  })
-  welcomeWindow.once('ready-to-show', () => {
-    if (process.platform === 'darwin') app.focus({ steal: true })
-    welcomeWindow?.focus()
-  })
-  loadRenderer(welcomeWindow, 'welcome')
-}
 
 /**
  * Tell someone what went wrong, where they will see it.
@@ -519,92 +531,6 @@ function notifyProblem(title: string, body: string): void {
   } catch (err) {
     console.warn('[snapit] could not show a notification:', err)
   }
-}
-
-function openSettingsWindow(): void {
-  if (settingsWindow) {
-    settingsWindow.focus()
-    return
-  }
-  settingsWindow = new BrowserWindow({
-    width: 480,
-    height: 430,
-    resizable: false,
-    title: 'snapit Settings',
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      sandbox: true,
-      spellcheck: false
-    }
-  })
-  settingsWindow.on('closed', () => {
-    settingsWindow = null
-  })
-  settingsWindow.once('ready-to-show', () => {
-    if (process.platform === 'darwin') app.focus({ steal: true })
-    settingsWindow?.focus()
-  })
-  loadRenderer(settingsWindow, 'settings')
-}
-
-function openAboutWindow(): void {
-  if (aboutWindow) {
-    aboutWindow.focus()
-    return
-  }
-  aboutWindow = new BrowserWindow({
-    width: 380,
-    height: 520,
-    resizable: false,
-    title: 'About snapit',
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      sandbox: true,
-      spellcheck: false
-    }
-  })
-  aboutWindow.on('closed', () => {
-    aboutWindow = null
-  })
-  aboutWindow.once('ready-to-show', () => {
-    if (process.platform === 'darwin') app.focus({ steal: true })
-    aboutWindow?.focus()
-  })
-  loadRenderer(aboutWindow, 'about')
-}
-
-/** Load the shared renderer, optionally at a hash route (e.g. "settings"). */
-function loadRenderer(win: BrowserWindow, hash = ''): void {
-  const suffix = hash ? `#${hash}` : ''
-  forwardRendererConsole(win)
-  if (process.env['ELECTRON_RENDERER_URL']) {
-    void win.loadURL(`${process.env['ELECTRON_RENDERER_URL']}${suffix}`)
-  } else {
-    void win.loadFile(join(__dirname, '../renderer/index.html'), hash ? { hash } : undefined)
-  }
-}
-
-/**
- * Mirror renderer warnings and errors into the terminal during development.
- *
- * Without this, anything thrown in an overlay is only visible if you happen to have that
- * window's devtools open — and the overlay is transparent, click-through and short-lived,
- * so in practice nobody does. Recording bugs in particular were invisible.
- */
-function forwardRendererConsole(win: BrowserWindow): void {
-  if (!process.env['ELECTRON_RENDERER_URL']) return
-  win.webContents.on('console-message', (details) => {
-    // Warnings and errors only — forwarding every level buries them in framework chatter.
-    if (details.level !== 'warning' && details.level !== 'error') return
-    const where = details.sourceId ? ` (${details.sourceId}:${details.lineNumber})` : ''
-    console.log(`[renderer:${details.level}] ${details.message}${where}`)
-  })
-  win.webContents.on('render-process-gone', (_e, d) => {
-    console.error(`[renderer] process gone: ${d.reason} (exit ${d.exitCode})`)
-  })
-  win.webContents.on('preload-error', (_e, path, err) => {
-    console.error(`[renderer] preload error in ${path}: ${err.message}`)
-  })
 }
 
 /** Asked once per run: a hotkey that reopens System Settings every time is its own bug. */
@@ -797,8 +723,12 @@ async function endBrowserSession(): Promise<void> {
   // still saying "capturing" through them would be lying.
   if (session?.mode === 'session') closeOverlayWindow()
   try {
-    await stopBrowserSession()
+    // Null means it was cancelled during setup and nothing was written. The library is
+    // still refreshed: a recording may have contributed to it before the cancel.
+    const dir = await stopBrowserSession()
     refreshLibrary()
+    // Null when it was cancelled during setup and nothing was written.
+    if (dir) showCaptureInApp(dir)
   } catch (err) {
     console.error('[snapit] failed to finish the browser session:', err)
     dialog.showMessageBox({
@@ -866,6 +796,18 @@ function webCaptureItems(): Electron.MenuItemConstructorOptions[] {
   return [{ label: 'Stop and save', click: () => void endBrowserSession() }]
 }
 
+/**
+ * The menu bar item.
+ *
+ * Actions only, and only the ones with a right moment. It used to be the app's
+ * navigation as well — Library, Settings, the save folder, About, an MCP submenu — which
+ * is how snapit came to have five windows opened from a dropdown and no front door.
+ * All of that lives in the window now, so this is left with the four things you reach for
+ * without wanting to look at anything, plus a way back to the window and a way out.
+ *
+ * A capture is still one keystroke away whether the window is open or not, which is the
+ * whole reason snapit stays resident.
+ */
 function buildTray(): void {
   const { screenshotHotkey, recordHotkey, gifHotkey } = getSettings()
   const template: Electron.MenuItemConstructorOptions[] = [
@@ -889,25 +831,13 @@ function buildTray(): void {
       registerAccelerator: false,
       click: () => void startCapture('gif')
     },
-    { label: 'Open image…', click: () => void openImageFromDialog() },
-    { type: 'separator' },
     ...webCaptureItems(),
     { type: 'separator' },
-    { label: 'Library…', click: openLibraryWindow },
-    { label: 'Settings…', click: openSettingsWindow },
-    { label: 'Open save folder', click: () => void shell.openPath(getSettings().saveDir) },
-    {
-      label: 'Claude Code (MCP)',
-      submenu: [
-        { label: 'Copy setup command', click: () => clipboard.writeText(mcpSetupCommand()) },
-        { label: 'Regenerate token…', click: () => void regenerateMcpTokenWithConfirm() }
-      ]
-    },
-    { label: 'About snapit', click: openAboutWindow },
-    { type: 'separator' },
+    { label: 'Open snapit', click: () => openWindow('home') },
     { label: 'Quit snapit', click: () => app.quit() }
   ]
-  // Surface an available update at the very top so it's the first thing seen.
+  // The one conditional row, and the only one that is not an action: a background app
+  // that is never opened has nowhere else to learn there is a newer version.
   if (availableUpdate) {
     template.unshift(
       {
@@ -950,43 +880,6 @@ function pngBuffer(dataUrl: string): Buffer {
   return nativeImage.createFromDataURL(dataUrl).toPNG()
 }
 
-function openEditorWindow(): void {
-  if (editorWindow) {
-    // Replace the current image with the just-opened one (editSession is already set).
-    editorWindow.focus()
-    editorWindow.webContents.reload()
-    return
-  }
-  editorWindow = new BrowserWindow({
-    width: 1000,
-    height: 720,
-    minWidth: 480,
-    minHeight: 360,
-    title: 'snapit — Edit image',
-    backgroundColor: '#1e1e20',
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      sandbox: true,
-      spellcheck: false
-    }
-  })
-  editorWindow.on('closed', () => {
-    editorWindow = null
-    editSession = null
-    // Back to a background accessory app once the document window is gone.
-    if (process.platform === 'darwin') void app.dock?.hide()
-  })
-  editorWindow.once('ready-to-show', () => {
-    if (process.platform === 'darwin') app.focus({ steal: true })
-    editorWindow?.focus()
-  })
-  // Unlike the capture overlays, the editor is a real document window — give it a
-  // Dock icon (and app switcher entry) while it's open. The icon image itself is
-  // applied once at startup (applyDevDockIcon) so it's already in place here.
-  if (process.platform === 'darwin') void app.dock?.show()
-  loadRenderer(editorWindow, 'edit')
-}
-
 /**
  * In dev the running binary is Electron, so the Dock shows its generic icon. Point
  * the Dock tile at snapit's real icon (downscaled to a Dock-appropriate size). Must
@@ -1003,37 +896,41 @@ function applyDevDockIcon(): void {
   app.dock?.setIcon(icon.resize({ width: 512, height: 512 }))
 }
 
-function closeEditorWindow(): void {
-  editorWindow?.close()
-  editorWindow = null
-  editSession = null
-}
-
-/** Read an existing image from disk and open it in the editor window. */
+/**
+ * Read an existing image from disk and show it in the app's editor route.
+ *
+ * It used to open a second window. That was one more window in an app that had five too
+ * many, and it meant editing a screenshot took you out of the surface you were browsing
+ * captures in. The image still arrives the same way — set here, fetched by the renderer
+ * with `edit:get` — only the destination changed.
+ */
 async function openImageForEdit(filePath: string): Promise<void> {
-  if (!isEditableImage(filePath)) {
-    console.warn(`[snapit] refusing to open unsupported file: ${filePath}`)
-    return
-  }
+  const ext = normalizeExt(filePath)
   const mime = mimeForPath(filePath)
-  if (!mime) return
-  let bytes: Buffer
-  try {
-    bytes = await readFile(filePath)
-  } catch (err) {
-    const detail = err instanceof Error ? err.message : String(err)
-    console.error(`[snapit] failed to read image ${filePath}: ${detail}`)
+  // Both checks, because `isEditableImage` goes by extension and the mime table is what
+  // the data URL actually needs — a file this cannot name a type for cannot be shown.
+  if (!isEditableImage(filePath) || mime === null) {
+    notifyProblem('That file cannot be edited', `snapit can open ${EDITABLE_EXTENSIONS.join(', ')}.`)
     return
   }
-  editSession = {
-    path: filePath,
-    name: parse(filePath).base,
-    ext: normalizeExt(filePath),
-    mime,
-    dataUrl: `data:${mime};base64,${bytes.toString('base64')}`
+  try {
+    const bytes = await readFile(filePath)
+    editSession = {
+      path: filePath,
+      name: basename(filePath),
+      ext,
+      mime,
+      dataUrl: `data:${mime};base64,${bytes.toString('base64')}`
+    }
+  } catch (err) {
+    notifyProblem('Could not open that image', err instanceof Error ? err.message : String(err))
+    return
   }
-  console.log(`[snapit] opening image for edit: ${filePath} (${bytes.length} bytes)`)
-  openEditorWindow()
+  openWindow('home')
+  const win = windowFor('home')
+  const send = (): void => notifyWindow('home', 'edit:opened')
+  if (win?.webContents.isLoading()) win.webContents.once('did-finish-load', send)
+  else send()
 }
 
 /** Prompt for an image file (tray fallback / dev entry point), then open it. */
@@ -1099,6 +996,12 @@ if (!app.requestSingleInstanceLock()) {
   })
 }
 
+// Before `whenReady` by requirement: a scheme cannot gain privileges once a page has
+// loaded, and the home window's frame reads every capture over this one.
+registerCaptureScheme()
+// So a `hideOnClose` window stops cancelling its own close once Quit is under way.
+watchForQuit()
+
 app.whenReady().then(() => {
   // Lost the single-instance race: this process is exiting, do nothing.
   if (!app.hasSingleInstanceLock()) return
@@ -1116,6 +1019,11 @@ app.whenReady().then(() => {
   // applied only to the packaged file:// renderer.
   if (!process.env['ELECTRON_RENDERER_URL']) {
     electronSession.defaultSession.webRequest.onHeadersReceived((details, cb) => {
+      // A capture's report already carries its own, far stricter policy — see
+      // `captureUrl.ts`. Adding this one on top does not tighten it: two policies on one
+      // response are intersected, and this one has no 'unsafe-inline' for script, so the
+      // report's Network panel and its seek script were both silently blocked.
+      if (details.url.startsWith(`${CAPTURE_SCHEME}:`)) return cb({})
       cb({ responseHeaders: { ...details.responseHeaders, 'Content-Security-Policy': [CSP] } })
     })
   }
@@ -1160,11 +1068,16 @@ app.whenReady().then(() => {
     { useSystemPicker: false }
   )
 
+  installCaptureProtocol()
+  // A grant lets one frame read one capture; none of them should outlive the window
+  // that asked for them.
+  whenClosed('home', revokeCaptureAccess)
+
   createTray()
   registerHotkeys()
   // First run, before anything else asks for attention. The permission it exists to
   // explain is the one thing that makes every other part of snapit look broken.
-  if (!getSettings().hasSeenWelcome) openWelcomeWindow()
+  if (!getSettings().hasSeenWelcome) openWindow('welcome')
   void refreshUpdate()
   setInterval(() => void refreshUpdate(), UPDATE_CHECK_INTERVAL_MS)
   startMcpServer(app.getVersion(), {
@@ -1205,8 +1118,8 @@ app.whenReady().then(() => {
     await mkdir(saveDir, { recursive: true })
     const filePath = captureFilePath(saveDir, 'png')
     await writeFile(filePath, pngBuffer(dataUrl))
-    shell.showItemInFolder(filePath)
     refreshLibrary()
+    showCaptureInApp(filePath)
     resolvePendingMcpCapture(dataUrl)
     closeOverlayWindow()
     return filePath
@@ -1225,6 +1138,8 @@ app.whenReady().then(() => {
       : await dialog.showSaveDialog(options)
     if (result.canceled || !result.filePath) return null
     await writeFile(result.filePath, pngBuffer(dataUrl))
+    // Revealed rather than shown in the app: Save-as puts it outside the save folder, so
+    // the library has no entry to open.
     shell.showItemInFolder(result.filePath)
     resolvePendingMcpCapture(dataUrl)
     closeOverlayWindow()
@@ -1287,13 +1202,14 @@ app.whenReady().then(() => {
       message: 'Overwrite the original image?',
       detail: target.path
     }
-    const { response } = editorWindow
-      ? await dialog.showMessageBox(editorWindow, confirmOptions)
+    const editor = windowFor('home')
+    const { response } = editor
+      ? await dialog.showMessageBox(editor, confirmOptions)
       : await dialog.showMessageBox(confirmOptions)
     if (response !== 0) return null
     await writeFile(target.path, bufferFromDataUrl(dataUrl))
     shell.showItemInFolder(target.path)
-    closeEditorWindow()
+    leaveEditor()
     return target.path
   })
 
@@ -1306,17 +1222,18 @@ app.whenReady().then(() => {
       defaultPath: join(dir, `${name} copy.${target.ext}`),
       filters: [{ name: 'Image', extensions: [target.ext] }]
     }
-    const result = editorWindow
-      ? await dialog.showSaveDialog(editorWindow, options)
+    const editor = windowFor('home')
+    const result = editor
+      ? await dialog.showSaveDialog(editor, options)
       : await dialog.showSaveDialog(options)
     if (result.canceled || !result.filePath) return null
     await writeFile(result.filePath, bufferFromDataUrl(dataUrl))
     shell.showItemInFolder(result.filePath)
-    closeEditorWindow()
+    leaveEditor()
     return result.filePath
   })
 
-  ipcMain.on('edit:close', closeEditorWindow)
+  ipcMain.on('edit:close', leaveEditor)
 
   // List capturable sources (each screen + each window) with preview thumbnails.
   ipcMain.handle('record:list-sources', async () => {
@@ -1373,7 +1290,7 @@ app.whenReady().then(() => {
   ipcMain.on('welcome:open-settings', () => void shell.openExternal(SCREEN_SETTINGS_URL))
   ipcMain.on('welcome:done', () => {
     markWelcomeSeen()
-    welcomeWindow?.close()
+    closeWindow('welcome')
   })
 
   ipcMain.handle('library:list', () => listLibrary(getSettings().saveDir))
@@ -1386,6 +1303,56 @@ app.whenReady().then(() => {
       return null
     }
   })
+  /**
+   * What the shell's sidebar reports. Polled, because none of it is an event this
+   * process sees: a permission is granted in another application, and an agent
+   * attaching over MCP is a socket opening, not a notification.
+   */
+  ipcMain.handle('shell:status', () => ({
+    screenPermission:
+      process.platform === 'darwin'
+        ? systemPreferences.getMediaAccessStatus('screen')
+        : ('not-applicable' as const),
+    sessionPhase: sessionPhase(),
+    mcp: mcpState(mcpActivity()),
+    saveDir: getSettings().saveDir,
+    version: app.getVersion()
+  }))
+
+  // Reads every HAR in the window, so it is asked for when the route opens rather than
+  // polled. `analyticsSource` caches until the folder changes.
+  ipcMain.handle('analytics:read', () => readAnalytics(getSettings().saveDir))
+
+  ipcMain.on('app:open-save-folder', () => void shell.openPath(getSettings().saveDir))
+  ipcMain.handle('mcp:setup-command', () => mcpSetupCommand())
+  ipcMain.handle('mcp:regenerate', () => regenerateMcpTokenWithConfirm())
+  ipcMain.on('app:copy-text', (_event, text: unknown) => clipboard.writeText(str(text)))
+  ipcMain.on('session:start', () => void beginBrowserSession())
+
+  /**
+   * Start a capture from the app's own UI.
+   *
+   * The window goes away first. A screenshot of the screen taken from a button inside
+   * snapit would otherwise have snapit in it, which is never what was wanted — and the
+   * region selector needs to see what is behind us. It comes back when the capture is
+   * dismissed or saved, so pressing a button in the app returns you to the app.
+   */
+  ipcMain.on('capture:start', (_event, mode: unknown) => {
+    if (mode !== 'screenshot' && mode !== 'record' && mode !== 'gif') return
+    const home = windowFor('home')
+    if (home?.isVisible()) {
+      restoreHomeAfterCapture = true
+      home.hide()
+    }
+    void startCapture(mode)
+  })
+
+  ipcMain.handle('app:open-image', () => openImageFromDialog())
+
+  // Where the home window should show this capture from. Everything about what that URL
+  // may address, and what the document served from it may do, is in `captureUrl.ts`.
+  ipcMain.handle('home:view', (_event, path: string) => captureView(getSettings().saveDir, path))
+
   ipcMain.handle('library:open', (_event, path: string) => {
     try {
       return shell.openPath(assertInside(getSettings().saveDir, path))
@@ -1400,7 +1367,22 @@ app.whenReady().then(() => {
       console.warn('[snapit] refused to reveal a path outside the save folder:', err)
     }
   })
+  /**
+   * Rename a capture. Resolves to the new path, or rejects with a reason the field can
+   * show — `captureName.ts` refuses rather than sanitising, so every rejection names the
+   * rule it hit.
+   */
+  ipcMain.handle('library:rename', async (_event, path: string, name: unknown) => {
+    const to = await renameCapture(getSettings().saveDir, path, str(name))
+    refreshLibrary()
+    return to
+  })
+
   ipcMain.handle('library:copy-markdown', (_event, path: string) => copyReportAsMarkdown(path))
+  // The whole flow — size decision, save dialog, streaming write — lives in share.ts.
+  ipcMain.handle('library:share', (_event, path: string) =>
+    shareCapture(getSettings().saveDir, path, windowFor('home'))
+  )
   ipcMain.handle('library:edit', async (_event, path: string) => {
     try {
       await openImageForEdit(assertInside(getSettings().saveDir, path))
@@ -1422,8 +1404,9 @@ app.whenReady().then(() => {
       message: `Move "${name}" to the Trash?`,
       detail: 'Everything in this capture goes with it — the recording, the report and the collected data.'
     }
-    const { response } = libraryWindow
-      ? await dialog.showMessageBox(libraryWindow, options)
+    const home = windowFor('home')
+    const { response } = home
+      ? await dialog.showMessageBox(home, options)
       : await dialog.showMessageBox(options)
     if (response !== 0) return false
     try {
@@ -1440,6 +1423,11 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('app:get-info', () => ({ version: app.getVersion() }))
+  // Renderer-discovered failures go through the same notification path as main's own.
+  ipcMain.on('app:report-problem', (_event, title: unknown, body: unknown) => {
+    notifyProblem(str(title).slice(0, 120) || 'Something went wrong', str(body).slice(0, 400))
+  })
+
   ipcMain.on('app:open-external', (_event, url: string) => {
     if (typeof url === 'string' && /^https:\/\//.test(url)) void shell.openExternal(url)
   })

@@ -1,3 +1,5 @@
+import type { Entry, HarLike } from './har'
+
 /**
  * Credential stripping for collected network data.
  *
@@ -50,9 +52,21 @@ export function isSensitiveField(name: string): boolean {
   return SENSITIVE_FIELDS.some((f) => n === f || n.includes(f))
 }
 
-type NameValue = { name: string; value: string }
+/**
+ * A name/value pair, in the four shapes HAR uses them: headers, cookies, query
+ * parameters and form fields. `value` is optional because a form field's genuinely is —
+ * `?flag` has a name and nothing else.
+ */
+type NameValue = { name: string; value?: string }
 
-export function redactNameValues(pairs: readonly NameValue[] | undefined): NameValue[] {
+/**
+ * Redact by name, keeping everything else each pair carries.
+ *
+ * Generic rather than fixed to `{name, value}` so a `Cookie` comes back a `Cookie`: HAR
+ * cookies have a domain, a path and an expiry, and a redaction pass that silently
+ * dropped them would be rewriting evidence rather than removing a secret.
+ */
+export function redactNameValues<T extends NameValue>(pairs: readonly T[] | undefined): T[] {
   if (!Array.isArray(pairs)) return []
   return pairs.map((p) =>
     SENSITIVE_HEADERS.has(String(p.name).toLowerCase()) || isSensitiveField(String(p.name))
@@ -62,7 +76,7 @@ export function redactNameValues(pairs: readonly NameValue[] | undefined): NameV
 }
 
 /** Cookies are credentials by definition here; only the names are kept. */
-export function redactCookies(cookies: readonly NameValue[] | undefined): NameValue[] {
+export function redactCookies<T extends NameValue>(cookies: readonly T[] | undefined): T[] {
   if (!Array.isArray(cookies)) return []
   return cookies.map((c) => ({ ...c, value: REDACTED }))
 }
@@ -136,33 +150,13 @@ export function redactAriaSnapshot(snapshot: string): string {
     .join('\n')
 }
 
-type HarEntry = {
-  request?: {
-    url?: string
-    headers?: NameValue[]
-    cookies?: NameValue[]
-    queryString?: NameValue[]
-    postData?: { text?: string; params?: NameValue[] }
-  }
-  response?: {
-    headers?: NameValue[]
-    cookies?: NameValue[]
-    content?: { text?: string; mimeType?: string }
-  }
-}
-
-type Har = { log?: { entries?: HarEntry[] } }
-
-const isJson = (mimeType: string | undefined): boolean =>
-  typeof mimeType === 'string' && mimeType.includes('json')
-
 /**
  * Strip credentials from a whole HAR: headers, cookies, query parameters, form fields
  * and JSON bodies. Bodies are otherwise left intact — a failed response body is usually
  * the reason the capture exists at all.
  */
-export function redactHar<T extends Har>(har: T): T {
-  const entries = har?.log?.entries
+export function redactHar<T extends HarLike>(har: T): T {
+  const entries = har?.log?.entries as Entry[] | undefined
   if (!Array.isArray(entries)) return har
   const redacted = entries.map((entry) => {
     const req = entry.request
@@ -193,9 +187,12 @@ export function redactHar<T extends Har>(har: T): T {
           ...(res.content && {
             content: {
               ...res.content,
-              ...(isJson(res.content.mimeType) && res.content.text
-                ? { text: redactJsonText(res.content.text) }
-                : {})
+              // Every text body, not only the ones declaring themselves JSON. It used
+              // to be gated on the mime type, which was safe while only failures had
+              // bodies at all; now that API responses do, an object served as
+              // text/plain would have gone through unredacted. `redactJsonText` hands
+              // back anything it cannot parse, so the widening costs nothing.
+              ...(res.content.text ? { text: redactJsonText(res.content.text) } : {})
             }
           })
         }

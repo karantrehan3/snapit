@@ -1,57 +1,19 @@
 import type { CSSProperties } from 'react'
 
-export const pageStyle: CSSProperties = {
-  padding: 24,
-  fontFamily: 'var(--font)',
-  color: 'var(--ink)',
-  background: 'var(--surface)',
-  height: '100vh',
-  boxSizing: 'border-box'
-}
+/**
+ * A route, not a window. The shell supplies the ground, the scroll container and the
+ * page padding, so setting any of them here would double the padding and fix the height
+ * of something that is inside a scroller.
+ */
+export const pageStyle: CSSProperties = { maxWidth: 460 }
 
-export const inputStyle: CSSProperties = {
-  flex: 1,
-  height: 30,
-  padding: '0 10px',
-  borderRadius: 6,
-  border: '1px solid var(--surface-edge)',
-  background: 'var(--surface-raised)',
-  color: 'var(--ink)',
-  font: '13px var(--font)'
-}
-
-export const browseStyle: CSSProperties = {
-  height: 30,
-  padding: '0 12px',
-  borderRadius: 6,
-  border: '1px solid var(--surface-edge)',
-  background: 'var(--surface-raised)',
-  cursor: 'pointer',
-  font: '13px var(--font)'
-}
-
-export const saveStyle: CSSProperties = {
-  height: 32,
-  padding: '0 18px',
-  borderRadius: 6,
-  border: 'none',
-  background: 'var(--accent)',
-  color: 'var(--on-dark)',
-  fontWeight: 600,
-  cursor: 'pointer',
-  font: '13px var(--font)'
-}
-
-export const closeStyle: CSSProperties = {
-  height: 32,
-  padding: '0 16px',
-  borderRadius: 6,
-  border: '1px solid var(--surface-edge)',
-  background: 'var(--surface-raised)',
-  cursor: 'pointer',
-  font: '13px var(--font)'
-}
-
+/**
+ * The hotkey recorder's own surface.
+ *
+ * Not a `Button`: it looks like an input because that is what it is being used as, and
+ * it has a state no button has — armed, listening for a chord, with a ring around it
+ * saying the next keys pressed are going somewhere.
+ */
 export function fieldStyle(recording: boolean): CSSProperties {
   return {
     flex: 1,
@@ -60,7 +22,7 @@ export function fieldStyle(recording: boolean): CSSProperties {
     gap: 6,
     minHeight: 32,
     padding: '4px 10px',
-    borderRadius: 6,
+    borderRadius: 'var(--r-md)',
     border: `1px solid ${recording ? 'var(--accent)' : 'var(--surface-edge)'}`,
     background: recording ? 'var(--accent-tint)' : 'var(--surface-raised)',
     boxShadow: recording ? '0 0 0 3px rgba(10, 132, 255, 0.15)' : 'none',
@@ -68,25 +30,7 @@ export function fieldStyle(recording: boolean): CSSProperties {
   }
 }
 
-export function keycapStyle(dim: boolean): CSSProperties {
-  return {
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 22,
-    height: 24,
-    padding: '0 7px',
-    borderRadius: 5,
-    background: dim ? '#dce8fb' : 'var(--surface-sunken)',
-    border: '1px solid #d0d0d4',
-    boxShadow: '0 1px 0 #d0d0d4',
-    color: 'var(--ink)',
-    font: '13px var(--font)',
-    fontWeight: 600
-  }
-}
-
 export const hintStyle: CSSProperties = {
   color: 'var(--ink-3)',
-  font: '13px var(--font)'
+  font: 'var(--t-body) var(--font)'
 }
