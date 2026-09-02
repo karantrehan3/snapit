@@ -4,7 +4,7 @@ import { readdir, stat } from 'fs/promises'
 import { basename, dirname, join } from 'path'
 import { Readable } from 'stream'
 import { protocol } from 'electron'
-import { BUNDLE_FILES, type CaptureMeta } from './bundle'
+import { BUNDLE_FILES, sanitizeMarkers, type CaptureMeta } from './bundle'
 import { renderBundleReport } from './bundleReport'
 import {
   CAPTURE_SCHEME,
@@ -108,7 +108,17 @@ export async function captureView(saveDir: string, capturePath: string): Promise
   // before rendering rather than by catching it afterwards.
   const meta = await readBundleJson<CaptureMeta>(target, BUNDLE_FILES.meta)
   if (meta?.capture) {
-    return { kind: 'report', url: captureUrl(idFor({ dir: target, only: null }), REPORT_FILE) }
+    return {
+      kind: 'report',
+      url: captureUrl(idFor({ dir: target, only: null }), REPORT_FILE),
+      // Handed over with the view rather than fetched separately: the editor beside the
+      // frame needs the markers themselves, not the count the library carries, and this
+      // is already the one round trip that happens per selection.
+      markers: sanitizeMarkers(meta.capture.markers, meta.capture.durationMs ?? null),
+      durationMs: meta.capture.durationMs ?? null,
+      /** A rail can only be drawn on something that plays. */
+      seekable: meta.media !== null && mediaKindFor(meta.media.file) === 'video'
+    }
   }
 
   // A bundle whose metadata is missing or truncated. `libraryEntry.ts` lists it anyway,

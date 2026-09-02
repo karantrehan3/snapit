@@ -92,6 +92,46 @@ export const REPORT_STYLES = `
   }
   video, img { display: block; width: 100%; height: auto; max-height: 72vh; object-fit: contain; }
 
+  /*
+   * The marker rail, under the player.
+   *
+   * Inside the figure and flush against the video, so it reads as part of the player
+   * rather than as a list that happens to be beneath one — the native controls sit
+   * directly above it, which is as close to marks on the scrubber as a page can get
+   * without owning the whole player.
+   *
+   * The pins are what the eye is meant to find, so the track is nearly nothing and they
+   * are brand red. The playhead fill is quiet on purpose: the scrubber above already
+   * says where playback is, and this only has to make the pins mean something as they
+   * pass.
+   */
+  .rail {
+    position: relative; height: 22px; cursor: pointer;
+    background: #0b0e13; border-top: 1px solid var(--edge);
+  }
+  .rail::before {
+    content: ''; position: absolute; left: 0; right: 0; top: 10px; height: 2px;
+    background: rgba(255, 255, 255, .14);
+  }
+  .rail-fill {
+    position: absolute; left: 0; top: 10px; height: 2px; width: 0;
+    background: rgba(255, 255, 255, .38); pointer-events: none;
+  }
+  .pin {
+    position: absolute; top: 3px; width: 12px; height: 16px; padding: 0;
+    transform: translateX(-50%); border: none; background: none; cursor: pointer;
+    -webkit-appearance: none; appearance: none;
+  }
+  .pin::before {
+    content: ''; display: block; width: 3px; height: 16px; margin: 0 auto;
+    border-radius: 2px; background: var(--focus);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, .45);
+  }
+  .pin:hover::before, .pin:focus-visible::before { width: 5px; }
+  /* Passed, not current: playback has gone by it. Dimmer, so what is ahead stands out. */
+  .pin.now::before { background: #fff; }
+  .pin:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+
   .panel { background: var(--card); border: 1px solid var(--edge); border-radius: 12px; }
   details.env { overflow: hidden; }
   details.env > summary {

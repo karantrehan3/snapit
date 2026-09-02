@@ -401,3 +401,86 @@ export function tileFindings(findings: boolean): CSSProperties {
     background: findings ? 'var(--danger-ink)' : 'transparent'
   }
 }
+
+/**
+ * The marker editor, between the detail's header and the framed report.
+ *
+ * A strip rather than a panel. Most recordings have no markers, so the surface has to
+ * cost almost nothing when it is empty — one row that says what it is for — and grow
+ * chips rather than open a place to go.
+ */
+export const markerBar: CSSProperties = {
+  flex: 'none',
+  display: 'flex',
+  alignItems: 'center',
+  gap: 10,
+  padding: '7px 14px',
+  borderBottom: '1px solid var(--surface-edge)',
+  background: 'var(--surface-sunken)',
+  fontSize: 'var(--t-small)',
+  color: 'var(--ink-2)'
+}
+
+/** Wraps: twenty markers on a long recording is a normal number, not an edge case. */
+export const markerTrail: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  flexWrap: 'wrap',
+  gap: 8,
+  minWidth: 0
+}
+
+export const markerChip: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 2,
+  padding: '1px 2px 1px 0',
+  borderRadius: 'var(--r-md)',
+  border: '1px solid var(--rule)',
+  background: 'var(--surface)'
+}
+
+/** Monospace and tabular, so a row of timestamps lines up rather than jitters. */
+export const markerTime: CSSProperties = {
+  padding: '2px 7px',
+  borderRadius: 'var(--r-sm)',
+  border: 'none',
+  background: 'transparent',
+  color: 'var(--ink)',
+  font: '600 var(--t-small) var(--mono)',
+  fontVariantNumeric: 'tabular-nums',
+  cursor: 'pointer'
+}
+
+export const markerNote: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 5,
+  maxWidth: 220,
+  padding: '2px 6px 2px 0',
+  border: 'none',
+  background: 'transparent',
+  color: 'var(--ink-2)',
+  fontSize: 'var(--t-small)',
+  textAlign: 'left',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap'
+}
+
+export const markerNoteInput: CSSProperties = {
+  boxSizing: 'border-box',
+  width: 240,
+  height: 24,
+  padding: '0 6px',
+  borderRadius: 'var(--r-sm)',
+  border: '1px solid var(--focus)',
+  background: 'var(--surface-raised)',
+  color: 'var(--ink)',
+  fontSize: 'var(--t-small)'
+}
+
+export const markerProblem: CSSProperties = { color: 'var(--danger-ink)', fontSize: 'var(--t-small)' }
+
+/** The empty line is a sentence, not a chip: it must not inherit the chip's ellipsis. */
+export const markerEmpty: CSSProperties = { color: 'var(--ink-3)', fontSize: 'var(--t-small)' }

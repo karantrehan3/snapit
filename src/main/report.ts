@@ -119,10 +119,63 @@ function mediaTag(meta: CaptureMeta, opts: ReportOptions): string {
     return `<p class="panel absent">${escapeHtml(why)}</p>`
   }
   const src = escapeHtml(opts.mediaSrc ?? meta.media.file)
-  const tag = VIDEO_EXTS.includes(meta.media.ext)
+  const isVideo = VIDEO_EXTS.includes(meta.media.ext)
+  const tag = isVideo
     ? `<video controls preload="metadata" src="${src}"></video>`
     : `<img src="${src}" alt="Screen capture" />`
-  return `<figure>${tag}</figure>`
+  return `<figure>${tag}${isVideo ? markerRail(meta) : ''}</figure>`
+}
+
+/**
+ * Where a marker sits along the recording, as a percentage.
+ *
+ * Clamped, because a marker at exactly the end would otherwise hang half off the rail,
+ * and one past the end (a duration that disagrees with the file, which happens when the
+ * front of a recording was trimmed) would leave the pin somewhere off screen.
+ */
+export function pinPercent(atMs: number, durationMs: number): number {
+  if (!Number.isFinite(atMs) || !Number.isFinite(durationMs) || durationMs <= 0) return 0
+  return Math.min(100, Math.max(0, (atMs / durationMs) * 100))
+}
+
+/**
+ * The markers, on the recording rather than beside it.
+ *
+ * The list in the aside says when each one is and seeks to it, which is the part that
+ * works when there is no video. What it cannot show is *where* they are — whether the
+ * three of them are spread across four minutes or bunched in the last ten seconds — and
+ * that is the shape of the recording someone is about to watch. Every player people
+ * already use draws them on the timeline for that reason.
+ *
+ * A rail of its own rather than marks on the native scrubber, because a `<video controls>`
+ * has no timeline this page can reach. Building a whole player to get one would mean
+ * owning play, volume, fullscreen and keyboard for the sake of some pins, in a document
+ * that is also handed to other people as a file — so the native controls keep the
+ * playing and this keeps the pointing. It scrubs as well, because a track under a
+ * playhead that does not respond to a click reads as broken.
+ */
+function markerRail(meta: CaptureMeta): string {
+  const markers = meta.capture.markers
+  const duration = meta.capture.durationMs
+  if (markers.length === 0 || duration === null || duration <= 0) return ''
+  const pins = markers
+    .map((m) => {
+      const label = m.note.trim() || humanDuration(m.atMs)
+      // `data-at` is what the seek script already looks for; `data-pin` is how the same
+      // script knows this one is on the rail and highlights the pin rather than its row.
+      return (
+        `<button type="button" class="pin" data-pin data-at="${(m.atMs / 1000).toFixed(3)}"` +
+        ` style="left:${pinPercent(m.atMs, duration).toFixed(3)}%"` +
+        ` title="${escapeHtml(`${humanDuration(m.atMs)} — ${label}`)}"` +
+        ` aria-label="${escapeHtml(`Marker at ${humanDuration(m.atMs)}: ${label}`)}"></button>`
+      )
+    })
+    .join('')
+  return (
+    `<div class="rail" data-rail data-duration="${(duration / 1000).toFixed(3)}"` +
+    ` role="group" aria-label="Markers">` +
+    `<span class="rail-fill" data-fill></span>${pins}</div>`
+  )
 }
 
 function row(label: string, value: string): string {
@@ -180,16 +233,25 @@ function markerSection(meta: CaptureMeta, seekable: boolean): string {
 }
 
 /**
- * The one script this page carries, and only when there is a video to justify it:
- * clicking a timestamp seeks the player, and playback moves the highlight down each
- * timeline. That second half is why the media column sticks — the list stays correlated
- * to the frame on screen.
+ * The one script this page carries, and only when there is a video to justify it.
+ *
+ * Three jobs, all of them the same job: keep the page and the frame on screen agreed.
+ * Clicking a timestamp seeks the player, playback moves the highlight down each timeline
+ * (which is why the media column sticks — the list follows the frame), and the marker
+ * rail under the player tracks the playhead and scrubs.
+ *
+ * The message listener is the fourth, and it only ever does anything inside snapit: the
+ * app frames this page in a sandbox with no shared origin, so `postMessage` is the only
+ * channel there is, and the marker editor beside the frame needs to seek the player and
+ * ask where the playhead is. In a report someone has been sent — a file, not framed —
+ * nothing posts to it and the listener never fires.
  */
 const SEEK_SCRIPT = `<script>
 (function () {
   var video = document.querySelector('video')
   if (!video) return
   var groups = new Map()
+  var pins = []
   Array.prototype.slice.call(document.querySelectorAll('button[data-at]')).forEach(function (mark) {
     mark.addEventListener('click', function () {
       video.currentTime = Number(mark.getAttribute('data-at'))
@@ -199,10 +261,31 @@ const SEEK_SCRIPT = `<script>
       // screen, which is the whole of the two-column case.
       video.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
     })
+    // A pin's siblings on the rail are the other pins, so the row highlighting below
+    // would fight over one shared parent. It highlights itself instead.
+    if (mark.hasAttribute('data-pin')) {
+      pins.push(mark)
+      return
+    }
     var section = mark.closest('section')
     if (!groups.has(section)) groups.set(section, [])
     groups.get(section).push(mark)
   })
+
+  var rail = document.querySelector('[data-rail]')
+  var fill = rail && rail.querySelector('[data-fill]')
+  var railDuration = rail ? Number(rail.getAttribute('data-duration')) : 0
+  if (rail) {
+    rail.addEventListener('click', function (event) {
+      // A pin's own click already seeked; this is the track between them.
+      if (event.target !== rail && event.target !== fill) return
+      var box = rail.getBoundingClientRect()
+      if (box.width <= 0 || !railDuration) return
+      var ratio = Math.min(1, Math.max(0, (event.clientX - box.left) / box.width))
+      video.currentTime = ratio * railDuration
+    })
+  }
+
   video.addEventListener('timeupdate', function () {
     groups.forEach(function (items) {
       var current = null
@@ -213,6 +296,29 @@ const SEEK_SCRIPT = `<script>
         mark.parentElement.classList.toggle('now', mark === current)
       })
     })
+    if (fill && railDuration) {
+      fill.style.width = Math.min(100, (video.currentTime / railDuration) * 100) + '%'
+    }
+    var passed = null
+    pins.forEach(function (pin) {
+      if (Number(pin.getAttribute('data-at')) <= video.currentTime) passed = pin
+    })
+    pins.forEach(function (pin) {
+      pin.classList.toggle('now', pin === passed)
+    })
+  })
+
+  window.addEventListener('message', function (event) {
+    // Only the window that framed this page, and only the two shapes it may ask for.
+    if (event.source !== window.parent || window.parent === window) return
+    var msg = event.data
+    if (!msg || msg.snapit !== 'seek' && msg.snapit !== 'where') return
+    if (msg.snapit === 'seek') {
+      video.currentTime = Math.max(0, Number(msg.atSec) || 0)
+      video.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+      return
+    }
+    window.parent.postMessage({ snapit: 'at', atSec: video.currentTime }, '*')
   })
 })()
 </script>`

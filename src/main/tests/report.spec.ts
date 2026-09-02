@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { buildMeta, type MetaInput } from '../bundle'
-import { collapseConsole, escapeHtml, renderReport, videoTimeSec } from '../report'
+import { collapseConsole, escapeHtml, pinPercent, renderReport, videoTimeSec } from '../report'
 import type { ReportRequest } from '../reportRequests'
 
 /** A request as the report receives it, with only the interesting fields spelled out. */
@@ -615,5 +615,76 @@ describe('renderReport — reading it', () => {
     })
     expect(html).toContain("classList.toggle('now'")
     expect(html.match(/<script>/g)).toHaveLength(1)
+  })
+})
+
+describe('the marker rail', () => {
+  const withMarkers = (markers: { atMs: number; note: string }[], over = {}) =>
+    renderReport(buildMeta(base({ markers, ...over })))
+
+  it('puts a pin on the recording for each marker', () => {
+    const html = withMarkers([
+      { atMs: 16_000, note: '' },
+      { atMs: 48_000, note: 'the 500' }
+    ])
+    // A quarter and three quarters of a 64s recording.
+    expect(html).toContain('left:25.000%')
+    expect(html).toContain('left:75.000%')
+    expect(html).toContain('class="rail"')
+  })
+
+  it('labels a pin with its note, and with its time when it has none', () => {
+    const html = withMarkers([
+      { atMs: 16_000, note: 'the 500' },
+      { atMs: 48_000, note: '' }
+    ])
+    expect(html).toContain('0:16 — the 500')
+    expect(html).toContain('0:48 — 0:48')
+  })
+
+  it('escapes a note, which is text somebody typed', () => {
+    const html = withMarkers([{ atMs: 1000, note: '<img onerror=alert(1)>' }])
+    expect(html).not.toContain('<img onerror')
+    expect(html).toContain('&lt;img onerror')
+  })
+
+  it('draws no rail when there is nothing to pin to it', () => {
+    expect(renderReport(buildMeta(base()))).not.toContain('class="rail"')
+  })
+
+  it('draws no rail on a still, which has no timeline to draw on', () => {
+    const html = withMarkers([{ atMs: 1000, note: 'x' }], {
+      ext: 'png',
+      mediaName: 'shot.png',
+      durationMs: null
+    })
+    expect(html).not.toContain('class="rail"')
+  })
+
+  it('still lists the markers beside the player, where a seek works without one', () => {
+    const html = withMarkers([{ atMs: 16_000, note: 'the 500' }])
+    expect(html).toContain('id="markers"')
+  })
+
+  it('fetches nothing, rail and all', () => {
+    expectFetchesNothing(withMarkers([{ atMs: 16_000, note: 'the 500' }]))
+  })
+})
+
+describe('pinPercent', () => {
+  it('places a marker along the recording', () => {
+    expect(pinPercent(30_000, 60_000)).toBe(50)
+  })
+
+  it('clamps, so a marker past the end sits at the end rather than off the rail', () => {
+    // Happens for real: the duration comes from the encoder and a trimmed recording's
+    // markers are rebased onto it, so the two can disagree by a frame.
+    expect(pinPercent(90_000, 60_000)).toBe(100)
+    expect(pinPercent(-5, 60_000)).toBe(0)
+  })
+
+  it('has nowhere to put a marker on a recording of no length', () => {
+    expect(pinPercent(1000, 0)).toBe(0)
+    expect(pinPercent(1000, Number.NaN)).toBe(0)
   })
 })

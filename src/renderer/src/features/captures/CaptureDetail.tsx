@@ -1,10 +1,11 @@
-import { useEffect, useState, type ReactElement } from 'react'
-import type { CaptureView, LibraryEntry } from '@preload/index'
+import { useEffect, useRef, useState, type ReactElement } from 'react'
+import type { CaptureView, LibraryEntry, Marker } from '@preload/index'
 import { Button } from '@renderer/components/Button'
 import { Icon } from '@renderer/components/Icon'
 import { Panel, panelBody } from '@renderer/components/Panel'
 import { errorMessage } from '@renderer/lib/errorMessage'
 import { CaptureName } from './CaptureName'
+import { MarkerBar } from './MarkerBar'
 import {
   detailActions,
   detailBody,
@@ -85,16 +86,28 @@ export function CaptureDetail({
 }): ReactElement {
   const [view, setView] = useState<CaptureView | null>(null)
   const [failed, setFailed] = useState<string | null>(null)
+  /**
+   * Markers are held here rather than read from `view`, because they change: editing one
+   * writes meta.json and hands back what was stored, and the pins inside the frame are
+   * drawn from that same file. Bumping `redraw` re-keys the frame, which re-requests the
+   * report — it is rendered per request — so the rail matches the editor above it.
+   */
+  const [markers, setMarkers] = useState<Marker[]>([])
+  const [redraw, setRedraw] = useState(0)
+  const frameRef = useRef<HTMLIFrameElement>(null)
 
   useEffect(() => {
     setView(null)
     setFailed(null)
+    setMarkers([])
     if (!entry) return
     let live = true
     void window.snapit
       .viewCapture(entry.path)
       .then((next) => {
-        if (live) setView(next)
+        if (!live) return
+        setView(next)
+        setMarkers(next.kind === 'report' ? next.markers : [])
       })
       .catch((err: unknown) => {
         if (live) setFailed(errorMessage(err))
@@ -207,6 +220,20 @@ export function CaptureDetail({
         </div>
       </header>
 
+      {/* Only where a marker can point at something: a still has no timeline, and a
+          bundle with no readable metadata has no file to write them to. */}
+      {view?.kind === 'report' && view.seekable && (
+        <MarkerBar
+          path={entry.path}
+          markers={markers}
+          frame={frameRef}
+          onChanged={(next) => {
+            setMarkers(next)
+            setRedraw((n) => n + 1)
+          }}
+        />
+      )}
+
       <div style={detailBody}>
         {failed !== null ? (
           <Panel tone="danger" icon="alert" heading="This capture could not be opened" style={{ margin: 18 }}>
@@ -219,7 +246,8 @@ export function CaptureDetail({
           // key on the URL so switching captures replaces the document rather than
           // navigating it, which would otherwise keep the previous one's scroll and tab.
           <iframe
-            key={view.url}
+            ref={frameRef}
+            key={`${view.url}#${redraw}`}
             src={view.url}
             sandbox="allow-scripts"
             referrerPolicy="no-referrer"

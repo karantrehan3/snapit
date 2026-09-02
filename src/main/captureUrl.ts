@@ -22,6 +22,8 @@
  */
 
 /** Standard-scheme, so `capture.mp4` resolves against the report's own URL. */
+import type { Marker } from './bundle'
+
 export const CAPTURE_SCHEME = 'snapit-capture'
 
 /** Rendered on request rather than read off disk. See `bundleReport.ts`. */
@@ -133,7 +135,19 @@ export const MEDIA_CSP = "default-src 'none'"
  * is the ordinary case, not the broken one.
  */
 export type CaptureView =
-  | { kind: 'report'; url: string }
+  | {
+      kind: 'report'
+      url: string
+      /**
+       * The capture's markers, sent with the view rather than fetched on their own. The
+       * editor beside the frame needs the moments themselves; the library only carries
+       * how many there are.
+       */
+      markers: Marker[]
+      durationMs: number | null
+      /** Whether the media is something a marker can point into. A still is not. */
+      seekable: boolean
+    }
   | { kind: 'media'; url: string; media: 'video' | 'image' }
 
 const VIDEO_TYPES = new Set(['video/mp4', 'video/webm'])

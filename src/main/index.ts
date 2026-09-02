@@ -21,6 +21,7 @@ import {
   type Display
 } from 'electron'
 import { captureDisplay, getDisplaySource, type DisplaySource } from './capture'
+import { setCaptureMarkers } from './markerStore'
 import { getSettings, setSettings, markWelcomeSeen, regenerateMcpToken, type Settings } from './settings'
 import type { CapturePrefs } from './capturePrefs'
 import { checkForUpdate, type UpdateInfo } from './updater'
@@ -1379,6 +1380,19 @@ app.whenReady().then(() => {
     const to = await renameCapture(getSettings().saveDir, path, str(name))
     refreshLibrary()
     return to
+  })
+
+  /**
+   * Replace a capture's markers. Returns what was stored, sanitized — the caller shows
+   * that rather than what it sent, so a marker the store clamped or dropped cannot sit
+   * in the editor claiming otherwise.
+   */
+  ipcMain.handle('library:set-markers', async (_event, path: string, markers: unknown) => {
+    const saved = await setCaptureMarkers(getSettings().saveDir, path, markers)
+    // The list shows a marker count, and the report is rendered per request — so both
+    // surfaces are already correct once this has landed.
+    refreshLibrary()
+    return saved
   })
 
   ipcMain.handle('library:copy-markdown', (_event, path: string) => copyReportAsMarkdown(path))

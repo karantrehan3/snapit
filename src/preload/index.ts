@@ -54,7 +54,15 @@ export type LibraryEntry = {
  * report to render — a loose screenshot, which is most of them.
  */
 export type CaptureView =
-  | { kind: 'report'; url: string }
+  | {
+      kind: 'report'
+      url: string
+      /** The capture's own markers, so the editor beside the frame has them to edit. */
+      markers: Marker[]
+      durationMs: number | null
+      /** Whether the media is something a marker can point into. A still is not. */
+      seekable: boolean
+    }
   | { kind: 'media'; url: string; media: 'video' | 'image' }
 
 /** Setup is collected and discarded; capturing is what reaches the report. */
@@ -211,6 +219,15 @@ const api = {
    * readable left, which the detail says on the page rather than showing an empty pane.
    */
   viewCapture: (path: string): Promise<CaptureView> => ipcRenderer.invoke('home:view', path),
+  /**
+   * Replace a capture's markers, resolving to what was stored.
+   *
+   * The whole list rather than one edit: the editor holds the list it is showing, and
+   * main validates whatever arrives against the recording's own duration — so there is
+   * no second copy of the editing rules on the far side of the IPC.
+   */
+  setMarkers: (path: string, markers: Marker[]): Promise<Marker[]> =>
+    ipcRenderer.invoke('library:set-markers', path, markers),
   /** Open a capture in whatever the OS uses for it — the report, or the media itself. */
   openCapture: (path: string): Promise<string> => ipcRenderer.invoke('library:open', path),
   revealCapture: (path: string): void => ipcRenderer.send('library:reveal', path),
