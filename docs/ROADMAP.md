@@ -1,7 +1,7 @@
 # snapit — Roadmap
 
 > Supersedes the Phase 3–4 roadmap in [`DESIGN.md`](DESIGN.md), which is stale.
-> Last updated: 2026-09-03. Current release: 3.2.0.
+> Last updated: 2026-09-03. Current release: 4.0.0.
 
 ## Direction
 
