@@ -1,0 +1,6 @@
+.data/
+
+# The root .gitignore excludes `.env.*`, which would take `.env.example` with it — and the
+# README's first instruction is to copy it. A deeper .gitignore wins, so un-ignore it here
+# rather than weakening the root rule that keeps real secrets out.
+!.env.example

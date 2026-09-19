@@ -1,0 +1,14 @@
+{
+  "name": "@snapit/server",
+  "version": "0.0.0-prototype",
+  "private": true,
+  "type": "module",
+  "description": "Prototype: workspace, auth and metadata for connected mode. Artifacts live in customer-configured storage.",
+  "scripts": {
+    "dev": "node --experimental-strip-types --watch src/index.ts",
+    "start": "node --experimental-strip-types src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  }
+}
