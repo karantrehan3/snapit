@@ -1,20 +1,25 @@
 # snapit — Roadmap
 
 > Supersedes the Phase 3–4 roadmap in [`DESIGN.md`](DESIGN.md), which is stale.
-> Last updated: 2026-09-03. Current release: 4.0.0.
+> Last updated: 2026-09-19. Current release: 4.0.0.
 
 ## Direction
 
 snapit is a local-first capture tool that becomes the **verification layer** for software written by
-agents. Two phases, in this order:
+agents. Three phases:
 
 1. **Jam parity** — a capture stops being a loose file and becomes a bug report with context.
 2. **Test writing** — the same captured context becomes Playwright integration tests, authored by
    Claude Code.
+3. **Teams** — a second person can see the capture, on infrastructure the customer runs.
 
-The sequencing is deliberate: Phase 2 needs a superset of what Phase 1 collects. Build Phase 1's
-collector to Phase 2's requirements and Phase 2 is mostly a new MCP surface over data you already
-have.
+The first two are sequenced deliberately: Phase 2 needs a superset of what Phase 1 collects. Build
+Phase 1's collector to Phase 2's requirements and Phase 2 is mostly a new MCP surface over data you
+already have.
+
+Phase 3 is not sequenced by data, it is sequenced by judgement, and the recommendation is that it
+comes last — see its own _Decisions to settle_. It also does not displace the first two: **local-first
+is the product, and a default install still has no server, no login and no network.**
 
 ---
 
@@ -446,6 +451,186 @@ process.
 
 ---
 
+## Phase 3 — Teams, without becoming a service
+
+**Not built. Proposed, with a prototype at [`server/`](../server/README.md) that exists to price it.**
+
+**The tension, before it is resolved.** M1.7 refused to mint a link. `Scope discipline` names "cloud
+bug reports with shareable links" as one of three fights to refuse. This phase reopens both, and the
+reopening is narrower than it looks.
+
+Read M1.7's four costs again and notice what they have in common. A stored credential, a support
+surface without control, a retention problem that moves rather than going away, and "it is one line
+from being the service" — every one of them is a cost of **snapit operating infrastructure**. None of
+them is a cost of a customer operating it inside their own network, against their own bucket, under
+their own retention policy, behind their own SSO.
+
+So the position, and it is the whole phase in one sentence: **snapit ships a server; snapit never
+operates one.** No hosted tier. No free-trial bucket. No snapit-owned storage at any price, for
+anybody, ever. A team that wants shared captures runs the server themselves. That is the same
+relationship snapit already has with the user's repo in Phase 2 — snapit emits, the customer runs —
+and it is the reason this is not a reversal of M1.6 or M1.7 so much as a narrowing of what they were
+protecting.
+
+**Local mode does not become the degraded one.** This is the load-bearing commitment, and it is the
+one worth breaking the phase over. The default install has no server, no login and no network; it is
+the product `DESIGN.md` describes under Goals — "stay local-only at first: no servers, no data leaving
+the machine" — and it must stay perfect for someone who never signs in. Connected mode is something a
+second person's need pulls you into, not something the single user opts out of.
+
+```
+Default install                          Opt in, on-prem
+───────────────                          ───────────────
+snapit desktop                           snapit desktop
+   └── save folder                          └── snapit server (the customer's)
+       owner, no auth, no network               ├── auth · roles · metadata
+                                                └── StorageProvider
+                                                      └── the customer's S3 / Azure / GCS / volume
+```
+
+### M3.0 — The two seams, and nothing else
+
+The refactor that must land before any team feature, because it is what stops connected mode being a
+fork of the app.
+
+Today three modules independently hard-code the same assumption — that the save folder is the truth.
+`library.ts` reads it to list, `analytics.ts` reads it to summarise, `share.ts` writes a file out of
+it. A server bolted onto that produces a second path through each, and then a third when the first
+bug is found in only one of them.
+
+Two interfaces, with only their local implementations wired and no behaviour change at all:
+
+| Seam           | Local                                     | Connected (later)            |
+| -------------- | ----------------------------------------- | ---------------------------- |
+| `CaptureStore` | today's `library.ts` + `analytics.ts`     | HTTP to the server           |
+| `Identity`     | the installer: owner, `can()` always true | role from the server's token |
+
+The test that this was done right is that **no view branches on mode**. A component asks
+`identity.can('analytics:read:workspace')`, never `if (connected && role === 'admin')`. In local mode
+every answer is yes, because it is one person's own machine and their own save folder — a single user
+must never meet a permission check.
+
+`share.ts` is deliberately not one of the seams. It is a file producer: it picks a shape and writes
+bytes. Uploading is not a fourth shape, it is a different `CaptureStore`, and treating it as a shape
+is how sharing becomes the only connected feature while listing, analytics, delete and rename stay
+local forever.
+
+### M3.1 — Identity, starting with the owner nobody signs in as
+
+Installing snapit writes one user record locally and marks it **owner**. No account, no email, no
+network — it is a local identity, the same way `mcpToken` is a local secret. That record is what
+later gets promoted if the owner chooses to sign in and stand a server up, which is why it exists
+before there is anything to authenticate against.
+
+Three roles, as few as will do:
+
+|                                             | user | admin | owner |
+| ------------------------------------------- | :--: | :---: | :---: |
+| capture, and read the captures they can see |  ●   |   ●   |   ●   |
+| file to Jira, Slack                         |  ●   |   ●   |   ●   |
+| findings on their own captures              |  ●   |   ●   |   ●   |
+| **the workspace-wide analytics roll-up**    |      |   ●   |   ●   |
+| manage members, integrations, settings      |      |   ●   |   ●   |
+| **mint or revoke a public link**            |      |   ●   |   ●   |
+| transfer ownership; cannot be removed       |      |       |   ●   |
+
+Two notes on that table, because both are choices rather than consequences:
+
+1. **There is no read-only role.** A PM who should see bugs but not delete them has nowhere to sit.
+   Three is the right number to start with and a fourth is cheap to add; four on day one is a
+   permission model nobody can hold in their head. Revisit when someone asks.
+2. **The analytics line is not two tiers of one page.** M1.9's whole point is the question DevTools
+   cannot answer — _which endpoint failed across more than one capture_ — and that question is
+   inherently about other people's sessions. So the split is by scope, not by depth: a `user` sees
+   findings on captures they can already open, and the cross-capture roll-up is an admin view.
+
+### M3.2 — Storage the customer owns
+
+`StorageProvider` — `put`, `get`, `head`, `delete`, `list`, `signedUrl` — with S3 (and therefore
+MinIO, R2, Ceph, and GCS's S3 endpoint), Azure Blob, GCS, and a filesystem provider for development.
+Nothing above the interface learns which one it got.
+
+Three rules that are not negotiable, and the reason each exists:
+
+1. **Bytes never pass through the server.** A recording is routinely 150 MB and a long one is 560 MB
+   (`STATUS.md` has the numbers). The server mints a presigned `PUT` and the desktop uploads direct;
+   playback redirects to a signed `GET`. A metadata service that streams recordings is a bandwidth
+   bill for data snapit does not want and should never hold.
+2. **A misconfigured bucket stops the server, not a viewer.** M1.7's second cost arrives exactly as
+   predicted otherwise: wrong CORS or a wrong ACL produces a link that works for the uploader and
+   403s for everybody else, and snapit gets blamed for someone else's policy. The server writes,
+   reads back and deletes a probe object before it accepts a connection.
+3. **The filesystem provider is for development.** It is real and it works, but it is the one
+   provider where bytes do transit the server, and it cannot serve range requests — so a long
+   recording will not seek. Labelled, not quietly shipped.
+
+### M3.3 — A link, inside somebody else's perimeter
+
+What M1.7 could not have without operating a service, M3.2 makes ownable. The link is off by
+default, admin-only to mint, revocable, `no-store`, `noindex`, and its slug is 128 random bits rather
+than anything enumerable.
+
+M1.7's costs, revisited honestly:
+
+| M1.7's cost                        | What this does to it                                                                                             | Settled?                                                                                                |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| 1. A stored credential             | Moves it off the laptop. The customer's server holds the bucket key; the desktop holds a scoped, expiring token. | **Improved, not removed.** The secret still exists, somewhere with a better threat model.               |
+| 2. Support surface without control | Preflight fails the boot rather than the viewer.                                                                 | **Mostly.** Preflight cannot see a CORS rule only a browser would trip.                                 |
+| 3. Retention moves                 | Keys nest `orgs/…/workspaces/…/captures/…`, so the customer's own lifecycle rule can expire a prefix.            | **No — and deliberately so.** It is now the customer's problem because it is the customer's data.       |
+| 4. One line from being the service | snapit stores no bytes, ever. "Just host it for people with no bucket" is a new subsystem, not a flag.           | **Yes. This is the real answer**, and it is why the no-hosted-tier rule is a rule and not a preference. |
+
+### M3.4 — Integrations, once there is somewhere to keep a connection
+
+`markdown.ts` made the right call for a local tool and says so in its own doc comment: whoever files
+the ticket is already authenticated to Jira, and a paste beats an OAuth flow and a token to keep
+alive. What changes in connected mode is not that pasting got worse — it is that a _workspace_ can
+hold one connection instead of every developer holding their own.
+
+One neutral payload, adapters that render it. The payload knows nothing about ADF or Block Kit; the
+adapters know nothing about captures. A third target is then a file, not a project. Every target
+gets a `preview` that sends nothing, because an integration whose output can only be seen by using it
+is one people file once and then stop trusting.
+
+### What the prototype at `server/` established
+
+Built 2026-09-19, deliberately isolated: nothing in `src/` imports it, the Electron build does not
+reference it, and it adds no dependency to the app.
+
+Worth knowing before this phase starts:
+
+- The two-phase direct upload works end to end, and `complete` must `HEAD` every object before
+  marking a capture ready — otherwise a failed upload becomes a share link that renders a broken
+  player to whoever it was sent to.
+- **`report.html` addresses its media by bare filename**, which is what makes the folder, the `.zip`
+  and M1.8's framed view all work from one `renderReport` call — and which breaks the moment the
+  page is served from a URL. The prototype substitutes the one `src` attribute. The better fix is to
+  re-render server-side with `ReportOptions.mediaSrc`, which `report.ts` already supports; that means
+  sharing the renderer between app and server, and it is the one decision in this phase that touches
+  the desktop app. **Undecided.**
+- SigV4 presigning is ~120 lines and needs no AWS SDK, which keeps the dependency argument off the
+  table. Verified against AWS's published canonical-request hash and differentially against `aws4`.
+- What it does **not** establish: no live bucket, no live Jira or Slack call, no real auth (HMAC
+  tokens stand in for OIDC), and a JSON file stands in for a database.
+
+### Decisions to settle before M3.0
+
+1. **Does Phase 3 come before or after Phase 2?** Phase 2 is the differentiator and Phase 3 is the
+   business model, and they compete for the same attention. Recommend finishing Phase 2 first: teams
+   are worth more on a tool that writes tests than tests are on a tool that has teams, and M3.0's
+   seams are cheap to land at any point.
+2. **Does the server share the app's renderer?** See above. It decides whether `report.ts` becomes a
+   published contract between two artifacts that version independently.
+3. **Is a workspace's storage per-org or per-workspace?** Per-org is simpler; per-workspace is what a
+   customer with one regulated product and three unregulated ones will ask for on day two.
+4. **What happens to a local library when someone signs in?** Nothing, is the safe answer — the
+   server starts empty and only new captures go up. The alternative, a bulk import, means the first
+   thing a new deployment does is move gigabytes.
+5. **OIDC, or username and password?** OIDC. A customer who wants their own bucket and their own
+   server is a customer who has SSO, and being an identity provider is M1.7's first cost in its worst
+   form.
+
+---
+
 ## Decisions to settle before M1.1
 
 1. **Bundle as directory or zip?** Recommend directory (inspectable, diffable) with export-to-zip on
@@ -466,16 +651,24 @@ Three fights to refuse:
 
 - **Automating a browser the agent controls** — Playwright MCP and chrome-devtools MCP own it, are
   first-party and free. Compose, never duplicate.
-- **Cloud bug reports with shareable links** — Jam and others own it. The bundle is the shareable
-  unit, and as of M1.6 it is one file that opens anywhere. Sharing is not the thing being refused;
-  operating a service is. Read M1.6 before reopening this.
+- **Operating a service** — the fight is not sharing and never was. The bundle is the shareable
+  unit, and as of M1.6 it is one file that opens anywhere. What is refused is snapit running the
+  infrastructure: no hosted tier, no snapit-owned bucket, no free-trial storage, at any price. Phase
+  3 ships a server the _customer_ runs; it does not make snapit one. Read M1.6, M1.7 and Phase 3
+  before reopening this, in that order.
 - **Generating tests by reading the diff** — wrong end of the problem; it inherits the agent's own
   misreading of intent. snapit starts from an observed human demonstration.
 
 ## Not in scope
 
-Cloud upload, shareable URLs, iOS capture, customer-facing recording links, network capture for
-native applications (would need a TLS-intercepting proxy).
+snapit-hosted storage of any kind, snapit-operated servers, accounts snapit holds, iOS capture,
+customer-facing recording links, network capture for native applications (would need a
+TLS-intercepting proxy).
+
+Amended 2026-09-19: "cloud upload" and "shareable URLs" used to sit on this list. They moved into
+Phase 3 unchanged in substance — a link exists only inside a deployment the customer operates,
+against a bucket the customer owns. The line the list is drawing is _who runs it_, which is why the
+first two entries are now phrased that way.
 
 ## Constraint carried forward
 
