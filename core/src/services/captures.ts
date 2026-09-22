@@ -1,5 +1,5 @@
 import { requirePermission, requireWorkspace, type Actor } from '../auth/context.ts'
-import { badRequest, conflict, notFound } from '../http/respond.ts'
+import { badRequest, conflict, notFound } from '../errors.ts'
 import { captureId as newCaptureId, shareSlug } from '../domain/ids.ts'
 import { buildManifest, type ArtifactRecord } from '../domain/manifest.ts'
 import { artifactKey, capturePrefix, requireFilename } from '../storage/keys.ts'

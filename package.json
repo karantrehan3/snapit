@@ -20,7 +20,9 @@
     "dist:win": "npm run build && electron-builder --win --publish never",
     "dist:linux": "npm run build && electron-builder --linux --publish never",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:all": "npm test && npm test --workspace @snapit/core && npm test --workspace @snapit/server",
+    "typecheck:all": "npm run typecheck && npm run typecheck --workspace @snapit/core && npm run typecheck --workspace @snapit/server"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
@@ -52,5 +54,9 @@
   },
   "volta": {
     "node": "22.22.3"
-  }
+  },
+  "workspaces": [
+    "core",
+    "server"
+  ]
 }

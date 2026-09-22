@@ -1,5 +1,5 @@
 import type { IncomingMessage } from 'node:http'
-import { forbidden, unauthorized } from '../http/respond.ts'
+import { forbidden, unauthorized } from '../errors.ts'
 import { can, type Permission } from '../domain/rbac.ts'
 import { extractBearerToken, verifyToken, type TokenClaims } from './tokens.ts'
 

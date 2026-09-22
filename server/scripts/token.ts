@@ -1,5 +1,5 @@
 import { API, DevAuthError, devSession, die } from './devAuth.ts'
-import { isRole } from '../src/domain/rbac.ts'
+import { isRole } from '@snapit/core/domain/rbac'
 
 /**
  * `eval $(npm run --silent token)` — shell variables for poking at the API by hand.

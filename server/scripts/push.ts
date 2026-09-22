@@ -2,7 +2,7 @@ import { readdir, stat } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { spawn } from 'node:child_process'
 import { findSaveDir } from '../src/appSettings.ts'
-import { pushBundle } from '../src/client/upload.ts'
+import { pushBundle } from '@snapit/core/client/upload'
 import { API, DevAuthError, devSession, die } from './devAuth.ts'
 import { humanBytes } from './human.ts'
 

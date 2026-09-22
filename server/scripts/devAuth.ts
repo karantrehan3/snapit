@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { devSecretPath } from '../src/devSecret.ts'
-import { issueToken } from '../src/auth/tokens.ts'
-import type { Role } from '../src/domain/rbac.ts'
+import { issueToken } from '@snapit/core/auth/tokens'
+import type { Role } from '@snapit/core/domain/rbac'
 
 /**
  * Minting a token from `.data/`, for the development scripts.

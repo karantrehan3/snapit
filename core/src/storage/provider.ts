@@ -1,5 +1,5 @@
 import type { Readable } from 'node:stream'
-import type { ByteRange } from '../http/range.ts'
+import type { ByteRange } from '../range.ts'
 
 /**
  * The seam between snapit's server and wherever the customer keeps their bytes.

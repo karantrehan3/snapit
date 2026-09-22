@@ -5,14 +5,14 @@ import { ensureDevSecret } from './devSecret.ts'
 import { Router, sendError } from './http/router.ts'
 import { notFound, sendJson } from './http/respond.ts'
 import { handleLocalStorage, isLocalStoragePath } from './http/localStorageRoute.ts'
-import { actorFrom } from './auth/context.ts'
-import { createStorageProvider } from './storage/registry.ts'
-import { createMemoryStore, type MemoryStore } from './store/memory.ts'
+import { actorFrom } from '@snapit/core/auth/context'
+import { createStorageProvider } from '@snapit/core/storage/registry'
+import { createMemoryStore, type MemoryStore } from '@snapit/core/store/memory'
 import { seedIfEmpty } from './seed.ts'
 import { routes } from './http/routes/api.ts'
 import { viewCapture, viewData, viewMedia, viewReport } from './http/routes/viewer.ts'
-import type { IntegrationDeps } from './services/integrations.ts'
-import type { StorageProvider } from './storage/provider.ts'
+import type { IntegrationDeps } from '@snapit/core/services/integrations'
+import type { StorageProvider } from '@snapit/core/storage/provider'
 
 /**
  * The prototype server.
@@ -164,7 +164,7 @@ async function main(): Promise<void> {
     return
   }
 
-  const storage = createStorageProvider(config)
+  const storage = createStorageProvider(config.storage)
   const store = await createMemoryStore(config.metadataFile)
   const deps: Deps = { store, storage, secrets: store, publicUrl: config.publicUrl }
   const router = buildRouter()

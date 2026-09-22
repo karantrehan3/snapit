@@ -22,6 +22,7 @@ import {
 } from 'electron'
 import { captureDisplay, getDisplaySource, type DisplaySource } from './capture'
 import { setCaptureMarkers } from './markerStore'
+import { localIdentity, type Identity } from './identity'
 import { getSettings, setSettings, markWelcomeSeen, regenerateMcpToken, type Settings } from './settings'
 import type { CapturePrefs } from './capturePrefs'
 import { checkForUpdate, type UpdateInfo } from './updater'
@@ -137,6 +138,9 @@ type CaptureSession = (
 ) & { workArea: WorkArea }
 
 /** `display.workArea` is in screen coordinates; shift it to be window-relative. */
+/** Resolved at startup; local until a server is configured. */
+let identity: Identity = localIdentity('usr-unknown')
+
 function windowWorkArea(display: Display): WorkArea {
   return {
     x: display.workArea.x - display.bounds.x,
@@ -1084,6 +1088,11 @@ app.whenReady().then(() => {
   if (!getSettings().hasSeenWelcome) openWindow('welcome')
   void refreshUpdate()
   setInterval(() => void refreshUpdate(), UPDATE_CHECK_INTERVAL_MS)
+  // The local owner. `ROADMAP.md` M3.0: every surface asks `identity.can(…)` rather than
+  // testing a mode, so the same components work unchanged when the answer starts coming
+  // from a server instead of from here.
+  identity = localIdentity(getSettings().ownerId)
+
   startMcpServer(app.getVersion(), {
     requestInteractiveCapture,
     // The tray reflects session state, so it has to be rebuilt when an agent is the one
@@ -1455,6 +1464,14 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('settings:get', () => getSettings())
+  // Deliberately the whole identity and not just a role: a renderer that receives a role
+  // has to own the permission table too, and then there are two of them.
+  ipcMain.handle('identity:get', () => ({
+    mode: identity.mode,
+    userId: identity.userId,
+    role: identity.role,
+    permissions: identity.permissions
+  }))
   ipcMain.handle('settings:set', (_event, partial: Partial<Settings>) => {
     const next = setSettings(partial)
     registerHotkeys()

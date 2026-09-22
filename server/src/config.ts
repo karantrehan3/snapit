@@ -1,4 +1,5 @@
-import type { StorageProviderId } from './storage/provider.ts'
+import { isProviderId, PROVIDER_IDS, type StorageConfig } from '@snapit/core/storage/config'
+import type { StorageProviderId } from '@snapit/core/storage/provider'
 
 /**
  * Configuration, read once and validated hard.
@@ -16,19 +17,8 @@ export type AppConfig = {
   publicUrl: string
   tokenSecret: string
   metadataFile: string
-  storage:
-    | { provider: 'local'; root: string }
-    | {
-        provider: 's3'
-        bucket: string
-        region: string
-        accessKeyId: string
-        secretAccessKey: string
-        endpoint?: string
-        forcePathStyle: boolean
-      }
-    | { provider: 'azure'; account: string; container: string; accountKey: string }
-    | { provider: 'gcs'; bucket: string; clientEmail: string; privateKey: string }
+  /** Core's shape, built here. Core itself never reads the environment. */
+  storage: StorageConfig
 }
 
 export class ConfigError extends Error {}
@@ -43,16 +33,14 @@ function required(env: Env, name: string): string {
 
 const optional = (env: Env, name: string): string | undefined => env[name]?.trim() || undefined
 
-const PROVIDERS: readonly StorageProviderId[] = ['local', 's3', 'azure', 'gcs']
-
 /** Long enough that a stolen token cannot be brute-forced offline in a prototype's lifetime. */
 const MIN_SECRET_LENGTH = 32
 
 export function loadConfig(env: Env = process.env): AppConfig {
-  const provider = (optional(env, 'SNAPIT_STORAGE_PROVIDER') ?? 'local') as StorageProviderId
-  if (!PROVIDERS.includes(provider)) {
+  const provider = optional(env, 'SNAPIT_STORAGE_PROVIDER') ?? 'local'
+  if (!isProviderId(provider)) {
     throw new ConfigError(
-      `SNAPIT_STORAGE_PROVIDER must be one of ${PROVIDERS.join(', ')} — got "${provider}".`
+      `SNAPIT_STORAGE_PROVIDER must be one of ${PROVIDER_IDS.join(', ')} — got "${provider}".`
     )
   }
 
@@ -74,14 +62,24 @@ export function loadConfig(env: Env = process.env): AppConfig {
     publicUrl: publicUrl.replace(/\/$/, ''),
     tokenSecret,
     metadataFile: optional(env, 'SNAPIT_METADATA_FILE') ?? './.data/metadata.json',
-    storage: storageConfig(provider, env)
+    storage: storageConfig(provider, env, publicUrl.replace(/\/$/, ''), tokenSecret)
   }
 }
 
-function storageConfig(provider: StorageProviderId, env: Env): AppConfig['storage'] {
+function storageConfig(
+  provider: StorageProviderId,
+  env: Env,
+  publicUrl: string,
+  signingSecret: string
+): StorageConfig {
   switch (provider) {
     case 'local':
-      return { provider, root: optional(env, 'SNAPIT_LOCAL_ROOT') ?? './.data/objects' }
+      return {
+        provider,
+        root: optional(env, 'SNAPIT_LOCAL_ROOT') ?? './.data/objects',
+        publicUrl,
+        signingSecret
+      }
     case 's3':
       return {
         provider,

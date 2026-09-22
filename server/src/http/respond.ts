@@ -1,37 +1,25 @@
 import type { ServerResponse } from 'node:http'
-import { isClientDisconnect } from './range.ts'
-import { StorageError, storageStatus } from '../storage/provider.ts'
-import { NotFoundError } from '../store/metadata.ts'
+import { ServiceError } from '@snapit/core/errors'
+import { isClientDisconnect } from '@snapit/core/range'
+import { StorageError, storageStatus } from '@snapit/core/storage/provider'
+import { NotFoundError } from '@snapit/core/store/metadata'
 
 /**
- * One response envelope, everywhere.
+ * Turning a service result, or a service failure, into an HTTP response.
  *
- * `{ ok, data, error, meta }` rather than a bare body, because a client that has to
- * guess whether a 200 carries a result or a problem is a client that will guess wrong
- * once. The desktop app's uploader in `client/upload.ts` reads exactly this shape.
+ * This file is the whole of what the transport adds. The failures themselves are defined
+ * in `@snapit/core/errors.ts`, deliberately: a service that invented its own error type
+ * per transport would let the local and remote modes disagree about what is allowed, and
+ * the `instanceof` below would quietly stop matching the moment there were two classes
+ * with the same name.
  */
 
 export type Envelope<T> =
   | { ok: true; data: T; meta?: Record<string, unknown> }
   | { ok: false; error: { code: string; message: string } }
 
-export class HttpError extends Error {
-  readonly status: number
-  readonly code: string
-
-  constructor(status: number, code: string, message: string) {
-    super(message)
-    this.name = 'HttpError'
-    this.status = status
-    this.code = code
-  }
-}
-
-export const badRequest = (message: string): HttpError => new HttpError(400, 'bad_request', message)
-export const unauthorized = (message: string): HttpError => new HttpError(401, 'unauthorized', message)
-export const forbidden = (message: string): HttpError => new HttpError(403, 'forbidden', message)
-export const notFound = (message: string): HttpError => new HttpError(404, 'not_found', message)
-export const conflict = (message: string): HttpError => new HttpError(409, 'conflict', message)
+// Re-exported so route files have one import for "how do I refuse this".
+export { ServiceError, badRequest, conflict, forbidden, notFound, unauthorized } from '@snapit/core/errors'
 
 /**
  * Send an envelope — unless the response has already begun.
@@ -54,8 +42,8 @@ export function sendJson<T>(res: ServerResponse, status: number, body: Envelope<
   res.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
     'content-length': Buffer.byteLength(text),
-    // Nothing this API returns should ever be cached by an intermediary: it is all
-    // scoped to a bearer token.
+    // Nothing this API returns should ever be cached by an intermediary: it is all scoped
+    // to a bearer token.
     'cache-control': 'no-store'
   })
   res.end(text)
@@ -67,11 +55,10 @@ export const sendOk = <T>(res: ServerResponse, data: T, meta?: Record<string, un
 /**
  * Turn any thrown thing into a response.
  *
- * The rule the branches encode: a message the client can act on is returned, and
- * anything else becomes "Something went wrong" with the detail in the server log. An
- * error from a storage provider is the interesting case — its message names a bucket and
- * sometimes a policy, which helps an operator and helps an attacker equally, so only its
- * mapped status crosses the wire.
+ * A message the client can act on is returned; anything else becomes "Something went
+ * wrong" with the detail in the server log. A storage failure is the interesting case —
+ * its message names a bucket and sometimes a policy, which helps an operator and an
+ * attacker equally, so only its mapped status crosses the wire.
  */
 export function sendError(res: ServerResponse, err: unknown): void {
   // A client that hung up is not a failure. It is what a video element does every time
@@ -80,7 +67,7 @@ export function sendError(res: ServerResponse, err: unknown): void {
     res.destroy()
     return
   }
-  if (err instanceof HttpError) {
+  if (err instanceof ServiceError) {
     sendJson(res, err.status, { ok: false, error: { code: err.code, message: err.message } })
     return
   }

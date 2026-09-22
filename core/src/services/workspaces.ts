@@ -1,5 +1,5 @@
 import { requirePermission, requireWorkspace, type Actor } from '../auth/context.ts'
-import { badRequest, notFound } from '../http/respond.ts'
+import { badRequest, notFound } from '../errors.ts'
 import { isRole, permissionsFor, type Permission, type Role } from '../domain/rbac.ts'
 import { userId as newUserId } from '../domain/ids.ts'
 import { mine, shareUrlFor, type CaptureDeps } from './captures.ts'

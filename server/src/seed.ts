@@ -1,7 +1,11 @@
-import { orgId as newOrgId, userId as newUserId, workspaceId as newWorkspaceId } from './domain/ids.ts'
-import { issueToken } from './auth/tokens.ts'
-import type { MemoryStore } from './store/memory.ts'
-import type { Role } from './domain/rbac.ts'
+import {
+  orgId as newOrgId,
+  userId as newUserId,
+  workspaceId as newWorkspaceId
+} from '@snapit/core/domain/ids'
+import { issueToken } from '@snapit/core/auth/tokens'
+import type { MemoryStore } from '@snapit/core/store/memory'
+import type { Role } from '@snapit/core/domain/rbac'
 
 /**
  * A workspace to talk to, on first run.

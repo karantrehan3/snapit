@@ -18,6 +18,13 @@ export type Settings = {
   bundleRecordings: boolean
   /** Bearer token the local MCP server requires — generated once, never renderer-settable. */
   mcpToken: string
+  /**
+   * Whoever installed this copy. Generated once and never renderer-settable, like
+   * `mcpToken`. There is no account behind it and no network: it is the local half of
+   * `ROADMAP.md` M3.1, so that "who is this" has an answer before there is a server to
+   * ask. If this install later signs in to one, this is the record that gets promoted.
+   */
+  ownerId: string
   /** Port the local MCP server listens on (127.0.0.1 only). */
   mcpPort: number
   /** What the capture bar was set to last time. See capturePrefs.ts. */
@@ -40,6 +47,7 @@ function defaults(): Settings {
     saveDir: join(app.getPath('pictures'), 'snapit'),
     bundleRecordings: true,
     mcpToken: randomBytes(24).toString('hex'),
+    ownerId: `usr-${randomBytes(8).toString('hex')}`,
     mcpPort: DEFAULT_MCP_PORT,
     capture: defaultCapture(),
     hasSeenWelcome: false
@@ -62,6 +70,7 @@ function coerce(raw: unknown): Settings {
     saveDir: typeof o.saveDir === 'string' ? o.saveDir : d.saveDir,
     bundleRecordings: typeof o.bundleRecordings === 'boolean' ? o.bundleRecordings : d.bundleRecordings,
     mcpToken: typeof o.mcpToken === 'string' && o.mcpToken.length > 0 ? o.mcpToken : d.mcpToken,
+    ownerId: typeof o.ownerId === 'string' && o.ownerId.length > 0 ? o.ownerId : d.ownerId,
     mcpPort: typeof o.mcpPort === 'number' && Number.isInteger(o.mcpPort) ? o.mcpPort : d.mcpPort,
     capture: coerceCapture(o.capture),
     hasSeenWelcome: o.hasSeenWelcome === true

@@ -1,7 +1,12 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { renderViewerGone, renderViewerPage } from '../../viewer/page.ts'
-import { renderSharedReport, resolveShared, sharedDataUrl, sharedMediaUrl } from '../../services/viewer.ts'
-import type { CaptureDeps } from '../../services/captures.ts'
+import {
+  renderSharedReport,
+  resolveShared,
+  sharedDataUrl,
+  sharedMediaUrl
+} from '@snapit/core/services/viewer'
+import type { CaptureDeps } from '@snapit/core/services/captures'
 
 /**
  * The share link over HTTP: `https://snapit.example.com/capture/abc123`.

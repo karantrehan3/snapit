@@ -1,5 +1,5 @@
-import { environmentLine, type CaptureManifest } from '../domain/manifest.ts'
-import type { Capture } from '../domain/model.ts'
+import { environmentLine, type CaptureManifest } from '@snapit/core/domain/manifest'
+import type { Capture } from '@snapit/core/domain/model'
 
 /**
  * The page a share link opens.

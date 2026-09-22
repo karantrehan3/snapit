@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { requirePermission, requireWorkspace, type Actor } from '../auth/context.ts'
-import { HttpError, badRequest, notFound } from '../http/respond.ts'
+import { ServiceError, badRequest, notFound } from '../errors.ts'
 import { capturePayload, type CapturePayload, type PayloadDetail } from '../integrations/payload.ts'
 import { jiraTarget } from '../integrations/jira.ts'
 import { slackTarget } from '../integrations/slack.ts'
@@ -151,7 +151,7 @@ export async function fileIntegration(
     const integration = await deps.store.getIntegration(actor.workspaceId, kind)
     const secret = deps.secrets.getSecret(actor.workspaceId, kind)
     if (!integration || !secret) {
-      throw new HttpError(
+      throw new ServiceError(
         409,
         'integration_not_configured',
         `This workspace has no ${kind} connection. An admin sets it up.`
@@ -161,7 +161,7 @@ export async function fileIntegration(
       return await go(integration.settings, secret)
     } catch (err) {
       if (err instanceof IntegrationError) {
-        throw new HttpError(err.retryable ? 503 : 422, `${kind}_rejected`, err.message)
+        throw new ServiceError(err.retryable ? 503 : 422, `${kind}_rejected`, err.message)
       }
       throw err
     }
@@ -194,7 +194,7 @@ export async function fileIntegration(
       })
     } catch (err) {
       if (!issue) throw err
-      slackError = err instanceof HttpError ? err.message : 'Slack could not be reached.'
+      slackError = err instanceof ServiceError ? err.message : 'Slack could not be reached.'
     }
   }
 

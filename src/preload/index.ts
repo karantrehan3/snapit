@@ -153,6 +153,21 @@ export type CaptureSession = (
     }
 ) & { workArea: WorkArea }
 
+/**
+ * Who is using snapit, and what they may do.
+ *
+ * Declared here rather than imported from main, like `Settings` above: preload is the IPC
+ * contract, and a contract that reaches into the other side's internals is not one.
+ */
+export type IdentitySnapshot = {
+  /** `local` until a workspace is configured. */
+  mode: 'local' | 'connected'
+  userId: string
+  role: 'admin' | 'developer' | 'viewer'
+  /** Everything this role may do. Ask this rather than testing `mode` or `role`. */
+  permissions: readonly string[]
+}
+
 export type Settings = {
   screenshotHotkey: string
   recordHotkey: string
@@ -348,6 +363,12 @@ const api = {
   reportProblem: (title: string, body: string): void => ipcRenderer.send('app:report-problem', title, body),
   /** Settings. */
   getSettings: (): Promise<Settings> => ipcRenderer.invoke('settings:get'),
+  /**
+   * Who is using snapit and what they may do. Locally this is the installer, who may do
+   * everything; when a workspace is configured it is whoever signed in. Views ask this
+   * rather than testing which mode they are in — see `src/main/identity.ts`.
+   */
+  getIdentity: (): Promise<IdentitySnapshot> => ipcRenderer.invoke('identity:get'),
   setSettings: (partial: Partial<Settings>): Promise<Settings> => ipcRenderer.invoke('settings:set', partial),
   browseDir: (): Promise<string | null> => ipcRenderer.invoke('settings:browse-dir')
 }

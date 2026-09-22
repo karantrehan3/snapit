@@ -1,8 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { pipeline } from 'node:stream/promises'
-import { LOCAL_STORAGE_PATH, verifyLocalUrl } from '../storage/local.ts'
-import { contentRange, isClientDisconnect, parseByteRange, rangeLength } from './range.ts'
-import type { StorageProvider } from '../storage/provider.ts'
+import { LOCAL_STORAGE_PATH, verifyLocalUrl } from '@snapit/core/storage/local'
+import { contentRange, isClientDisconnect, parseByteRange, rangeLength } from '@snapit/core/range'
+import type { StorageProvider } from '@snapit/core/storage/provider'
 
 /**
  * Serving the signed URLs the local provider mints.

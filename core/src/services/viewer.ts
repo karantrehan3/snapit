@@ -1,6 +1,6 @@
 import { isShareSlug } from '../domain/ids.ts'
 import { artifactKey } from '../storage/keys.ts'
-import { rewriteMediaSrc, withBase } from '../viewer/rewrite.ts'
+import { rewriteMediaSrc, withBase } from '../report/rewrite.ts'
 import type { Capture } from '../domain/model.ts'
 import type { CaptureDeps } from './captures.ts'
 
@@ -48,7 +48,7 @@ export type RenderedReport = { html: string; mediaRewritten: boolean }
  *
  * The report is the one artifact worth reading through the process that serves it: it is
  * under a hundred kilobytes and it has to be modified in flight. Everything else is a
- * redirect. See `viewer/rewrite.ts` for why this is a substitution and not a re-render.
+ * redirect. See `report/rewrite.ts` for why this is a substitution and not a re-render.
  */
 export async function renderSharedReport(
   deps: CaptureDeps,

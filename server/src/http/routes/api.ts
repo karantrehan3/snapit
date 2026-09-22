@@ -1,11 +1,11 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { readJson } from '../router.ts'
 import { sendOk } from '../respond.ts'
-import type { Actor } from '../../auth/context.ts'
-import * as captures from '../../services/captures.ts'
-import * as workspaces from '../../services/workspaces.ts'
-import * as integrations from '../../services/integrations.ts'
-import type { PayloadDetail } from '../../integrations/payload.ts'
+import type { Actor } from '@snapit/core/auth/context'
+import * as captures from '@snapit/core/services/captures'
+import * as workspaces from '@snapit/core/services/workspaces'
+import * as integrations from '@snapit/core/services/integrations'
+import type { PayloadDetail } from '@snapit/core/integrations/payload'
 
 /**
  * HTTP over the services, and nothing else.
