@@ -57,6 +57,18 @@ export interface MetadataStore {
   listIssueLinks(captureId: string): Promise<IssueLink[]>
 }
 
+/**
+ * Where integration credentials live.
+ *
+ * Separated from `MetadataStore` because it is the one thing that must *not* be persisted
+ * the way everything else is — see `store/memory.ts`. Keeping it a distinct contract means
+ * a real build can put it in a secrets manager without touching the metadata store.
+ */
+export interface SecretStore {
+  setSecret(workspaceId: string, kind: string, secret: string): void
+  getSecret(workspaceId: string, kind: string): string | null
+}
+
 export class NotFoundError extends Error {
   constructor(what: string) {
     super(`${what} not found.`)

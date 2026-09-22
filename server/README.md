@@ -53,34 +53,42 @@ everything — the objects, the metadata and the development secret — and noth
 
 ## Where this runs
 
-Three configurations, and it is worth being precise about which is a product mode and which
-is just development.
+The same service logic in every mode. What changes is the transport, and — for v5.0.0 —
+whether there is a server process at all.
 
-|                  | Server                                         | Storage                         | Share links                                            | What it is                                                                                                 |
-| ---------------- | ---------------------------------------------- | ------------------------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
-| **Local only**   | none                                           | your save folder                | none — you share a file                                | **The product today.** No login, no network. `ROADMAP.md` Phase 3 commits to keeping this the default.     |
-| **Local server** | `localhost`                                    | `server/.data/`                 | `http://localhost:8787/…` — **only you can open them** | **Development.** What the quickstart runs. Not a mode to ship: a link nobody else can open is not a share. |
-| **On-prem**      | the customer's EC2, EKS, or a box under a desk | the customer's S3 / Azure / GCS | real, inside their perimeter                           | **The team mode.** What Phase 3 is for.                                                                    |
+|                         | Where the logic runs                           | Storage                         | Share links                                    |
+| ----------------------- | ---------------------------------------------- | ------------------------------- | ---------------------------------------------- |
+| **Local (the default)** | **in the app's own process**, called directly  | the save folder                 | none needed — you share the file (M1.6, M1.10) |
+| **On-prem**             | the customer's EC2, EKS, or a box under a desk | the customer's S3 / Azure / GCS | real, inside their perimeter                   |
+| **This prototype**      | a standalone node process                      | `server/.data/`                 | `localhost` — only you can open them           |
 
-So "running everything locally" is how you _develop_ this, and "local only" — no server at
-all — is how the product ships by default. The server is only worth standing up when more
-than one person needs the capture, and that is the case where it belongs on shared
-infrastructure rather than a laptop.
+The third row is how you develop and evaluate the thing. The first two are the product.
+
+**Corrected 2026-09-23.** An earlier version of this file called a local server "development
+only, not a mode to ship". That was wrong about the intent: in v5.0.0 the logic runs on the
+device by default, and a _separate_ server is the on-prem exception. What was right, and is
+worth keeping straight, is that a `http://localhost/...` link is one nobody else can open —
+so locally the value of this layer is not links. It is that there is exactly one
+implementation of what a capture is, who may touch it, and where its bytes live, and going
+on-prem changes a transport rather than forking the app.
 
 ```
-Local only                    On-prem (a team)
-──────────                    ────────────────
-snapit desktop                snapit desktop
-   └── save folder               └── snapit server   ← the customer's EC2 / EKS
-                                       ├── auth · roles · metadata
-                                       └── StorageProvider
-                                             └── the customer's S3 / Azure / GCS
+Local (v5.0.0)                        On-prem
+──────────────                        ───────
+snapit desktop                        snapit desktop
+  ├── shell / capture / library          └── https ──► snapit server (customer's EC2/EKS)
+  └── service ──► save folder                            └── service ──► customer's S3
+        ▲                                                       ▲
+        └── the same functions ─────────────────────────────────┘
 ```
+
+`src/services/` is that shared layer: plain async functions taking `(deps, actor, input)`,
+no request and no response anywhere in them. `src/http/routes/` is a thin adapter that
+reads a body, calls one of them, and writes the envelope — it holds no logic and no
+authorisation, so an in-process caller cannot skip a check that a request would hit.
 
 snapit never operates any of it. No hosted tier, no snapit-owned bucket, no free-trial
 storage — see `ROADMAP.md` _Scope discipline_.
-
----
 
 ## The number that shaped the architecture
 

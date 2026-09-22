@@ -9,17 +9,9 @@ import { actorFrom } from './auth/context.ts'
 import { createStorageProvider } from './storage/registry.ts'
 import { createMemoryStore, type MemoryStore } from './store/memory.ts'
 import { seedIfEmpty } from './seed.ts'
-import {
-  completeCapture,
-  createCapture,
-  deleteCapture,
-  getCapture,
-  listCaptures,
-  type CaptureDeps
-} from './api/captures.ts'
-import { listMembers, removeMember, setCaptureSharing, setMember, whoami } from './api/workspaces.ts'
-import { fileIntegration, listIntegrations, previewIntegration, setIntegration } from './api/integrations.ts'
-import { viewCapture, viewData, viewMedia, viewReport } from './api/viewer.ts'
+import { routes } from './http/routes/api.ts'
+import { viewCapture, viewData, viewMedia, viewReport } from './http/routes/viewer.ts'
+import type { IntegrationDeps } from './services/integrations.ts'
 import type { StorageProvider } from './storage/provider.ts'
 
 /**
@@ -39,7 +31,7 @@ import type { StorageProvider } from './storage/provider.ts'
  * See `README.md` for what this does and does not answer about ROADMAP M1.7.
  */
 
-type Deps = CaptureDeps & { store: MemoryStore; storage: StorageProvider; publicUrl: string }
+type Deps = IntegrationDeps & { store: MemoryStore }
 type Ctx = { deps: Deps; config: AppConfig }
 
 function buildRouter(): Router<Ctx> {
@@ -67,68 +59,72 @@ function buildRouter(): Router<Ctx> {
 
   router.get(
     '/v1/me',
-    authed((req, res, ctx, actor) => whoami(req, res, ctx.deps, actor))
+    authed((req, res, ctx, actor) => routes.whoami(req, res, ctx.deps, actor))
   )
 
   router.get(
     '/v1/workspaces/:workspaceId/members',
-    authed((req, res, ctx, actor) => listMembers(req, res, ctx.deps, actor, ctx.params.workspaceId!))
+    authed((req, res, ctx, actor) => routes.listMembers(req, res, ctx.deps, actor, ctx.params.workspaceId!))
   )
   router.post(
     '/v1/workspaces/:workspaceId/members',
-    authed((req, res, ctx, actor) => setMember(req, res, ctx.deps, actor, ctx.params.workspaceId!))
+    authed((req, res, ctx, actor) => routes.setMember(req, res, ctx.deps, actor, ctx.params.workspaceId!))
   )
   router.delete(
     '/v1/workspaces/:workspaceId/members/:userId',
     authed((req, res, ctx, actor) =>
-      removeMember(req, res, ctx.deps, actor, ctx.params.workspaceId!, ctx.params.userId!)
+      routes.removeMember(req, res, ctx.deps, actor, ctx.params.workspaceId!, ctx.params.userId!)
     )
   )
 
   router.post(
     '/v1/workspaces/:workspaceId/captures',
-    authed((req, res, ctx, actor) => createCapture(req, res, ctx.deps, actor, ctx.params.workspaceId!))
+    authed((req, res, ctx, actor) => routes.createCapture(req, res, ctx.deps, actor, ctx.params.workspaceId!))
   )
   router.get(
     '/v1/workspaces/:workspaceId/captures',
-    authed((req, res, ctx, actor) => listCaptures(req, res, ctx.deps, actor, ctx.params.workspaceId!))
+    authed((req, res, ctx, actor) => routes.listCaptures(req, res, ctx.deps, actor, ctx.params.workspaceId!))
   )
   router.post(
     '/v1/captures/:captureId/complete',
-    authed((req, res, ctx, actor) => completeCapture(req, res, ctx.deps, actor, ctx.params.captureId!))
+    authed((req, res, ctx, actor) => routes.completeCapture(req, res, ctx.deps, actor, ctx.params.captureId!))
   )
   router.get(
     '/v1/captures/:captureId',
-    authed((req, res, ctx, actor) => getCapture(req, res, ctx.deps, actor, ctx.params.captureId!))
+    authed((req, res, ctx, actor) => routes.getCapture(req, res, ctx.deps, actor, ctx.params.captureId!))
   )
   router.delete(
     '/v1/captures/:captureId',
-    authed((req, res, ctx, actor) => deleteCapture(req, res, ctx.deps, actor, ctx.params.captureId!))
+    authed((req, res, ctx, actor) => routes.deleteCapture(req, res, ctx.deps, actor, ctx.params.captureId!))
   )
   router.post(
     '/v1/captures/:captureId/share',
-    authed((req, res, ctx, actor) => setCaptureSharing(req, res, ctx.deps, actor, ctx.params.captureId!))
+    authed((req, res, ctx, actor) =>
+      routes.setCaptureSharing(req, res, ctx.deps, actor, ctx.params.captureId!)
+    )
   )
 
   router.get(
     '/v1/workspaces/:workspaceId/integrations',
-    authed((req, res, ctx, actor) => listIntegrations(req, res, ctx.deps, actor, ctx.params.workspaceId!))
+    authed((req, res, ctx, actor) =>
+      routes.listIntegrations(req, res, ctx.deps, actor, ctx.params.workspaceId!)
+    )
   )
   router.post(
     '/v1/workspaces/:workspaceId/integrations/:kind',
     authed((req, res, ctx, actor) =>
-      setIntegration(req, res, ctx.deps, actor, ctx.params.workspaceId!, ctx.params.kind!)
+      routes.setIntegration(req, res, ctx.deps, actor, ctx.params.workspaceId!, ctx.params.kind!)
     )
   )
   router.post(
     '/v1/captures/:captureId/integrations/:kind/preview',
     authed((req, res, ctx, actor) =>
-      previewIntegration(req, res, ctx.deps, actor, ctx.params.captureId!, ctx.params.kind!)
+      routes.previewIntegration(req, res, ctx.deps, actor, ctx.params.captureId!, ctx.params.kind!)
     )
   )
   router.post(
     '/v1/captures/:captureId/file',
-    authed((req, res, ctx, actor) => fileIntegration(req, res, ctx.deps, actor, ctx.params.captureId!))
+    authed((req, res, ctx, actor) => routes.fileIntegration(req, res, ctx.deps, actor, ctx.params.captureId!))
   )
 
   // The viewer. No `authed` wrapper anywhere below this line, deliberately visible.
@@ -170,7 +166,7 @@ async function main(): Promise<void> {
 
   const storage = createStorageProvider(config)
   const store = await createMemoryStore(config.metadataFile)
-  const deps: Deps = { store, storage, publicUrl: config.publicUrl }
+  const deps: Deps = { store, storage, secrets: store, publicUrl: config.publicUrl }
   const router = buildRouter()
 
   // Prove storage works before accepting a capture. A bucket with the wrong policy
@@ -216,6 +212,21 @@ async function main(): Promise<void> {
         res.destroy()
       }
     })
+  })
+
+  // A port already in use is the most likely startup failure and it used to surface as an
+  // unhandled 'error' event and a stack trace, which reads like a crash rather than a
+  // thing you can fix in one command.
+  server.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`[snapit-server] port ${config.port} is already in use.`)
+      console.error(`  Another snapit server is probably running. Stop it, or pick another port:`)
+      console.error(`    SNAPIT_PORT=8788 SNAPIT_PUBLIC_URL=http://localhost:8788 npm start`)
+    } else {
+      console.error('[snapit-server] could not start:', err.message)
+    }
+    process.exitCode = 1
+    server.close()
   })
 
   server.listen(config.port, () => {

@@ -482,11 +482,22 @@ second person's need pulls you into, not something the single user opts out of.
 Default install                          Opt in, on-prem
 ───────────────                          ───────────────
 snapit desktop                           snapit desktop
-   └── save folder                          └── snapit server (the customer's)
-       owner, no auth, no network               ├── auth · roles · metadata
-                                                └── StorageProvider
-                                                      └── the customer's S3 / Azure / GCS / volume
+  ├── shell / capture / library            └── https ──► snapit server (the customer's)
+  └── service ──► save folder                              ├── auth · roles · metadata
+        ▲                                                  └── service ──► their S3 / Azure / GCS
+        └── the same functions ──────────────────────────────────▲
 ```
+
+**The service runs on the device by default; it is a separate process only on-prem.**
+Settled 2026-09-23, and it is not a small distinction — it decides whether there is one
+implementation of "what a capture is and who may touch it" or two. In local mode the app
+calls the service functions directly, in its own process: no port, no token, no HTTP hop in
+front of the user's own files, and no new way for the app to fail to start. On-prem, the
+same functions sit behind a router.
+
+What does _not_ change is that a `http://localhost/...` link is one nobody else can open, so
+the local value of this layer is not links — locally a capture is still shared as a file
+(M1.6, M1.10). The value is that going on-prem is a transport swap rather than a fork.
 
 ### M3.0 — The two seams, and nothing else
 
