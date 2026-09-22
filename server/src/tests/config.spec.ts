@@ -59,6 +59,8 @@ describe('refusals', () => {
   ])('s3 without %s stops the boot', (missing) => {
     const env: Record<string, string> = {
       ...base,
+      SNAPIT_OIDC_ISSUER: 'https://id.corp',
+      SNAPIT_OIDC_CLIENT_ID: 'snapit',
       SNAPIT_STORAGE_PROVIDER: 's3',
       SNAPIT_S3_BUCKET: 'b',
       SNAPIT_S3_REGION: 'eu-west-1',
@@ -77,6 +79,9 @@ describe('refusals', () => {
 describe('s3', () => {
   const s3 = {
     ...base,
+    // Real storage cannot use the dev identity provider, so every s3 fixture carries one.
+    SNAPIT_OIDC_ISSUER: 'https://id.corp',
+    SNAPIT_OIDC_CLIENT_ID: 'snapit',
     SNAPIT_STORAGE_PROVIDER: 's3',
     SNAPIT_S3_BUCKET: 'snapit-captures',
     SNAPIT_S3_REGION: 'eu-west-1',
@@ -103,5 +108,46 @@ describe('s3', () => {
     expect(loadConfig({ ...s3, SNAPIT_S3_FORCE_PATH_STYLE: 'yes' }).storage).toMatchObject({
       forcePathStyle: false
     })
+  })
+})
+
+describe('the identity provider', () => {
+  const s3 = {
+    ...base,
+    SNAPIT_STORAGE_PROVIDER: 's3',
+    SNAPIT_S3_BUCKET: 'b',
+    SNAPIT_S3_REGION: 'eu-west-1',
+    SNAPIT_S3_ACCESS_KEY_ID: 'k',
+    SNAPIT_S3_SECRET_ACCESS_KEY: 's'
+  }
+
+  test('local storage defaults to the dev provider', () => {
+    expect(loadConfig(base).auth).toEqual({ provider: 'dev' })
+  })
+
+  test('real storage defaults to oidc, and then demands its settings', () => {
+    expect(() => loadConfig(s3)).toThrow(/SNAPIT_OIDC_ISSUER/)
+  })
+
+  test('the dev provider is refused against real storage, whatever the env says', () => {
+    // It authenticates nobody. A server pointed at a customer's bucket must fail to
+    // start, not fail at the first sign-in — by which point it is already listening.
+    expect(() => loadConfig({ ...s3, SNAPIT_AUTH_PROVIDER: 'dev' })).toThrow(/authenticates nobody/)
+  })
+
+  test('a bad bucket is reported before a missing identity provider', () => {
+    // Both are wrong here. The operator was configuring storage.
+    const { SNAPIT_S3_BUCKET, ...withoutBucket } = s3
+    expect(() => loadConfig(withoutBucket)).toThrow(/SNAPIT_S3_BUCKET/)
+  })
+
+  test('oidc carries its issuer and client through', () => {
+    expect(
+      loadConfig({ ...s3, SNAPIT_OIDC_ISSUER: 'https://id.corp', SNAPIT_OIDC_CLIENT_ID: 'snapit' }).auth
+    ).toEqual({ provider: 'oidc', issuer: 'https://id.corp', clientId: 'snapit', clientSecret: undefined })
+  })
+
+  test('an unknown provider names the two that exist', () => {
+    expect(() => loadConfig({ ...base, SNAPIT_AUTH_PROVIDER: 'saml' })).toThrow(/dev or oidc/)
   })
 })

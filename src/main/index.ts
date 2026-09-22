@@ -22,9 +22,7 @@ import {
 } from 'electron'
 import { captureDisplay, getDisplaySource, type DisplaySource } from './capture'
 import { setCaptureMarkers } from './markerStore'
-import { localIdentity, type Identity } from './identity'
-import { createLocalCaptureStore } from './localCaptures'
-import type { CaptureStore } from './captureStore'
+import { createSessionManager } from './session'
 import { getSettings, setSettings, markWelcomeSeen, regenerateMcpToken, type Settings } from './settings'
 import type { CapturePrefs } from './capturePrefs'
 import { checkForUpdate, type UpdateInfo } from './updater'
@@ -140,14 +138,25 @@ type CaptureSession = (
 ) & { workArea: WorkArea }
 
 /** `display.workArea` is in screen coordinates; shift it to be window-relative. */
-/** Resolved at startup; local until a server is configured. */
-let identity: Identity = localIdentity('usr-unknown')
-
 /**
- * Where captures come from. Local until a workspace is configured — see `captureStore.ts`.
- * The save folder is passed as a function because Settings can change it while running.
+ * Which store and which identity are in play. Local until somebody signs in, and local
+ * again the moment a server stops answering — see `session.ts`.
  */
-const captures: CaptureStore = createLocalCaptureStore(() => getSettings().saveDir)
+const sessions = createSessionManager(
+  () => getSettings().saveDir,
+  () => getSettings().ownerId
+)
+
+/** Always read through these. The session can change underneath at runtime. */
+const captures = {
+  list: () => sessions.current().store.list(),
+  thumbnail: (id: string) => sessions.current().store.thumbnail(id),
+  analytics: () => sessions.current().store.analytics(),
+  rename: (id: string, name: string) => sessions.current().store.rename(id, name),
+  setMarkers: (id: string, markers: unknown) => sessions.current().store.setMarkers(id, markers),
+  remove: (id: string) => sessions.current().store.remove(id),
+  locate: (id: string) => sessions.current().store.locate(id)
+}
 
 function windowWorkArea(display: Display): WorkArea {
   return {
@@ -1096,10 +1105,17 @@ app.whenReady().then(() => {
   if (!getSettings().hasSeenWelcome) openWindow('welcome')
   void refreshUpdate()
   setInterval(() => void refreshUpdate(), UPDATE_CHECK_INTERVAL_MS)
-  // The local owner. `ROADMAP.md` M3.0: every surface asks `identity.can(…)` rather than
-  // testing a mode, so the same components work unchanged when the answer starts coming
-  // from a server instead of from here.
-  identity = localIdentity(getSettings().ownerId)
+  /**
+   * Restore a stored sign-in, without waiting for it.
+   *
+   * The app starts local and upgrades if the server answers, rather than holding the
+   * window closed on a network call. That ordering is the local-first promise in one line:
+   * a server that is down, slow or unreachable delays nothing and costs nobody their own
+   * save folder — it just means the library shows what is on this disk.
+   */
+  void sessions.restore().then((state) => {
+    if (state.store.mode === 'connected') refreshLibrary()
+  })
 
   startMcpServer(app.getVersion(), {
     requestInteractiveCapture,
@@ -1484,12 +1500,39 @@ app.whenReady().then(() => {
   ipcMain.handle('settings:get', () => getSettings())
   // Deliberately the whole identity and not just a role: a renderer that receives a role
   // has to own the permission table too, and then there are two of them.
-  ipcMain.handle('identity:get', () => ({
-    mode: identity.mode,
-    userId: identity.userId,
-    role: identity.role,
-    permissions: identity.permissions
-  }))
+  ipcMain.handle('identity:get', () => {
+    const { identity, session, offlineReason } = sessions.current()
+    return {
+      mode: identity.mode,
+      userId: identity.userId,
+      role: identity.role,
+      permissions: identity.permissions,
+      workspace: session ? { id: session.workspaceId, name: session.workspaceName } : null,
+      email: session?.email ?? null,
+      offlineReason
+    }
+  })
+
+  /** What this server wants as a credential, so the UI can prompt for the right thing. */
+  ipcMain.handle('auth:describe', async (_event, serverUrl: unknown) => {
+    const base = str(serverUrl).replace(/\/$/, '')
+    const res = await fetch(`${base}/v1/auth/describe`, { signal: AbortSignal.timeout(8000) })
+    const envelope = (await res.json()) as { ok: boolean; data?: unknown; error?: { message: string } }
+    if (!envelope.ok) throw new Error(envelope.error?.message ?? 'That server did not answer.')
+    return envelope.data
+  })
+
+  ipcMain.handle('auth:sign-in', async (_event, serverUrl: unknown, credential: unknown) => {
+    await sessions.signIn(str(serverUrl), str(credential))
+    refreshLibrary()
+    return { ok: true }
+  })
+
+  ipcMain.handle('auth:sign-out', () => {
+    sessions.signOut()
+    refreshLibrary()
+    return { ok: true }
+  })
   ipcMain.handle('settings:set', (_event, partial: Partial<Settings>) => {
     const next = setSettings(partial)
     registerHotkeys()

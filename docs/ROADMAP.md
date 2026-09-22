@@ -587,6 +587,40 @@ Two notes on that table, because both are choices rather than consequences:
    inherently about other people's sessions. So the split is by scope, not by depth: a `user` sees
    findings on captures they can already open, and the cross-capture roll-up is an admin view.
 
+#### Signing in — built 2026-09-23, with OIDC shaped
+
+`IdentityProvider` splits authentication in two, and the split is the design: **the provider
+says who, the workspace says what.** An IdP proves an email; it does not know that the email
+is an admin of Web QA, and a provider that could assert a role would be a provider that
+could grant itself one. So membership decides, which also means offboarding is removing a
+membership rather than touching the IdP.
+
+Two providers. `dev` signs in as any seeded member by typing their email, authenticates
+nothing, warns on every use — and `config.ts` refuses it against any storage but `local`, so
+a server pointed at a customer's bucket cannot start with it whatever is in its env. `oidc`
+is shaped, and `server/src/auth/oidc.ts` records the part worth deciding before anyone
+starts: the flow for a desktop app is the **device authorization grant**, not the
+authorization code flow, because an Electron app has no trustworthy redirect URI and
+embedding a browser to collect a corporate password is the pattern IdPs are moving to block.
+
+On the app side the token lives in the **OS keychain** via `safeStorage`, never in
+`settings.json` — that file is world-readable, is written from the renderer's requests, and
+gets pasted into bug reports. When no keychain is available snapit stores nothing and you
+sign in again next launch, because a plaintext fallback would defeat asking for the keychain
+at all.
+
+**A server problem never costs you your own captures.** `session.ts` restores a stored
+sign-in in the background and falls back to local when the server does not answer within
+four seconds, keeping the session rather than clearing it — a flaky network is not a
+sign-out. The app starts local and upgrades; nothing waits on a network call.
+
+Two things connected mode cannot do yet, both recorded rather than hidden. Thumbnails are
+absent, because the fix is the server rendering one at upload rather than the app
+downloading a 41 MB recording per tile. And analytics keeps the totals it knows from each
+manifest but leaves the endpoint tables empty, because M1.9's question — which endpoint
+failed across more than one capture — needs every HAR. The fix there is also server-side:
+derive the request facts once at `complete`, while the HAR is already in hand.
+
 ### M3.2 — Storage the customer owns
 
 `StorageProvider` — `put`, `get`, `head`, `delete`, `list`, `signedUrl` — with S3 (and therefore

@@ -160,13 +160,24 @@ export type CaptureSession = (
  * contract, and a contract that reaches into the other side's internals is not one.
  */
 export type IdentitySnapshot = {
-  /** `local` until a workspace is configured. */
+  /** `local` until somebody signs in, and local again if that server stops answering. */
   mode: 'local' | 'connected'
   userId: string
   role: 'admin' | 'developer' | 'viewer'
   /** Everything this role may do. Ask this rather than testing `mode` or `role`. */
   permissions: readonly string[]
+  /** Null when local. */
+  workspace: { id: string; name: string } | null
+  email: string | null
+  /**
+   * Set when a stored sign-in could not be restored because the server did not answer.
+   * The session is kept — this is "showing local captures", not "signed out".
+   */
+  offlineReason: string | null
 }
+
+/** What a server wants as a credential, so the prompt can ask for the right thing. */
+export type SignInMethod = { provider: string; kind: string; detail: string }
 
 export type Settings = {
   screenshotHotkey: string
@@ -369,6 +380,13 @@ const api = {
    * rather than testing which mode they are in — see `src/main/identity.ts`.
    */
   getIdentity: (): Promise<IdentitySnapshot> => ipcRenderer.invoke('identity:get'),
+  /** Ask a server how it wants to be signed in to, before prompting for anything. */
+  describeSignIn: (serverUrl: string): Promise<SignInMethod> =>
+    ipcRenderer.invoke('auth:describe', serverUrl),
+  /** Rejects with the server's own message — "not a member", "that code expired". */
+  signIn: (serverUrl: string, credential: string): Promise<{ ok: true }> =>
+    ipcRenderer.invoke('auth:sign-in', serverUrl, credential),
+  signOut: (): Promise<{ ok: true }> => ipcRenderer.invoke('auth:sign-out'),
   setSettings: (partial: Partial<Settings>): Promise<Settings> => ipcRenderer.invoke('settings:set', partial),
   browseDir: (): Promise<string | null> => ipcRenderer.invoke('settings:browse-dir')
 }

@@ -5,6 +5,7 @@ import type { Actor } from '@snapit/core/auth/context'
 import * as captures from '@snapit/core/services/captures'
 import * as workspaces from '@snapit/core/services/workspaces'
 import * as integrations from '@snapit/core/services/integrations'
+import * as auth from '@snapit/core/services/auth'
 import type { PayloadDetail } from '@snapit/core/integrations/payload'
 
 /**
@@ -16,7 +17,7 @@ import type { PayloadDetail } from '@snapit/core/integrations/payload'
  * If a check ever appears in this file, it is a check the in-process caller skips.
  */
 
-export type ApiDeps = integrations.IntegrationDeps
+export type ApiDeps = integrations.IntegrationDeps & { auth: auth.AuthDeps }
 
 const body = async (req: IncomingMessage, max?: number): Promise<Record<string, unknown>> =>
   ((await readJson(req, max)) ?? {}) as Record<string, unknown>
@@ -34,6 +35,27 @@ function detailFrom(raw: Record<string, unknown>): PayloadDetail {
 }
 
 export const routes = {
+  /**
+   * Sign in. The one API route with no bearer token, because it is where one comes from.
+   *
+   * `describeSignIn` is a GET so a client can ask how to collect a credential before it
+   * asks somebody to type anything — a device-flow provider needs a different prompt from
+   * a password one, and the app should not hardcode which.
+   */
+  describeSignIn: async (_req: IncomingMessage, res: ServerResponse, deps: ApiDeps) =>
+    sendOk(res, auth.describeSignIn(deps.auth)),
+
+  signIn: async (req: IncomingMessage, res: ServerResponse, deps: ApiDeps) => {
+    const input = await body(req)
+    sendOk(
+      res,
+      await auth.signIn(deps.auth, {
+        credential: typeof input.credential === 'string' ? input.credential : '',
+        verifier: typeof input.verifier === 'string' ? input.verifier : undefined
+      })
+    )
+  },
+
   whoami: async (_req: IncomingMessage, res: ServerResponse, deps: ApiDeps, actor: Actor) =>
     sendOk(res, await workspaces.whoami(deps, actor)),
 
@@ -85,6 +107,9 @@ export const routes = {
     const input = await body(req, 4_000_000)
     sendOk(res, await captures.completeCapture(deps, actor, id, { files: input.files, meta: input.meta }))
   },
+
+  renameCapture: async (req: IncomingMessage, res: ServerResponse, deps: ApiDeps, actor: Actor, id: string) =>
+    sendOk(res, { capture: await captures.renameCapture(deps, actor, id, (await body(req)).title) }),
 
   getCapture: async (_req: IncomingMessage, res: ServerResponse, deps: ApiDeps, actor: Actor, id: string) =>
     sendOk(res, await captures.getCapture(deps, actor, id)),

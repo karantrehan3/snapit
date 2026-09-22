@@ -10,8 +10,11 @@ import { createStorageProvider } from '@snapit/core/storage/registry'
 import { createMemoryStore, type MemoryStore } from '@snapit/core/store/memory'
 import { seedIfEmpty } from './seed.ts'
 import { routes } from './http/routes/api.ts'
+import { createDevIdentityProvider } from './auth/dev.ts'
+import { createOidcIdentityProvider } from './auth/oidc.ts'
 import { viewCapture, viewData, viewMedia, viewReport } from './http/routes/viewer.ts'
 import type { IntegrationDeps } from '@snapit/core/services/integrations'
+import type { AuthDeps } from '@snapit/core/services/auth'
 import type { StorageProvider } from '@snapit/core/storage/provider'
 
 /**
@@ -31,7 +34,7 @@ import type { StorageProvider } from '@snapit/core/storage/provider'
  * See `README.md` for what this does and does not answer about ROADMAP M1.7.
  */
 
-type Deps = IntegrationDeps & { store: MemoryStore }
+type Deps = IntegrationDeps & { store: MemoryStore } & { auth: AuthDeps }
 type Ctx = { deps: Deps; config: AppConfig }
 
 function buildRouter(): Router<Ctx> {
@@ -52,6 +55,10 @@ function buildRouter(): Router<Ctx> {
       const actor = actorFrom(req, ctx.config.tokenSecret, nowSeconds())
       await handler(req, res, ctx, actor)
     }
+
+  // No `authed` wrapper: this is where a token comes from.
+  router.get('/v1/auth/describe', (req, res, ctx) => routes.describeSignIn(req, res, ctx.deps))
+  router.post('/v1/auth/token', (req, res, ctx) => routes.signIn(req, res, ctx.deps))
 
   router.get('/health', (_req, res, ctx) =>
     sendJson(res, 200, { ok: true, data: { storage: ctx.deps.storage.id, publicUrl: ctx.config.publicUrl } })
@@ -92,6 +99,10 @@ function buildRouter(): Router<Ctx> {
   router.get(
     '/v1/captures/:captureId',
     authed((req, res, ctx, actor) => routes.getCapture(req, res, ctx.deps, actor, ctx.params.captureId!))
+  )
+  router.patch(
+    '/v1/captures/:captureId',
+    authed((req, res, ctx, actor) => routes.renameCapture(req, res, ctx.deps, actor, ctx.params.captureId!))
   )
   router.delete(
     '/v1/captures/:captureId',
@@ -166,7 +177,22 @@ async function main(): Promise<void> {
 
   const storage = createStorageProvider(config.storage)
   const store = await createMemoryStore(config.metadataFile)
-  const deps: Deps = { store, storage, secrets: store, publicUrl: config.publicUrl }
+  const provider =
+    config.auth.provider === 'dev'
+      ? createDevIdentityProvider()
+      : createOidcIdentityProvider({
+          issuer: config.auth.issuer,
+          clientId: config.auth.clientId,
+          clientSecret: config.auth.clientSecret
+        })
+
+  const deps: Deps = {
+    store,
+    storage,
+    secrets: store,
+    publicUrl: config.publicUrl,
+    auth: { store, provider, tokenSecret: config.tokenSecret }
+  }
   const router = buildRouter()
 
   // Prove storage works before accepting a capture. A bucket with the wrong policy
@@ -231,6 +257,7 @@ async function main(): Promise<void> {
 
   server.listen(config.port, () => {
     console.log(`[snapit-server] listening on ${config.publicUrl}`)
+    console.log(`[snapit-server] identity provider: ${config.auth.provider}`)
     if (seeded)
       console.log(
         `[snapit-server] seeded workspace ${seeded.workspaceId} with an admin, a developer and a viewer`

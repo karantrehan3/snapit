@@ -217,6 +217,26 @@ export async function getCapture(
   }
 }
 
+/**
+ * Rename a capture.
+ *
+ * `capture:create` rather than a read, and rather than a permission of its own: renaming is
+ * how a capture gets the title a ticket will quote, so whoever may produce one may title
+ * it. A `viewer` may not.
+ */
+export async function renameCapture(
+  deps: CaptureDeps,
+  actor: Actor,
+  id: string,
+  title: unknown
+): Promise<Capture> {
+  requirePermission(actor, 'capture:create')
+  const capture = await mine(deps, actor, id)
+  const next = typeof title === 'string' ? title.trim() : ''
+  if (!next) throw badRequest('A capture needs a name.')
+  return deps.store.updateCapture(capture.id, { title: next.slice(0, 200) })
+}
+
 export async function listCaptures(deps: CaptureDeps, actor: Actor, workspaceId: string): Promise<Capture[]> {
   requireWorkspace(actor, workspaceId)
   requirePermission(actor, 'capture:read')

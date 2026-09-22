@@ -17,6 +17,8 @@ export type AppConfig = {
   publicUrl: string
   tokenSecret: string
   metadataFile: string
+  /** `dev` is only reachable against local storage — see `auth/dev.ts`. */
+  auth: { provider: 'dev' } | { provider: 'oidc'; issuer: string; clientId: string; clientSecret?: string }
   /** Core's shape, built here. Core itself never reads the environment. */
   storage: StorageConfig
 }
@@ -62,7 +64,11 @@ export function loadConfig(env: Env = process.env): AppConfig {
     publicUrl: publicUrl.replace(/\/$/, ''),
     tokenSecret,
     metadataFile: optional(env, 'SNAPIT_METADATA_FILE') ?? './.data/metadata.json',
-    storage: storageConfig(provider, env, publicUrl.replace(/\/$/, ''), tokenSecret)
+    // Storage first, deliberately. Both can be wrong at once, and an operator who just
+    // set up a bucket should be told what is wrong with the bucket rather than about an
+    // identity provider they have not reached yet.
+    storage: storageConfig(provider, env, publicUrl.replace(/\/$/, ''), tokenSecret),
+    auth: authConfig(env, provider)
   }
 }
 
@@ -104,5 +110,36 @@ function storageConfig(
         clientEmail: required(env, 'SNAPIT_GCS_CLIENT_EMAIL'),
         privateKey: required(env, 'SNAPIT_GCS_PRIVATE_KEY')
       }
+  }
+}
+
+/**
+ * Which identity provider, and the guard that matters.
+ *
+ * `dev` authenticates nothing, so it is refused against any storage but `local`. That check
+ * is here rather than in the provider because a server pointed at a customer's bucket must
+ * fail to *start*, not fail at the first sign-in — by which point it is already listening.
+ */
+function authConfig(env: Env, storage: StorageProviderId): AppConfig['auth'] {
+  const provider = optional(env, 'SNAPIT_AUTH_PROVIDER') ?? (storage === 'local' ? 'dev' : 'oidc')
+
+  if (provider === 'dev') {
+    if (storage !== 'local') {
+      throw new ConfigError(
+        'SNAPIT_AUTH_PROVIDER=dev authenticates nobody and is refused against real storage. ' +
+          'Use oidc, or run against the local provider.'
+      )
+    }
+    return { provider: 'dev' }
+  }
+
+  if (provider !== 'oidc') {
+    throw new ConfigError(`SNAPIT_AUTH_PROVIDER must be dev or oidc — got "${provider}".`)
+  }
+  return {
+    provider: 'oidc',
+    issuer: required(env, 'SNAPIT_OIDC_ISSUER'),
+    clientId: required(env, 'SNAPIT_OIDC_CLIENT_ID'),
+    clientSecret: optional(env, 'SNAPIT_OIDC_CLIENT_SECRET')
   }
 }

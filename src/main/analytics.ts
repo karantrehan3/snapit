@@ -46,6 +46,15 @@ export type CaptureFacts = {
   consoleErrors: number
   /** Present only for captures that collected a HAR. */
   requests: RequestFact[]
+  /**
+   * How many requests failed, when that is known but the requests themselves are not.
+   *
+   * Only for a source that can count without reading a HAR — a connected workspace knows
+   * the number from each capture's manifest but would have to download every recording to
+   * get the detail. Ignored whenever `requests` is non-empty, because there the requests
+   * are the truth and this would be a second opinion.
+   */
+  knownFailedRequests?: number
 }
 
 const DAY_MS = 86_400_000
@@ -244,6 +253,12 @@ export function summarise(
       entry.statuses.add(req.status)
       if (!Number.isNaN(at)) entry.last = Math.max(entry.last, at)
       failing.set(endpoint, entry)
+    }
+    // A source with no request detail still knows how many failed; counting zero there
+    // would show "no failures" on a page whose own capture list says otherwise.
+    if (capture.requests.length === 0 && capture.knownFailedRequests) {
+      failedHere = Math.max(0, capture.knownFailedRequests)
+      out.failedRequests += failedHere
     }
     if (failedHere > 0 || capture.consoleErrors > 0) out.withFindings++
   }
