@@ -151,3 +151,36 @@ describe('the identity provider', () => {
     expect(() => loadConfig({ ...base, SNAPIT_AUTH_PROVIDER: 'saml' })).toThrow(/dev or oidc/)
   })
 })
+
+describe('what it listens on', () => {
+  test('loopback by default — a server nobody meant to expose is not exposed', () => {
+    expect(loadConfig(base).host).toBe('127.0.0.1')
+  })
+
+  test('the dev provider may not listen on a network interface', () => {
+    // The finding this test exists for: bound to every interface, the dev provider hands
+    // an admin token to anyone on the same wifi who can spell a seeded email address.
+    expect(() => loadConfig({ ...base, SNAPIT_HOST: '0.0.0.0' })).toThrow(/only listen on loopback/)
+    expect(() => loadConfig({ ...base, SNAPIT_HOST: '192.168.1.39' })).toThrow(/only listen on loopback/)
+  })
+
+  test.each(['127.0.0.1', 'localhost', '::1'])('%s counts as loopback', (host) => {
+    expect(loadConfig({ ...base, SNAPIT_HOST: host }).host).toBe(host)
+  })
+
+  test('a real deployment opts in explicitly, with a real provider', () => {
+    const config = loadConfig({
+      ...base,
+      SNAPIT_HOST: '0.0.0.0',
+      SNAPIT_STORAGE_PROVIDER: 's3',
+      SNAPIT_S3_BUCKET: 'b',
+      SNAPIT_S3_REGION: 'eu-west-1',
+      SNAPIT_S3_ACCESS_KEY_ID: 'k',
+      SNAPIT_S3_SECRET_ACCESS_KEY: 's',
+      SNAPIT_OIDC_ISSUER: 'https://id.corp',
+      SNAPIT_OIDC_CLIENT_ID: 'snapit'
+    })
+    expect(config.host).toBe('0.0.0.0')
+    expect(config.auth.provider).toBe('oidc')
+  })
+})

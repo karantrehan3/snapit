@@ -255,8 +255,8 @@ async function main(): Promise<void> {
     server.close()
   })
 
-  server.listen(config.port, () => {
-    console.log(`[snapit-server] listening on ${config.publicUrl}`)
+  server.listen(config.port, config.host, () => {
+    console.log(`[snapit-server] listening on ${config.host}:${config.port} — ${config.publicUrl}`)
     console.log(`[snapit-server] identity provider: ${config.auth.provider}`)
     if (seeded)
       console.log(

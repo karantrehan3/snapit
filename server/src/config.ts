@@ -13,6 +13,15 @@ import type { StorageProviderId } from '@snapit/core/storage/provider'
 
 export type AppConfig = {
   port: number
+  /**
+   * Which interface to listen on. Loopback by default, deliberately.
+   *
+   * A server that binds every interface the moment it starts is one that was exposed to
+   * the office wifi by somebody running `npm start` to try it. The app's own MCP server
+   * has always bound `127.0.0.1` for exactly this reason; this now matches it, and a real
+   * deployment opts in with SNAPIT_HOST=0.0.0.0 behind whatever terminates its TLS.
+   */
+  host: string
   /** How the outside world addresses this server. Share URLs are built from it. */
   publicUrl: string
   tokenSecret: string
@@ -38,6 +47,11 @@ const optional = (env: Env, name: string): string | undefined => env[name]?.trim
 /** Long enough that a stolen token cannot be brute-forced offline in a prototype's lifetime. */
 const MIN_SECRET_LENGTH = 32
 
+const LOOPBACK = '127.0.0.1'
+
+/** `::1` counts: an address nothing outside this machine can route to. */
+const isLoopback = (host: string): boolean => host === '127.0.0.1' || host === 'localhost' || host === '::1'
+
 export function loadConfig(env: Env = process.env): AppConfig {
   const provider = optional(env, 'SNAPIT_STORAGE_PROVIDER') ?? 'local'
   if (!isProviderId(provider)) {
@@ -46,6 +60,7 @@ export function loadConfig(env: Env = process.env): AppConfig {
     )
   }
 
+  const host = optional(env, 'SNAPIT_HOST') ?? LOOPBACK
   const tokenSecret = required(env, 'SNAPIT_TOKEN_SECRET')
   if (tokenSecret.length < MIN_SECRET_LENGTH) {
     throw new ConfigError(`SNAPIT_TOKEN_SECRET must be at least ${MIN_SECRET_LENGTH} characters.`)
@@ -61,6 +76,7 @@ export function loadConfig(env: Env = process.env): AppConfig {
 
   return {
     port: Number(optional(env, 'SNAPIT_PORT') ?? 8787),
+    host: host,
     publicUrl: publicUrl.replace(/\/$/, ''),
     tokenSecret,
     metadataFile: optional(env, 'SNAPIT_METADATA_FILE') ?? './.data/metadata.json',
@@ -68,7 +84,7 @@ export function loadConfig(env: Env = process.env): AppConfig {
     // set up a bucket should be told what is wrong with the bucket rather than about an
     // identity provider they have not reached yet.
     storage: storageConfig(provider, env, publicUrl.replace(/\/$/, ''), tokenSecret),
-    auth: authConfig(env, provider)
+    auth: authConfig(env, provider, host)
   }
 }
 
@@ -120,10 +136,18 @@ function storageConfig(
  * is here rather than in the provider because a server pointed at a customer's bucket must
  * fail to *start*, not fail at the first sign-in — by which point it is already listening.
  */
-function authConfig(env: Env, storage: StorageProviderId): AppConfig['auth'] {
+function authConfig(env: Env, storage: StorageProviderId, host: string): AppConfig['auth'] {
   const provider = optional(env, 'SNAPIT_AUTH_PROVIDER') ?? (storage === 'local' ? 'dev' : 'oidc')
 
   if (provider === 'dev') {
+    // The one that actually bit: bound to every interface, this hands an admin token to
+    // anyone on the same wifi who can spell a seeded email address.
+    if (!isLoopback(host)) {
+      throw new ConfigError(
+        `SNAPIT_AUTH_PROVIDER=dev authenticates nobody, so it may only listen on loopback — ` +
+          `got SNAPIT_HOST=${host}. Use oidc to listen on a network interface.`
+      )
+    }
     if (storage !== 'local') {
       throw new ConfigError(
         'SNAPIT_AUTH_PROVIDER=dev authenticates nobody and is refused against real storage. ' +
