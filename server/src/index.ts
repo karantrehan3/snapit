@@ -1,5 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
+import { dirname, resolve } from 'node:path'
 import { ConfigError, loadConfig, type AppConfig } from './config.ts'
+import { ensureDevSecret } from './devSecret.ts'
 import { Router, sendError } from './http/router.ts'
 import { notFound, sendJson } from './http/respond.ts'
 import { handleLocalStorage, isLocalStoragePath } from './http/localStorageRoute.ts'
@@ -140,10 +142,25 @@ function buildRouter(): Router<Ctx> {
   return router
 }
 
+/**
+ * Fill in a development token secret when there is none and nothing is at stake.
+ *
+ * Only for the `local` provider — see `devSecret.ts` for why that boundary is where it is.
+ * Everything else still fails loudly, because there the secret guards a real bucket.
+ */
+function withDevSecret(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const provider = env.SNAPIT_STORAGE_PROVIDER?.trim() || 'local'
+  if (env.SNAPIT_TOKEN_SECRET?.trim() || provider !== 'local') return env
+  const dataDir = dirname(resolve(env.SNAPIT_METADATA_FILE?.trim() || './.data/metadata.json'))
+  const secret = ensureDevSecret(dataDir)
+  console.log(`[snapit-server] no SNAPIT_TOKEN_SECRET set; using the development secret in ${dataDir}`)
+  return { ...env, SNAPIT_TOKEN_SECRET: secret }
+}
+
 async function main(): Promise<void> {
   let config: AppConfig
   try {
-    config = loadConfig()
+    config = loadConfig(withDevSecret(process.env))
   } catch (err) {
     console.error(`[snapit-server] configuration: ${err instanceof ConfigError ? err.message : String(err)}`)
     console.error('[snapit-server] see .env.example')
@@ -193,12 +210,15 @@ async function main(): Promise<void> {
 
   server.listen(config.port, () => {
     console.log(`[snapit-server] listening on ${config.publicUrl}`)
-    if (seeded) {
-      console.log(`[snapit-server] seeded workspace ${seeded.workspaceId}`)
-      for (const [role, token] of Object.entries(seeded.tokens)) {
-        console.log(`[snapit-server]   ${role.padEnd(9)} ${token}`)
-      }
-      console.log('[snapit-server] tokens expire in 24h and are printed once. See src/seed.ts.')
+    if (seeded)
+      console.log(
+        `[snapit-server] seeded workspace ${seeded.workspaceId} with an admin, a developer and a viewer`
+      )
+    if (config.storage.provider === 'local') {
+      // The tokens used to be printed here for copying. They are not any more: `npm run
+      // push` mints its own from the same `.data/` it can already read, which removed the
+      // three copy-paste steps that made this hard to start.
+      console.log('[snapit-server] ready — in another terminal, run:  npm run push')
     }
   })
 }
