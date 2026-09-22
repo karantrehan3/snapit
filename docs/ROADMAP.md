@@ -501,6 +501,10 @@ the local value of this layer is not links — locally a capture is still shared
 
 ### M3.0 — The two seams, and nothing else
 
+**Built 2026-09-23.** `src/main/identity.ts` and `src/main/captureStore.ts`, with only their local
+implementations wired: 662 app tests, the app builds and launches, and nothing a user can see
+changed. The one decision it forced is recorded below.
+
 The refactor that must land before any team feature, because it is what stops connected mode being a
 fork of the app.
 
@@ -525,6 +529,34 @@ must never meet a permission check.
 bytes. Uploading is not a fourth shape, it is a different `CaptureStore`, and treating it as a shape
 is how sharing becomes the only connected feature while listing, analytics, delete and rename stay
 local forever.
+
+#### Locally, the folder is the truth — and there is no local database
+
+The decision M3.0 forced, and the one worth defending later when somebody proposes an index.
+
+A capture is a folder. People move them, rename them in Finder, drop them on a colleague, delete them
+out of the Trash — and today all of that works, because `listLibrary` re-reads the directory and
+believes what it finds. A metadata store that claimed otherwise would be wrong within a week of
+ordinary use, and its failure mode is the worst kind: a capture the app insists exists and cannot
+open.
+
+So `LocalCaptureStore` holds no state. It re-reads, exactly as 4.0.0 did. The cost is that anything
+the folder cannot hold has nowhere to live locally — which has not bitten, because the mutable thing
+that exists so far, a capture's markers, is already written _into the bundle_ by `markerStore.ts`.
+That is the same decision one level down, and it is the pattern to follow: bundle-local state goes in
+the bundle. If state ever appears that genuinely cannot, it belongs in a cache that reconciles against
+the folder on startup, never in a store that outranks it.
+
+**Connected mode is the opposite, and that is fine.** There the server's database is the truth,
+because there the bytes are in a bucket nobody is dragging around in Finder. The two stores answer the
+same questions from different sources of truth, which is exactly what an interface is for.
+
+#### What the seam exposed
+
+`open`, `reveal` and `edit` used to call `shell` with a path straight from the renderer. They now ask
+`locate()`, which returns either a path or a URL — so a connected capture opens its share link, and
+the editor, which works on pixels on this disk, refuses loudly rather than opening something empty.
+That asymmetry is real and was invisible while everything was a path.
 
 ### M3.1 — Identity, starting with the owner nobody signs in as
 

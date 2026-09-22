@@ -23,6 +23,8 @@ import {
 import { captureDisplay, getDisplaySource, type DisplaySource } from './capture'
 import { setCaptureMarkers } from './markerStore'
 import { localIdentity, type Identity } from './identity'
+import { createLocalCaptureStore } from './localCaptures'
+import type { CaptureStore } from './captureStore'
 import { getSettings, setSettings, markWelcomeSeen, regenerateMcpToken, type Settings } from './settings'
 import type { CapturePrefs } from './capturePrefs'
 import { checkForUpdate, type UpdateInfo } from './updater'
@@ -50,7 +52,7 @@ import {
   type SessionPhase
 } from './captureSession'
 import { renderReport } from './report'
-import { assertInside, deleteCapture, listLibrary, renameCapture, thumbnailFor } from './library'
+import { assertInside } from './library'
 import { shareCapture } from './share'
 import {
   EDITABLE_EXTENSIONS,
@@ -140,6 +142,12 @@ type CaptureSession = (
 /** `display.workArea` is in screen coordinates; shift it to be window-relative. */
 /** Resolved at startup; local until a server is configured. */
 let identity: Identity = localIdentity('usr-unknown')
+
+/**
+ * Where captures come from. Local until a workspace is configured — see `captureStore.ts`.
+ * The save folder is passed as a function because Settings can change it while running.
+ */
+const captures: CaptureStore = createLocalCaptureStore(() => getSettings().saveDir)
 
 function windowWorkArea(display: Display): WorkArea {
   return {
@@ -1306,16 +1314,10 @@ app.whenReady().then(() => {
     closeWindow('welcome')
   })
 
-  ipcMain.handle('library:list', () => listLibrary(getSettings().saveDir))
+  ipcMain.handle('library:list', () => captures.list())
   // Fetched per tile rather than with the list: a thumbnail goes through the OS
   // thumbnail service, and forty of those would hold up the window painting at all.
-  ipcMain.handle('library:thumbnail', (_event, path: string) => {
-    try {
-      return thumbnailFor(assertInside(getSettings().saveDir, path))
-    } catch {
-      return null
-    }
-  })
+  ipcMain.handle('library:thumbnail', (_event, path: string) => captures.thumbnail(path))
   /**
    * What the shell's sidebar reports. Polled, because none of it is an event this
    * process sees: a permission is granted in another application, and an agent
@@ -1334,7 +1336,7 @@ app.whenReady().then(() => {
 
   // Reads every HAR in the window, so it is asked for when the route opens rather than
   // polled. `analyticsSource` caches until the folder changes.
-  ipcMain.handle('analytics:read', () => readAnalytics(getSettings().saveDir))
+  ipcMain.handle('analytics:read', () => captures.analytics())
 
   ipcMain.on('app:open-save-folder', () => void shell.openPath(getSettings().saveDir))
   ipcMain.handle('mcp:setup-command', () => mcpSetupCommand())
@@ -1366,19 +1368,30 @@ app.whenReady().then(() => {
   // may address, and what the document served from it may do, is in `captureUrl.ts`.
   ipcMain.handle('home:view', (_event, path: string) => captureView(getSettings().saveDir, path))
 
-  ipcMain.handle('library:open', (_event, path: string) => {
+  /**
+   * Open a capture in whatever the OS thinks owns it.
+   *
+   * Goes through `locate` so that a connected store can answer with a share URL instead
+   * of a path, and this handler opens that. The two branches are the whole difference
+   * between the modes here.
+   */
+  ipcMain.handle('library:open', async (_event, path: string) => {
     try {
-      return shell.openPath(assertInside(getSettings().saveDir, path))
+      const at = await captures.locate(path)
+      return at.kind === 'path' ? await shell.openPath(at.path) : await shell.openExternal(at.url)
     } catch (err) {
       return err instanceof Error ? err.message : String(err)
     }
   })
+  // Revealing has no meaning for a capture that lives in somebody's bucket, so a
+  // connected store's `url` location is ignored rather than guessed at.
   ipcMain.on('library:reveal', (_event, path: string) => {
-    try {
-      shell.showItemInFolder(assertInside(getSettings().saveDir, path))
-    } catch (err) {
-      console.warn('[snapit] refused to reveal a path outside the save folder:', err)
-    }
+    void captures
+      .locate(path)
+      .then((at) => {
+        if (at.kind === 'path') shell.showItemInFolder(at.path)
+      })
+      .catch((err: unknown) => console.warn('[snapit] could not reveal that capture:', err))
   })
   /**
    * Rename a capture. Resolves to the new path, or rejects with a reason the field can
@@ -1386,7 +1399,7 @@ app.whenReady().then(() => {
    * rule it hit.
    */
   ipcMain.handle('library:rename', async (_event, path: string, name: unknown) => {
-    const to = await renameCapture(getSettings().saveDir, path, str(name))
+    const to = await captures.rename(path, str(name))
     refreshLibrary()
     return to
   })
@@ -1397,7 +1410,7 @@ app.whenReady().then(() => {
    * in the editor claiming otherwise.
    */
   ipcMain.handle('library:set-markers', async (_event, path: string, markers: unknown) => {
-    const saved = await setCaptureMarkers(getSettings().saveDir, path, markers)
+    const saved = await captures.setMarkers(path, markers)
     // The list shows a marker count, and the report is rendered per request — so both
     // surfaces are already correct once this has landed.
     refreshLibrary()
@@ -1411,7 +1424,12 @@ app.whenReady().then(() => {
   )
   ipcMain.handle('library:edit', async (_event, path: string) => {
     try {
-      await openImageForEdit(assertInside(getSettings().saveDir, path))
+      const at = await captures.locate(path)
+      // The editor works on pixels on this disk. A remote capture would have to be
+      // fetched first, which is a feature and not a fallback — so it is refused loudly
+      // rather than opening something empty.
+      if (at.kind !== 'path') throw new Error('That capture is not on this machine.')
+      await openImageForEdit(at.path)
     } catch (err) {
       console.warn('[snapit] could not open that capture for editing:', err)
     }
@@ -1436,7 +1454,7 @@ app.whenReady().then(() => {
       : await dialog.showMessageBox(options)
     if (response !== 0) return false
     try {
-      await deleteCapture(getSettings().saveDir, path)
+      await captures.remove(path)
       return true
     } catch (err) {
       void dialog.showMessageBox({
