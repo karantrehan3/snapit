@@ -160,9 +160,13 @@ export function createLocalProvider(config: LocalConfig): StorageProvider {
       return described
     },
 
-    async get(key) {
+    async get(key, range) {
       if (!(await describe(key))) throw new StorageError('not-found', `No object at ${key}.`)
-      return createReadStream(pathFor(root, key))
+      // `end` is inclusive for createReadStream, which is the same way HTTP means it — so
+      // the range passes through untranslated.
+      return range
+        ? createReadStream(pathFor(root, key), { start: range.start, end: range.end })
+        : createReadStream(pathFor(root, key))
     },
 
     head: describe,

@@ -205,7 +205,17 @@ async function main(): Promise<void> {
       }
       await matched.handler(req, res, { deps, config, params: matched.params, url })
     }
-    handle().catch((err) => sendError(res, err))
+    // `sendError` is the last thing between a bad request and the process. If it throws —
+    // and it did, on a response that had already started — the rejection is unhandled and
+    // node exits. Nothing past this point may be allowed to fail.
+    handle().catch((err) => {
+      try {
+        sendError(res, err)
+      } catch (fatal) {
+        console.error('[snapit-server] failed to report an error:', fatal)
+        res.destroy()
+      }
+    })
   })
 
   server.listen(config.port, () => {

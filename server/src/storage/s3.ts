@@ -199,8 +199,14 @@ export function createS3Provider(config: S3Config): StorageProvider {
       }
     },
 
-    async get(key) {
-      const res = await send('get', key, 'GET')
+    async get(key, range) {
+      const res = await send(
+        'get',
+        key,
+        'GET',
+        range ? { headers: { range: `bytes=${range.start}-${range.end}` } } : undefined
+      )
+      // 206 is the success case for a ranged read, and `res.ok` already covers it.
       if (!res.ok) await fail('get', key, res)
       if (!res.body) throw new StorageError('failed', `S3 returned no body for ${key}.`)
       return Readable.fromWeb(res.body as Parameters<typeof Readable.fromWeb>[0])

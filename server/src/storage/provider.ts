@@ -1,4 +1,5 @@
 import type { Readable } from 'node:stream'
+import type { ByteRange } from '../http/range.ts'
 
 /**
  * The seam between snapit's server and wherever the customer keeps their bytes.
@@ -83,8 +84,16 @@ export interface StorageProvider {
 
   put(key: StorageKey, body: Readable | Buffer, options: PutOptions): Promise<StoredObject>
 
-  /** Only for the small files — the report, the HAR, the metadata. Never the media. */
-  get(key: StorageKey): Promise<Readable>
+  /**
+   * Read an object, optionally a byte range of it.
+   *
+   * The range is what makes a recording seekable: a player asks for the end of the file to
+   * find the index, then for the window around wherever you clicked. Without it the only
+   * way to play the first second is to transfer all of it, and every seek re-transfers
+   * everything — which is also what made aborted requests the normal path rather than an
+   * edge case.
+   */
+  get(key: StorageKey, range?: ByteRange): Promise<Readable>
 
   /** Null when the object is absent, rather than throwing: absence is an answer. */
   head(key: StorageKey): Promise<StoredObject | null>

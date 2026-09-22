@@ -2,3 +2,6 @@ node_modules/
 out/
 dist/
 package-lock.json
+
+# Runtime state for the connected-mode prototype: objects, metadata, dev secret.
+server/.data/

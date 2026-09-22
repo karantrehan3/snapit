@@ -560,9 +560,9 @@ Three rules that are not negotiable, and the reason each exists:
    predicted otherwise: wrong CORS or a wrong ACL produces a link that works for the uploader and
    403s for everybody else, and snapit gets blamed for someone else's policy. The server writes,
    reads back and deletes a probe object before it accepts a connection.
-3. **The filesystem provider is for development.** It is real and it works, but it is the one
-   provider where bytes do transit the server, and it cannot serve range requests — so a long
-   recording will not seek. Labelled, not quietly shipped.
+3. **The filesystem provider is for development.** It is real, it serves byte ranges, and a
+   recording seeks in it — but it is the one provider where the bytes do transit the server,
+   which is the property the other two rules exist to avoid. Labelled, not quietly shipped.
 
 ### M3.3 — A link, inside somebody else's perimeter
 

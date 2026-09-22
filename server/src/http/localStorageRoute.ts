@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { pipeline } from 'node:stream/promises'
 import { LOCAL_STORAGE_PATH, verifyLocalUrl } from '../storage/local.ts'
+import { contentRange, isClientDisconnect, parseByteRange, rangeLength } from './range.ts'
 import type { StorageProvider } from '../storage/provider.ts'
 
 /**
@@ -56,15 +57,38 @@ export async function handleLocalStorage(
     res.writeHead(404, { 'content-type': 'text/plain' }).end('No such object.')
     return
   }
+
   const download = url.searchParams.get('download')
-  res.writeHead(200, {
+  const common = {
     'content-type': object.contentType ?? 'application/octet-stream',
-    'content-length': object.bytes,
     'cache-control': 'no-store',
     'x-content-type-options': 'nosniff',
-    ...(download ? { 'content-disposition': `attachment; filename="${download.replace(/"/g, '')}"` } : {}),
-    // A recording is played with a range request; without this the player cannot seek.
-    'accept-ranges': 'none'
+    // Advertised so a player knows it may seek at all. Chrome checks this before it will
+    // let you scrub a video.
+    'accept-ranges': 'bytes',
+    ...(download ? { 'content-disposition': `attachment; filename="${download.replace(/"/g, '')}"` } : {})
+  }
+
+  const wanted = parseByteRange(req.headers.range, object.bytes)
+  if (wanted.kind === 'unsatisfiable') {
+    res.writeHead(416, { ...common, 'content-range': `bytes */${object.bytes}` }).end()
+    return
+  }
+
+  const range = wanted.kind === 'partial' ? wanted.range : null
+  res.writeHead(range ? 206 : 200, {
+    ...common,
+    'content-length': range ? rangeLength(range) : object.bytes,
+    ...(range ? { 'content-range': contentRange(range, object.bytes) } : {})
   })
-  await pipeline(await storage.get(key), res)
+
+  try {
+    await pipeline(await storage.get(key, range ?? undefined), res)
+  } catch (err) {
+    // A player aborts every time somebody seeks or leaves the page. The headers went out
+    // long before, so there is nothing to say to the client and nothing worth logging —
+    // this used to propagate and take the process with it.
+    if (!isClientDisconnect(err)) throw err
+    res.destroy()
+  }
 }

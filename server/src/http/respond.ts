@@ -1,4 +1,5 @@
 import type { ServerResponse } from 'node:http'
+import { isClientDisconnect } from './range.ts'
 import { StorageError, storageStatus } from '../storage/provider.ts'
 import { NotFoundError } from '../store/metadata.ts'
 
@@ -32,7 +33,23 @@ export const forbidden = (message: string): HttpError => new HttpError(403, 'for
 export const notFound = (message: string): HttpError => new HttpError(404, 'not_found', message)
 export const conflict = (message: string): HttpError => new HttpError(409, 'conflict', message)
 
+/**
+ * Send an envelope — unless the response has already begun.
+ *
+ * The guard is not defensive programming, it is a crash that happened: a browser aborting
+ * a media download rejected the streaming pipeline, the error reached `sendError`, and
+ * `writeHead` on a response whose headers left minutes ago threw `ERR_HTTP_HEADERS_SENT`
+ * from inside a `.catch()`, which is an unhandled rejection, which is a dead process.
+ *
+ * Once bytes are on the wire there is no way to tell the client something went wrong. The
+ * honest move is to destroy the connection so it sees a truncated response rather than a
+ * complete one.
+ */
 export function sendJson<T>(res: ServerResponse, status: number, body: Envelope<T>): void {
+  if (res.headersSent || res.writableEnded) {
+    res.destroy()
+    return
+  }
   const text = JSON.stringify(body)
   res.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
@@ -57,6 +74,12 @@ export const sendOk = <T>(res: ServerResponse, data: T, meta?: Record<string, un
  * mapped status crosses the wire.
  */
 export function sendError(res: ServerResponse, err: unknown): void {
+  // A client that hung up is not a failure. It is what a video element does every time
+  // somebody seeks or closes the tab, and logging it as an error buries the real ones.
+  if (isClientDisconnect(err)) {
+    res.destroy()
+    return
+  }
   if (err instanceof HttpError) {
     sendJson(res, err.status, { ok: false, error: { code: err.code, message: err.message } })
     return

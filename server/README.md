@@ -35,14 +35,14 @@ That is the whole happy path. Everything below is optional.
 <details>
 <summary><strong>If something goes wrong</strong></summary>
 
-| What you see                          | What it means                                                                               |
-| ------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `No development secret yet`           | The server has not run yet. `npm start` in another terminal, then retry.                    |
-| `The server has not been started yet` | Same — the server creates `.data/` on first boot.                                           |
-| `No capture bundles in …`             | You have no browser-session bundles. Record one in snapit, or pass a folder as an argument. |
-| `Upload failed … fetch`               | The server is not listening. Check terminal 1.                                              |
-| `EADDRINUSE`                          | Port 8787 is taken. `SNAPIT_PORT=9000 SNAPIT_PUBLIC_URL=http://localhost:9000 npm start`.   |
-| Video will not seek                   | Expected. The filesystem provider cannot serve range requests — see _Storage_ below.        |
+| What you see                          | What it means                                                                                      |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `No development secret yet`           | The server has not run yet. `npm start` in another terminal, then retry.                           |
+| `The server has not been started yet` | Same — the server creates `.data/` on first boot.                                                  |
+| `No capture bundles in …`             | You have no browser-session bundles. Record one in snapit, or pass a folder as an argument.        |
+| `Upload failed … fetch`               | The server is not listening. Check terminal 1.                                                     |
+| `EADDRINUSE`                          | Port 8787 is taken. `SNAPIT_PORT=9000 SNAPIT_PUBLIC_URL=http://localhost:9000 npm start`.          |
+| Video will not seek                   | Should work — the local provider serves byte ranges. If it does not, the browser console says why. |
 
 Start over at any time: delete `server/.data/` and run `npm start` again. It holds
 everything — the objects, the metadata and the development secret — and nothing else.
@@ -216,9 +216,10 @@ not negotiable:
 2. **A misconfigured bucket stops the server, not a viewer.** `preflight()` writes, reads
    back and deletes a probe object before the port opens. Try it: `SNAPIT_LOCAL_ROOT=/nope
 npm start`.
-3. **The filesystem provider is for development.** It is the one provider where bytes do
-   transit the server, and it cannot serve range requests — so a long recording will not
-   seek. That is the single clearest reason not to run this configuration for a team.
+3. **The filesystem provider is for development.** It serves byte ranges, so a recording
+   seeks — but it is the one provider where the bytes pass through the server, which is
+   exactly what rule 1 exists to prevent. The reason not to run it for a team is load and
+   cost, not whether it works.
 
 ---
 
@@ -275,7 +276,9 @@ npm run typecheck
 3. **No multipart upload.** A single presigned `PUT` covers snapit's recordings today; Azure
    caps at 256 MiB and S3 at 5 GB. `src/storage/azure.ts` has the analysis.
 4. **Neither integration has run against a live service.**
-5. **No range requests from the local provider**, so seeking only works against a real bucket.
+5. **Nothing has been load-tested.** The local provider streams every byte through the
+   server, and several people scrubbing long recordings at once is a case nobody has
+   measured.
 6. **Deleting a workspace or an org is not implemented** — only a capture. The key layout
    makes both prefix deletions.
 7. **Roles here are `admin / developer / viewer`**, while Phase 3 settles on
