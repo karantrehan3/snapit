@@ -453,10 +453,40 @@ matters:
   `--enable-unsafe-extension-debugging`. That is what the harness does.
 - Chrome for Testing and Chromium still honour the flag; branded Chrome does not.
 - **snapit cannot install or side-load the extension for anybody.** "Ship the folder inside
-  the app and point Chrome at it" is not available. The only routes are a human in
-  `chrome://extensions` with Developer mode on, the Web Store, or enterprise policy — which
-  makes the distribution question load-bearing rather than deferrable, and makes a policy
-  install worth more again, since it also suppresses the debugging banner.
+  the app and point Chrome at it" is not available. The routes are a human in
+  `chrome://extensions` with Developer mode on, the Web Store, or enterprise policy.
+
+#### Decided 2026-10-04: custom install, not the Web Store — for now
+
+The Web Store is the only route that reaches a stranger, and the `debugger` permission
+guarantees a manual review: weeks for a first submission, and every update behind the same
+queue. For a tool that is not yet trying to reach strangers, that is a cadence tax paid for
+nothing. So the extension ships as a folder the user loads themselves, and the Web Store is
+revisited when there is an audience that cannot be handed a folder.
+
+What that decision costs and requires, in the order it bites:
+
+- **The extension is an upgrade, never a dependency.** The CDP-launch collector stays as
+  the floor, so an install without the extension is a working snapit. Nobody is blocked by
+  a route that needs Developer mode.
+- **The id had to be pinned.** An unpacked extension's id is the hash of its _absolute
+  folder path_, so it differs on every machine and changes if the folder moves — which
+  breaks anything keyed to it. `manifest.key` pins it to a public key instead. Verified:
+  Chrome loads it as `flhandipbjjgpogpdoemadcebhjlgneo`, the id computed from that key.
+- **Pairing had to be inverted, because the first design could not work.** The app was to
+  push a token over `chrome.runtime.onMessageExternal`, which only accepts messages from
+  other extensions or from web origins in `externally_connectable` — an Electron main
+  process is neither. The extension now fetches `/collector/pair` from a fixed loopback
+  port and the app verifies the request's `Origin` is exactly that pinned id, which Chrome
+  sets and a page cannot forge. The pinned id is what makes the check possible.
+- **Unpacked extensions do not auto-update.** Updating the app does not update the
+  extension, so the two can disagree about the protocol between them. The extension reports
+  its version when it pairs, and a mismatch is the app's job to say out loud.
+- **Packaging.** `asar: true` means the folder is not a real directory in the bundle; it has
+  to go in `extraResources` so Chrome can be pointed at it, with a Reveal action in the app.
+- **Enterprise policy stays documented as a customer option**, not a plan. It is the one
+  route with no per-machine step, and it also suppresses the debugging banner — worth
+  writing down for any org-sized user, worth nothing for an individual.
 
 **Not yet built:** the app-side bridge that receives the batches, the content script for the
 action trail, response bodies (a `Network.getResponseBody` round trip per request, issued

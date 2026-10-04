@@ -145,6 +145,8 @@ function onDetach(source: chrome.debugger.Debuggee, reason: string): void {
 
 export async function start(tabId: number): Promise<void> {
   if (session) await stop('restarted')
+  // Nothing to send events to otherwise, and the person has just asked to record.
+  if (!(await bridge())) await pair()
 
   // A tab allows one debugger client, so this rejects when DevTools is open on it, and
   // Chrome detaches us if DevTools is opened later (handled in `onDetach`). Enterprise
@@ -200,16 +202,35 @@ chrome.action.onClicked.addListener((tab) => {
   void (session && session.tabId === tab.id ? stop() : start(tab.id))
 })
 
-/** The app pairs by writing its port and token in, so nothing is hardcoded. */
-chrome.runtime.onMessageExternal.addListener((message, _sender, reply) => {
-  if (message?.type === 'pair' && typeof message.port === 'number' && typeof message.token === 'string') {
-    void chrome.storage.local
-      .set({ port: message.port, token: message.token })
-      .then(() => reply({ ok: true }))
-    return true
+/**
+ * Pairing: the extension asks the app, not the other way round.
+ *
+ * The first version had the app send a token in over `chrome.runtime.onMessageExternal`,
+ * which cannot work — that API only accepts messages from other extensions or from web
+ * origins listed in `externally_connectable`, and an Electron main process is neither.
+ *
+ * So the extension fetches instead and the app decides. What makes that safe is the pinned
+ * `key` in the manifest: the extension's id is fixed, so the app can check the request's
+ * `Origin` is exactly `chrome-extension://<our id>` — a header Chrome sets and a web page
+ * cannot forge. The app still asks the person first; this only narrows who can be asking.
+ */
+const DEFAULT_BRIDGE_PORT = 47318
+
+export async function pair(port = DEFAULT_BRIDGE_PORT): Promise<'paired' | string> {
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/collector/pair`, { method: 'POST' })
+    if (!res.ok) return `snapit refused the pairing (${res.status}).`
+    const { token } = (await res.json()) as { token?: unknown }
+    if (typeof token !== 'string') return 'snapit did not return a token.'
+    await chrome.storage.local.set({ port, token })
+    return 'paired'
+  } catch {
+    return 'Could not reach snapit. Is the app running?'
   }
-  return false
-})
+}
+
+/** Pair on install, and again on start, so a rotated token heals itself. */
+chrome.runtime.onInstalled.addListener(() => void pair())
 
 export const inspect = (): { tabId: number; queued: number } | null =>
   session ? { tabId: session.tabId, queued: session.queue.length } : null
@@ -222,4 +243,4 @@ export const inspect = (): { tabId: number; queued: number } | null =>
  * the only way to exercise the extension is by hand, which is exactly the gap that let
  * three wrong claims about this API survive into a commit.
  */
-;(globalThis as unknown as { snapit: unknown }).snapit = { start, stop, inspect }
+;(globalThis as unknown as { snapit: unknown }).snapit = { start, stop, inspect, pair }
