@@ -4,8 +4,13 @@
   "version": "0.1.0",
   "description": "Records console, network and actions from the tab you are already signed in to, and hands them to the snapit desktop app.",
   "minimum_chrome_version": "116",
-  "permissions": ["debugger", "tabs", "storage"],
+  "permissions": ["debugger", "tabs", "storage", "alarms"],
   "host_permissions": ["http://127.0.0.1/*"],
-  "background": { "service_worker": "background.js", "type": "module" },
-  "action": { "default_title": "snapit — record this tab" }
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "snapit \u2014 record this tab"
+  }
 }

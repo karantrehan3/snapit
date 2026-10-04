@@ -13,10 +13,14 @@
  *
  * Two deliberate choices worth knowing:
  *
- * - **HTTP batches, not a WebSocket.** A socket is the usual MV3 keep-alive, but it needs a
- *   server dependency the app does not have, and a `fetch` inside the 30-second idle window
- *   resets the worker's timer just as well. The flush interval is therefore load-bearing:
- *   it is the keep-alive, not only a batching optimisation.
+ * - **HTTP batches, not a WebSocket** — but `fetch` is *not* what keeps the worker alive.
+ *   Chrome's lifecycle docs are explicit that `fetch()` does not reset the 30-second idle
+ *   timer (it has its own separate 30-second limit); what does reset it is *receiving an
+ *   event or calling an extension API*, since Chrome 110. So each tick also writes to
+ *   `chrome.storage.session`, and a `chrome.alarms` backstop revives the worker if it dies
+ *   anyway — `setInterval` does not survive termination. Relying on the fetch alone would
+ *   have worked for as long as the tab was busy and died the moment a tester stopped to
+ *   read something, which is the worst possible failure shape for a recording.
  * - **Nothing is interpreted here.** Events are forwarded raw. Every rule about what a HAR
  *   contains and what gets redacted already lives in the app and is tested there; a second
  *   copy in an extension that updates on Chrome's schedule is how the two drift.
@@ -26,6 +30,8 @@ const PROTOCOL_VERSION = '1.3'
 
 /** Under the 30s MV3 idle timeout with room to spare, and small enough to feel live. */
 const FLUSH_MS = 1000
+
+const KEEPALIVE_ALARM = 'snapit-keepalive'
 
 /** The CDP domains the app's collector reconstructs a session from. */
 const DOMAINS = ['Network.enable', 'Page.enable', 'Runtime.enable', 'Log.enable'] as const
@@ -107,6 +113,9 @@ async function flush(): Promise<void> {
   if (!session) return
   const batch = session.queue
   session.queue = []
+  // An extension API call, which is what actually resets the idle timer. Cheap, and the
+  // value is incidentally useful when debugging a worker that died anyway.
+  await chrome.storage.session.set({ lastFlush: Date.now() })
   const res = await post('/collector/events', {
     tabId: session.tabId,
     startedAt: session.startedAt,
@@ -137,11 +146,17 @@ function onDetach(source: chrome.debugger.Debuggee, reason: string): void {
 export async function start(tabId: number): Promise<void> {
   if (session) await stop('restarted')
 
+  // A tab allows one debugger client, so this rejects when DevTools is open on it, and
+  // Chrome detaches us if DevTools is opened later (handled in `onDetach`). Enterprise
+  // host or DLP policy can also refuse. All three need a message, not a silent no-op.
   await chrome.debugger.attach({ tabId }, PROTOCOL_VERSION)
   for (const domain of DOMAINS) await chrome.debugger.sendCommand({ tabId }, domain)
 
   session = { tabId, startedAt: Date.now(), queue: [], timer: null }
   session.timer = setInterval(() => void flush(), FLUSH_MS)
+  // Revives the worker if Chrome terminates it despite the above. 30s is the floor since
+  // Chrome 120, which is why it is a backstop and not the primary mechanism.
+  await chrome.alarms.create(KEEPALIVE_ALARM, { periodInMinutes: 0.5 })
   await post('/collector/start', { tabId, startedAt: session.startedAt })
   await chrome.action.setBadgeText({ text: 'REC' })
   await chrome.action.setBadgeBackgroundColor({ color: '#c0392b' })
@@ -152,6 +167,7 @@ export async function stop(reason = 'stopped'): Promise<void> {
   session = null
   if (!ending) return
   if (ending.timer) clearInterval(ending.timer)
+  await chrome.alarms.clear(KEEPALIVE_ALARM)
 
   // Flush what is left before detaching: the last requests are usually the reason somebody
   // pressed stop, which is the same finding that gave the old collector its drain window.
@@ -170,6 +186,10 @@ export async function stop(reason = 'stopped'): Promise<void> {
   }
   await chrome.action.setBadgeText({ text: '' })
 }
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === KEEPALIVE_ALARM) void flush()
+})
 
 chrome.debugger.onEvent.addListener(onEvent)
 chrome.debugger.onDetach.addListener(onDetach)

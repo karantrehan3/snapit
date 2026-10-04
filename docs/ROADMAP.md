@@ -398,18 +398,31 @@ redacted cookie survive.
 
 Three costs, priced:
 
-1. **The debugging infobar.** `chrome.debugger` marks every attached tab, permanently and
-   undismissably, and that banner lands inside every screen recording. Today's launched
-   Chrome shows nothing — `launchArgs` deliberately omits `--enable-automation`. The escape
-   is worse: `chrome.webRequest` has no infobar and **cannot read response bodies at all**
-   under MV3, which is the signal `a1f4044` went out of its way to capture. Take the infobar.
-2. **MV3 service-worker death**, the risk `DESIGN.md` §10 flagged. The worker is killed after
-   ~30s idle. The flush interval is the answer and is therefore load-bearing: a `fetch`
-   inside the window resets the timer, so an empty batch is a heartbeat, not waste. HTTP
-   batching also avoids the WebSocket server dependency the app does not have.
-3. **Distribution, undecided.** The spike is a plain MV3 folder so it can be loaded unpacked,
-   zipped for the Web Store, or force-installed by policy. Packaging is the last step, not
-   the first.
+1. **The debugging infobar.** `chrome.debugger` puts a banner on every attached tab, and it
+   lands inside every screen recording; today's launched Chrome shows nothing, since
+   `launchArgs` deliberately omits `--enable-automation`. It is dismissable with Cancel but
+   returns on tab switches, so dismissing is not a fix. Two real escapes: launching with
+   `--silent-debugger-extension-api`, which means controlling the launch and so defeats the
+   point; or **installing by enterprise policy, which suppresses the banner entirely** —
+   which ties this cost to the distribution choice rather than making it unconditional.
+   Not an escape: `chrome.webRequest`, which **cannot read response bodies at all** —
+   confirmed against the API reference, which exposes headers, status and timing only.
+   That is the signal `a1f4044` went out of its way to capture.
+2. **MV3 service-worker death**, the risk `DESIGN.md` §10 flagged, and the one the spike got
+   wrong first. The worker is killed after 30s idle — and **`fetch()` does not reset that
+   timer**; Chrome's lifecycle docs are explicit that it has its own separate 30s limit.
+   What resets the timer is receiving an event or calling an extension API (Chrome 110+).
+   So the flush tick also writes to `chrome.storage.session`, and a `chrome.alarms` backstop
+   revives the worker if it dies anyway, since `setInterval` does not survive termination.
+   Relying on the fetch would have worked while the tab was busy and died the moment a
+   tester stopped to read something — the worst possible failure shape for a recording.
+3. **A tab allows one debugger client.** Attach rejects when DevTools is already open on it,
+   and Chrome detaches the extension if DevTools is opened later. Enterprise host or DLP
+   policy can refuse too. All three are states the UI has to explain rather than fail
+   silently in — and all three are reasons the launched-Chrome collector stays.
+4. **Distribution, undecided** — and now coupled to cost 1, since a policy install is also
+   what removes the banner. The spike is a plain MV3 folder so it can be loaded unpacked,
+   zipped for the Web Store, or force-installed by policy. Packaging is the last step.
 
 **What it does not change.** `DESIGN.md` §3's fault line still holds: screenshots are
 OS-level and the DOM is browser-level. The extension is a better answer to the browser half,
@@ -417,11 +430,19 @@ not a replacement for snapit — screen capture, annotation, bundling, reports a
 untouched, and a native dialog or an IDE is still capturable. The shell-plus-modules shape is
 doing exactly what it was designed for: one module is being swapped.
 
+**Both collectors stay — this is a second source, not a replacement.** They attach
+differently and share everything after that, so the cost of keeping both is two attach paths
+over one pipeline. Each covers the other's failure: the extension cannot attach to a tab with
+DevTools open, is refused by some enterprise policy, and needs installing at all; the
+launched profile cannot reach a session the tester is already signed in to. Which one a
+capture used belongs in `meta.json`, because it changes what the trail can be trusted to
+contain.
+
 **Not yet built:** the app-side bridge that receives the batches, the content script for the
-action trail, response bodies (a `Network.getResponseBody` round trip per request, which the
-extension can issue through `chrome.debugger.sendCommand`), and pairing the extension to the
-app's port and token. The CDP-launch collector stays as the fallback until the extension is
-installable.
+action trail, response bodies (a `Network.getResponseBody` round trip per request, issued
+through `chrome.debugger.sendCommand`), pairing the extension to the app's port and token,
+and the source selector in the app. **The extension has never been loaded into a browser** —
+everything above is verified against the protocol and the documentation, not against Chrome.
 
 ---
 
