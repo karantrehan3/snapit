@@ -44,10 +44,18 @@ export type BridgeHooks = {
   extensionId: () => string
   /** Whether a pairing attempt may succeed right now. */
   pairingAllowed: () => boolean
+  /** A pairing just succeeded. The window should shut. */
+  onPaired: () => void
   /** The extension version this build of the app speaks to. */
   expectedExtensionVersion: string
-  /** A session began in the browser. The handle is how the app collects it. */
-  onSessionStart: (handle: CollectorHandle, info: { tabId: number; version: string }) => void
+  /**
+   * A session began in the browser. The handle is how the app collects it.
+   *
+   * Returns false when the app cannot take it — it is already recording something else.
+   * The bridge then drops the session rather than quietly filling a buffer nobody will
+   * ever read, and the extension is told to detach.
+   */
+  onSessionStart: (handle: CollectorHandle, info: { tabId: number; version: string }) => boolean
   /** The extension stopped, or the tab went away. */
   onSessionEnd: (reason: string) => void
   /** The extension is a version this app does not speak to. */
@@ -162,6 +170,7 @@ export function startCollectorBridge(hooks: BridgeHooks, port = DEFAULT_BRIDGE_P
       if (path === '/collector/pair') {
         const outcome = checkPairRequest(origin, hooks.extensionId(), hooks.pairingAllowed())
         if (!outcome.ok) return deny(res, outcome)
+        hooks.onPaired()
         return json(res, 200, { ok: true, token: hooks.token(), expects: hooks.expectedExtensionVersion })
       }
 
@@ -182,8 +191,12 @@ export function startCollectorBridge(hooks: BridgeHooks, port = DEFAULT_BRIDGE_P
           hooks.onVersionMismatch(version, hooks.expectedExtensionVersion)
           return json(res, 409, { ok: false, error: 'This snapit expects a different extension version.' })
         }
-        live = { tabId, startedAt: new Date(), events: [], fromMs: 0 }
-        hooks.onSessionStart(handleFor(live), { tabId, version })
+        const candidate: Live = { tabId, startedAt: new Date(), events: [], fromMs: 0 }
+        live = candidate
+        if (!hooks.onSessionStart(handleFor(candidate), { tabId, version })) {
+          live = null
+          return json(res, 409, { ok: false, error: 'snapit is already recording something else.' })
+        }
         // The app owns the injected script and hands it over, rather than the extension
         // carrying a copy. One source for what an action is, in the place it is tested.
         return json(res, 200, { ok: true, bindingName: BINDING_NAME, injectedScript: INJECTED_SCRIPT })

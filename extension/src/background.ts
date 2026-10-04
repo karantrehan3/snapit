@@ -226,8 +226,19 @@ export async function start(tabId: number): Promise<void> {
     version: chrome.runtime.getManifest().version
   })
   if (started?.status === 409) {
-    await stop('version-mismatch')
-    throw new Error('This snapit expects a different version of the extension. Reload it.')
+    // Covers both refusals snapit can give: a version it does not speak to, and already
+    // recording something else. Its message is the useful one.
+    const why = ((await started.json().catch(() => null)) as { error?: string } | null)?.error
+    await stop('refused')
+    throw new Error(why ?? 'snapit refused the session.')
+  }
+  if (started && !started.ok) {
+    await stop('refused')
+    throw new Error(`snapit refused the session (${started.status}).`)
+  }
+  if (!started) {
+    await stop('unreachable')
+    throw new Error('Could not reach snapit. Is the app running?')
   }
 
   // The app hands over the script that records what the tester does, rather than the
@@ -285,10 +296,37 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 chrome.debugger.onEvent.addListener(onEvent)
 chrome.debugger.onDetach.addListener(onDetach)
 
-/** Clicking the toolbar button records the tab you are looking at. */
+/**
+ * Clicking the toolbar button records the tab you are looking at.
+ *
+ * Every refusal `start` can hit — snapit not running, a version mismatch, DevTools already
+ * open on this tab, an enterprise policy — arrives as a rejection, and a rejection in a
+ * service worker is a line in a log nobody is reading. So it becomes a badge, which is the
+ * only surface this extension has.
+ */
 chrome.action.onClicked.addListener((tab) => {
   if (!tab.id) return
-  void (session && session.tabId === tab.id ? stop() : start(tab.id))
+  const tabId = tab.id
+  void (async () => {
+    if (session && session.tabId === tabId) {
+      await stop()
+      return
+    }
+    try {
+      await start(tabId)
+    } catch (err) {
+      console.error('[snapit] could not start recording:', err)
+      await chrome.action.setBadgeText({ text: '!' })
+      await chrome.action.setBadgeBackgroundColor({ color: '#b7791f' })
+      await chrome.action.setTitle({
+        title: `snapit — ${err instanceof Error ? err.message : 'could not start'}`
+      })
+      setTimeout(() => {
+        void chrome.action.setBadgeText({ text: '' })
+        void chrome.action.setTitle({ title: 'snapit — record this tab' })
+      }, 6000)
+    }
+  })()
 })
 
 /**

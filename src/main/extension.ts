@@ -19,10 +19,34 @@ const PAIRING_WINDOW_MS = 5 * 60 * 1000
 /** The extension this build speaks to. A major mismatch is refused at session start. */
 export const EXPECTED_EXTENSION_VERSION = '0.1.0'
 
+/**
+ * The first candidate that actually holds a manifest.
+ *
+ * Guessing one path was wrong, because `app.getAppPath()` follows whatever entry script
+ * Electron was given — the project root under `electron-vite`, but the script's own
+ * directory under a bare `electron out/main/index.js`. The symptom was not an error: the
+ * id came back empty, so the bridge refused the real extension as "not the snapit
+ * extension", which is a confusing way to say "I could not find my own folder".
+ *
+ * So all three are tried and the first that exists wins. `__dirname` is the reliable one
+ * in development — this file is compiled to `out/main/index.js`, two levels under the
+ * repository root — and `resourcesPath` is the reliable one once packaged.
+ */
+function candidates(): string[] {
+  // `process.resourcesPath` is undefined outside Electron, and `join` throws on
+  // undefined rather than ignoring it — so a root that is not a string is dropped before
+  // it can take the whole lookup down.
+  const roots = [process.resourcesPath, app.getAppPath(), join(__dirname, '..', '..')]
+  return roots
+    .filter((r): r is string => typeof r === 'string' && r.length > 0)
+    .map((r) => join(r, 'extension'))
+}
+
 export function extensionDir(): string {
-  // Packaged: Contents/Resources/extension. Development: the workspace folder.
-  const packaged = join(process.resourcesPath, 'extension')
-  return existsSync(packaged) ? packaged : join(app.getAppPath(), 'extension')
+  const found = candidates().find((dir) => existsSync(join(dir, 'manifest.json')))
+  // The first candidate when none exist, so the Reveal button has somewhere to point and
+  // `isExtensionAvailable` reports false rather than throwing.
+  return found ?? candidates()[0] ?? 'extension'
 }
 
 /**
@@ -39,8 +63,18 @@ export function extensionId(): string {
   }
 }
 
+/**
+ * Loadable, not merely present.
+ *
+ * `manifest.json` points at `dist/background.js`, which `tsc` produces — so a tree where
+ * the extension has never been built has a manifest and no worker, and Chrome rejects it
+ * with an error that does not say why. Checking the built file means the app can say
+ * "not in this build" instead of letting somebody find out in `chrome://extensions`.
+ */
 export const isExtensionAvailable = (): boolean =>
-  existsSync(join(extensionDir(), 'manifest.json')) && extensionId() !== ''
+  existsSync(join(extensionDir(), 'manifest.json')) &&
+  existsSync(join(extensionDir(), 'dist', 'background.js')) &&
+  extensionId() !== ''
 
 export const revealExtension = (): void => void shell.openPath(extensionDir())
 

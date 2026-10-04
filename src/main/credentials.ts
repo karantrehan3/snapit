@@ -13,6 +13,9 @@ import { app, safeStorage } from 'electron'
  * libsecret on Linux), so the ciphertext on disk is useless to anything that is not this
  * app on this machine and this login.
  *
+ * **Nothing here touches the keychain unless there is a session.** `isEncryptionAvailable`
+ * prompts on macOS, so every entry point checks for the file first — see `loadSession`.
+ *
  * **It can be unavailable**, and that is the case worth handling rather than asserting
  * away: a Linux box with no keyring, or a session where the keychain is locked. When it
  * is, snapit stores nothing at all and the person signs in again next launch. Writing a
@@ -55,9 +58,19 @@ export function saveSession(session: StoredSession): void {
   }
 }
 
-/** The stored session, or null — expired, unreadable and absent are all the same answer. */
+/**
+ * The stored session, or null — expired, unreadable and absent are all the same answer.
+ *
+ * **The file is checked before the keychain, and the order is the whole point.** On macOS
+ * `safeStorage.isEncryptionAvailable()` reaches into the Keychain, which makes the OS ask
+ * *"snapit wants to use your confidential information…"*. Asking that on every launch, of
+ * everyone, for a sign-in almost nobody has — connected mode is not even shipped — is a
+ * scary dialog in exchange for nothing. With no session file there is nothing to decrypt,
+ * so there is nothing to ask about.
+ */
 export function loadSession(now: Date = new Date()): StoredSession | null {
-  if (!canPersistSession() || !existsSync(path())) return null
+  if (!existsSync(path())) return null
+  if (!canPersistSession()) return null
   try {
     const session = JSON.parse(safeStorage.decryptString(readFileSync(path()))) as StoredSession
     if (!session?.token || !session.serverUrl) return null

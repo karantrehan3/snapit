@@ -1138,29 +1138,33 @@ app.whenReady().then(() => {
     extensionId,
     pairingAllowed: isPairingAllowed,
     expectedExtensionVersion: EXPECTED_EXTENSION_VERSION,
-    onSessionStart: (handle, info) => {
-      // Pairing succeeded, so the window closes — it exists for one handshake.
+    onPaired: () => {
+      // The window exists for one handshake, so it shuts the moment that happens rather
+      // than running its full five minutes.
       closePairing()
+      console.log('[snapit] the Chrome extension paired')
+    },
+    onSessionStart: (handle, info) => {
       if (!adoptExtensionSession(handle)) {
-        console.warn('[snapit] a session was already running; ignoring the extension.')
-        return
+        // Refused rather than queued: snapit holds one session, and a second one
+        // accumulating in the bridge is a buffer nobody will ever read.
+        console.warn('[snapit] already recording; refusing the extension session.')
+        return false
       }
       console.log(`[snapit] recording tab ${info.tabId} via the extension`)
       buildTray()
       // The session bar is how somebody knows snapit is collecting. Without it the only
       // sign is a badge in a browser they may not be looking at.
       showSessionBar()
+      return true
     },
     onSessionEnd: (reason) => {
-      // The extension stopped, so the app stops with it — the two must not disagree about
-      // whether a session is running.
-      void stopBrowserSession()
-        .then(() => {
-          buildTray()
-          closeOverlayWindow()
-        })
-        .catch((err: unknown) => console.error('[snapit] could not finish that session:', err))
+      // The same path the tray's Stop takes, rather than a second one. The first version
+      // of this called `stopBrowserSession` directly and threw away what it returned — so
+      // the bundle was written, the library never refreshed and the capture never opened.
+      // Stopping is already a sequence with an order that matters; there must be one.
       if (reason !== 'stopped' && reason !== 'user') console.log(`[snapit] extension detached: ${reason}`)
+      void endBrowserSession()
     },
     onVersionMismatch: (found, expected) => {
       void dialog.showMessageBox({

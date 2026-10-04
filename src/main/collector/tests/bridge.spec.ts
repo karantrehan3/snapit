@@ -20,6 +20,8 @@ let handle: CollectorHandle | null = null
 let ended: string | null = null
 let mismatch: [string, string] | null = null
 let allowPairing = true
+let paired = false
+let adopts = true
 
 const call = (path: string, body?: unknown, headers: Record<string, string> = {}): Promise<Response> =>
   fetch(`${API}${path}`, {
@@ -37,9 +39,13 @@ beforeAll(() => {
       token: () => TOKEN,
       extensionId: () => ID,
       pairingAllowed: () => allowPairing,
+      onPaired: () => {
+        paired = true
+      },
       expectedExtensionVersion: '0.1.0',
       onSessionStart: (h) => {
         handle = h
+        return adopts
       },
       onSessionEnd: (reason) => {
         ended = reason
@@ -54,10 +60,13 @@ beforeAll(() => {
 afterAll(() => stopCollectorBridge())
 
 describe('pairing', () => {
-  test('hands the token to our extension', async () => {
+  test('hands the token to our extension, and tells the app it happened', async () => {
     const res = await call('/collector/pair')
     expect(res.status).toBe(200)
     expect(await res.json()).toMatchObject({ ok: true, token: TOKEN, expects: '0.1.0' })
+    // The app closes its pairing window on this, rather than leaving it open for the
+    // full five minutes after the handshake it existed for.
+    expect(paired).toBe(true)
   })
 
   test('refuses a web page outright', async () => {
@@ -141,6 +150,15 @@ describe('a session', () => {
     // The fixture predates the content-script handover, so it carries no bindingCalled
     // events and therefore no actions. A session recorded now would.
     expect(collected.actions).toEqual([])
+  })
+
+  test('a session the app will not take is dropped, not buffered', async () => {
+    // Otherwise the extension keeps posting into a buffer nothing will ever collect.
+    adopts = false
+    const res = await authed('/collector/start', { tabId: 99, version: '0.1.0' })
+    expect(res.status).toBe(409)
+    expect(bridgeSession()).toBeNull()
+    adopts = true
   })
 
   test('a batch after the session ended tells the extension to detach', async () => {
