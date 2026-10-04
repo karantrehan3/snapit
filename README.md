@@ -120,9 +120,10 @@ collects from the tab you are already in — your session, your cookies, your ex
 
 It shows **REC** while collecting.
 
-**It collects, it does not record.** Console, network, response bodies and every step you
-took — but no video. For a capture with video, use the launched browser, which is
-unchanged.
+snapit then opens its recording bar, pointed at that Chrome window, and waits — pick
+quality, frame rate and audio, then press Record. The video is recorded by the app, not the
+extension, so it is the same quality as any other snapit capture and includes the address
+bar.
 
 Two things worth knowing before you try it:
 

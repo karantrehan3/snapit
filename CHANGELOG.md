@@ -11,20 +11,25 @@ every time — the cost that lands first on the people least willing to pay it. 
 Chrome extension collects from the tab you are already in: your session, your cookies, your
 extensions.
 
-**It collects; it does not yet record.** Console, network, response bodies and every step
-you took, but no video — a capture made through the extension is a session report, not a
-recording. Video from a tab needs `chrome.tabCapture` and a recorder in the extension, and
-that is the next milestone rather than part of this one. For a capture with video, use the
-launched browser, which is unchanged.
+**With video, recorded by the app rather than the extension.** The browser says which
+window; snapit records it with the encoder it already has — the one measured against OBS —
+so a capture through the extension is the same artifact as any other, address bar and all.
+And because the click was in Chrome rather than in snapit, the recording bar opens pointed
+at that window and _waits_: quality, frame rate, microphone, system audio, all there, and
+nothing starts until you press Record.
 
 The major bump is the second install. snapit is now an app _and_ a folder you load into
 Chrome, and that is a different thing to hand somebody than a dmg.
 
-### Collect from the tab you are in
+### Capture from the tab you are in
 
 - **A Chrome extension** that collects console, network, response bodies and every click
-  from the tab you choose, and hands them to the app over loopback. No video yet — see
-  above.
+  from the tab you choose, and hands them to the app over loopback.
+- **Video without a second encoder.** macOS names a Chrome window after its active tab, so
+  the extension sends the title and snapit finds the window — no `tabCapture`, no offscreen
+  document, and none of the WebCodecs tuning duplicated inside an extension that would
+  update on Chrome's schedule. The whole window is recorded, not the viewport, because a
+  bug report is better with the address bar in it.
 - **The recording starts in the browser.** Click snapit in Chrome's toolbar; the app is told
   and opens its session bar. The lifecycle runs the other way round from a launched browser,
   which is why the session bar now appears without anyone touching snapit.

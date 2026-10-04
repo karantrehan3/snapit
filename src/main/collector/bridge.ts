@@ -64,7 +64,10 @@ export type BridgeHooks = {
    * The bridge then drops the session rather than quietly filling a buffer nobody will
    * ever read, and the extension is told to detach.
    */
-  onSessionStart: (handle: CollectorHandle, info: { tabId: number; version: string }) => boolean
+  onSessionStart: (
+    handle: CollectorHandle,
+    info: { tabId: number; version: string; title: string; url: string }
+  ) => boolean
   /** The extension stopped, or the tab went away. */
   onSessionEnd: (reason: string) => void
   /** The extension is a version this app does not speak to. */
@@ -207,7 +210,9 @@ export function startCollectorBridge(hooks: BridgeHooks, port = DEFAULT_BRIDGE_P
         }
         const candidate: Live = { tabId, startedAt: new Date(), events: [], fromMs: 0 }
         live = candidate
-        if (!hooks.onSessionStart(handleFor(candidate), { tabId, version })) {
+        const title = typeof body.title === 'string' ? body.title : ''
+        const url = typeof body.url === 'string' ? body.url : ''
+        if (!hooks.onSessionStart(handleFor(candidate), { tabId, version, title, url })) {
           live = null
           return json(res, 409, { ok: false, error: 'snapit is already recording something else.' })
         }

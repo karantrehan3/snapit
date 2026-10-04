@@ -51,8 +51,17 @@ export function RecordOverlay({
   /** How the bar was left last time. See main/capturePrefs.ts. */
   prefs: CapturePrefs
   workArea: WorkArea
-  /** Set when snapit knows what to record: the browser window it just opened. */
-  auto?: { sourceId: string }
+  /**
+   * Set when snapit knows what to record.
+   *
+   * `confirm` is the difference between the two ways that happens. Snapit launching a
+   * browser is a choice already made in the app, so the recording starts. The Chrome
+   * extension is not: somebody pressed a button in another application, and starting to
+   * record their screen on the strength of that — with no options and no chance to say
+   * no — is a surprise rather than a feature. There the window is pre-selected and the
+   * bar waits.
+   */
+  auto?: { sourceId: string; confirm?: boolean }
   onReady?: () => void
 }): ReactElement {
   const [systemAudio, setSystemAudio] = useState(prefs.systemAudio)
@@ -97,7 +106,7 @@ export function RecordOverlay({
   // reproduce it is most of why anyone records one.
   const startedAuto = useRef(false)
   useEffect(() => {
-    if (!auto || startedAuto.current) return
+    if (!auto || auto.confirm || startedAuto.current) return
     startedAuto.current = true
     void recorder.start({
       selectedId: auto.sourceId,
@@ -115,7 +124,17 @@ export function RecordOverlay({
     // Deliberately once, on mount: re-running would start a second recording.
   }, [auto])
 
-  if (auto && recorder.phase !== 'recording') {
+  // Pre-select what the extension is collecting, so the bar opens pointed at the right
+  // window and the only thing left to do is look at the options and press Record.
+  const pointed = useRef(false)
+  useEffect(() => {
+    if (!auto?.confirm || pointed.current) return
+    if (!picker.sources.some((s) => s.id === auto.sourceId)) return
+    pointed.current = true
+    picker.setSelectedId(auto.sourceId)
+  }, [auto, picker])
+
+  if (auto && !auto.confirm && recorder.phase !== 'recording') {
     return (
       <div style={stage}>
         <div style={centerHint}>

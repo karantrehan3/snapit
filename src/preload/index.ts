@@ -140,7 +140,7 @@ export type CaptureSession = (
        * Skip the setup panel and record this source immediately. Set when snapit itself
        * knows what to record — the browser window it just opened.
        */
-      auto?: { sourceId: string }
+      auto?: { sourceId: string; confirm?: boolean }
     }
   | { mode: 'gif'; source: DisplaySource; prefs: CapturePrefs }
   | {

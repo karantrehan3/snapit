@@ -491,31 +491,43 @@ What that decision costs and requires, in the order it bites:
 **Built 2026-10-04 and shipped in 5.0.0:** the bridge, the action trail, response bodies,
 pairing, and the Browser page that explains the install.
 
-### M1.12 — Video from a tab
+### M1.12 — Video, without a second encoder
 
-**Not built, and the gap 5.0.0 ships with.** The extension collects console, network,
-bodies and actions. It records no video, so a capture made through it is a session report
-and not a recording — which is a different product from the one the launched browser gives
-you, and the first thing somebody notices.
+**Built 2026-10-04.** The extension collects; it does not record. The app does, with the
+WebCodecs pipeline that was measured against OBS — so a capture made through the extension
+is the same artifact as any other.
 
-`chrome.tabCapture` is the route, and it is more than a call:
+**What made it cheap is a measurement, not an API.** `chrome.tabCapture` is the obvious
+route and it is the expensive one: a service worker has no DOM and therefore no
+`MediaRecorder`, so it needs an offscreen document with its own lifecycle; it captures the
+viewport rather than the window, losing the address bar that makes a bug report legible;
+it would mean a second encoder to tune, inside an artifact that updates on Chrome's
+schedule rather than snapit's; and the recording still has to cross to the app, tens of
+megabytes at a time.
 
-- **The recorder cannot live in the service worker.** It has no DOM, so no `MediaRecorder`.
-  MV3's answer is an offscreen document, which is a second lifecycle to own: created on
-  demand, kept alive while recording, torn down after.
-- **It captures a tab, not a screen.** A dialog outside the viewport, a second window, the
-  OS itself — none of it is there. That is a real narrowing against what snapit records
-  today, and the honest shape is to offer both rather than replace one with the other.
-- **The bytes have to reach the app.** A recording is tens of megabytes; posting it through
-  the bridge in one request is not reasonable. Chunked upload, or a file the app reads.
-- **And it needs the thing this milestone has been missing all along: a choice.** Loom and
-  Jam open a panel — what to record, which tab or screen, microphone on or off, and a
-  visible countdown. snapit's extension starts the instant the toolbar button is clicked,
-  with no options and no way to change your mind. That is the actual complaint, and the
-  panel is the fix, not the capture API.
+None of that is necessary, because of something that had to be checked rather than
+assumed: **on macOS `desktopCapturer` reports a Chrome window by its active tab's title
+alone** — `"Example Domain"`, with no browser suffix. So a tab title _is_ a window name.
+The extension sends the title, `findTabWindow` resolves it to a source id, and the existing
+recorder takes it from there. It is the same mechanism the launched browser already used
+through its landing page, generalised.
 
-Until then the launched browser remains the only way to get a capture with video, and both
-the README and the changelog say so rather than letting somebody find out.
+Verified against real windows: an exact title resolves, a decorated one
+(`"(478) … - YouTube 🔊"`) resolves by containment, and a title nothing holds resolves to
+nothing — which is the case that matters, because it takes the no-video path rather than
+recording the wrong window.
+
+**And the recording bar waits.** Snapit launching a browser is a choice already made in
+the app, so that path starts immediately. A click in Chrome is not: starting to record
+somebody's screen on the strength of a button in another application, with no options and
+no chance to decline, is a surprise. The extension path pre-selects the window and opens
+the bar — quality, frame rate, microphone, system audio — and nothing starts until Record
+is pressed.
+
+**Known limit:** two windows showing the same title means the first is taken. Being wrong
+there produces a recording of the wrong window, which is visible immediately, rather than a
+silent failure — so it is left rather than guessed at. The source picker is already open at
+that point and can be corrected by hand.
 
 ---
 

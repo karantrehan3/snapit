@@ -48,6 +48,7 @@ import type { ConsoleEntry } from './collector/session'
 import {
   adoptExtensionSession,
   beginCapture,
+  findTabWindow,
   contributeRecording,
   isAutoRecording,
   markAutoRecording,
@@ -141,7 +142,13 @@ type WorkArea = { x: number; y: number; w: number; h: number }
 
 type CaptureSession = (
   | { mode: 'screenshot'; frame: Frame }
-  | { mode: 'record'; source: DisplaySource; prefs: CapturePrefs; auto?: { sourceId: string } }
+  | {
+      mode: 'record'
+      source: DisplaySource
+      prefs: CapturePrefs
+      /** `confirm` pre-selects the window but waits to be told — see RecordOverlay. */
+      auto?: { sourceId: string; confirm?: boolean }
+    }
   | { mode: 'gif'; source: DisplaySource; prefs: CapturePrefs }
   // Chrome only: the browser is what the user is looking at, and this is the bar that
   // says snapit is collecting from it and offers the one action worth taking.
@@ -783,6 +790,53 @@ async function endBrowserSession(): Promise<void> {
  * which one, and being asked to point at it would be the interface apologising for
  * its own implementation.
  */
+/**
+ * Record the window the extension is collecting from.
+ *
+ * The extension contributes no video — it reads the page, not the screen. snapit already
+ * has the recorder: the WebCodecs pipeline that was measured against OBS, with the
+ * quality, frame rate and audio controls somebody expects to see before a recording
+ * starts. Rebuilding that inside an extension would be a second encoder to tune and a
+ * worse one, so the browser says *what* to record and the app does the recording.
+ *
+ * Recording the whole Chrome window rather than the tab's viewport is deliberate: a bug
+ * report is better with the address bar in it.
+ *
+ * Failing to find the window is not a failed capture. The collector is already running,
+ * so the session continues without video and the bar says so — the same posture
+ * `startWebAppCapture` takes, for the same reason.
+ */
+async function startExtensionRecording(title: string): Promise<void> {
+  const sourceId = await findTabWindow(title)
+  if (!sourceId) {
+    console.warn(`[snapit] no window named ${JSON.stringify(title)}; collecting without video`)
+    showSessionBar(true)
+    buildTray()
+    return
+  }
+  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+  try {
+    session = {
+      mode: 'record',
+      workArea: windowWorkArea(display),
+      source: await getDisplaySource(display),
+      prefs: getSettings().capture,
+      // `confirm`: the click was in Chrome, not here. The bar opens pointed at that
+      // window with the quality, frame rate and audio controls, and waits to be told.
+      auto: { sourceId, confirm: true }
+    }
+    markAutoRecording()
+    showOverlay(display)
+  } catch (err) {
+    notifyProblem(
+      'Collecting without video',
+      `That browser window could not be recorded, so this capture holds console, network and steps only. ${err instanceof Error ? err.message : String(err)}`
+    )
+    showSessionBar(true)
+    buildTray()
+  }
+}
+
 async function startWebAppCapture(): Promise<void> {
   beginCapture()
   const sourceId = sessionWindowSourceId()
@@ -1138,17 +1192,18 @@ app.whenReady().then(() => {
     requestPairing: () => confirmExtensionPairing(windowFor('home')),
     expectedExtensionVersion: EXPECTED_EXTENSION_VERSION,
     onSessionStart: (handle, info) => {
-      if (!adoptExtensionSession(handle)) {
+      if (!adoptExtensionSession(handle, info.title)) {
         // Refused rather than queued: snapit holds one session, and a second one
         // accumulating in the bridge is a buffer nobody will ever read.
         console.warn('[snapit] already recording; refusing the extension session.')
         return false
       }
-      console.log(`[snapit] recording tab ${info.tabId} via the extension`)
+      console.log(`[snapit] collecting tab ${info.tabId} — ${info.title}`)
       buildTray()
-      // The session bar is how somebody knows snapit is collecting. Without it the only
-      // sign is a badge in a browser they may not be looking at.
-      showSessionBar()
+      // Video is the app's job, not the extension's: snapit already has an encoder that
+      // was measured against OBS, and a tab recorded inside Chrome would be a second one.
+      // The window is found by title, so this waits for that before offering to record.
+      void startExtensionRecording(info.title)
       return true
     },
     onSessionEnd: (reason) => {

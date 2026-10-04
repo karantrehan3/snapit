@@ -78,28 +78,54 @@ export function markAutoRecording(): void {
 export const sessionWindowSourceId = (): string | null => session?.windowSourceId ?? null
 
 /**
- * Find the window snapit just opened.
+ * Find a window by what macOS calls it, retrying while it settles.
  *
- * The landing page's title is the marker — it is set precisely so this is possible, and
- * it is only reliable before the user navigates away, which is why this runs at launch
- * and the answer is kept.
+ * Measured rather than assumed: on macOS `desktopCapturer` reports a Chrome window by its
+ * active tab's title alone — `"Example Domain"`, with no browser suffix — so a tab title
+ * is a window name. That is what makes recording an extension's tab possible at all, and
+ * it is the same mechanism the launched browser already used through its landing page.
  */
-async function findLaunchedWindow(): Promise<string | null> {
+async function findWindowNamed(match: (name: string) => boolean): Promise<string | null> {
   for (let attempt = 0; attempt < 10; attempt++) {
     try {
       const sources = await desktopCapturer.getSources({
         types: ['window'],
         thumbnailSize: { width: 0, height: 0 }
       })
-      const match = sources.find((s) => s.name.includes(LANDING_TITLE))
-      if (match) return match.id
+      const found = sources.find((s) => match(s.name))
+      if (found) return found.id
     } catch (err) {
-      console.warn('[snapit] could not list windows to find the collector browser:', err)
+      console.warn('[snapit] could not list windows:', err)
       return null
     }
     await new Promise((r) => setTimeout(r, 300))
   }
   return null
+}
+
+/**
+ * The window snapit just opened. Its landing page carries a title set precisely so this
+ * can work, and only before the user navigates away — which is why this runs at launch
+ * and the answer is kept.
+ */
+const findLaunchedWindow = (): Promise<string | null> =>
+  findWindowNamed((name) => name.includes(LANDING_TITLE))
+
+/**
+ * The window holding the tab the extension is recording.
+ *
+ * An exact match first, because a tab title is usually the whole window name. The
+ * fallback is a containment match, for the cases where Chrome decorates it — a tab
+ * playing audio becomes `"… 🔊"`, and an unread count becomes `"(3) …"`.
+ *
+ * Ambiguity is possible and is not resolved here: two windows showing the same title
+ * means the first is taken. Being wrong produces a recording of the wrong window, which
+ * is visible immediately, rather than a silent failure.
+ */
+export function findTabWindow(title: string): Promise<string | null> {
+  const wanted = title.trim()
+  if (!wanted) return Promise.resolve(null)
+  return findWindowNamed((name) => name === wanted || name.includes(wanted))
 }
 
 /**
@@ -169,11 +195,11 @@ function summarise(collected: CollectedSession, failed: number): CollectedSummar
  * signing in, navigating — and `beginCapture` exists to throw it away. Pressing record in
  * a tab you are already on *is* the start.
  */
-export function adoptExtensionSession(handle: CollectorHandle): boolean {
+export function adoptExtensionSession(handle: CollectorHandle, tabTitle?: string): boolean {
   if (session?.collector) return false
 
   const { saveDir } = getSettings()
-  session = {
+  const started: OpenSession = {
     dir: bundleDir(saveDir, captureBaseName()),
     phase: 'capturing',
     windowSourceId: null,
@@ -183,7 +209,16 @@ export function adoptExtensionSession(handle: CollectorHandle): boolean {
     collector: handle,
     recording: null
   }
+  session = started
   handle.beginCapture()
+
+  // Not awaited: the collector is already recording the page, and the window only has to
+  // be found before somebody asks for video. The caller polls `sessionWindowSourceId`.
+  if (tabTitle) {
+    void findTabWindow(tabTitle).then((id) => {
+      if (session === started) started.windowSourceId = id
+    })
+  }
   return true
 }
 

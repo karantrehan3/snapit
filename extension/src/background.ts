@@ -220,10 +220,15 @@ export async function start(tabId: number): Promise<void> {
   // Revives the worker if Chrome terminates it despite the above. 30s is the floor since
   // Chrome 120, which is why it is a backstop and not the primary mechanism.
   await chrome.alarms.create(KEEPALIVE_ALARM, { periodInMinutes: 0.5 })
+  // The title is how snapit finds the OS window to record: macOS reports a Chrome
+  // window by its active tab's title, so the two are the same string.
+  const tab = await chrome.tabs.get(tabId).catch(() => null)
   const started = await post('/collector/start', {
     tabId,
     startedAt: session.startedAt,
-    version: chrome.runtime.getManifest().version
+    version: chrome.runtime.getManifest().version,
+    title: tab?.title ?? '',
+    url: tab?.url ?? ''
   })
   if (started?.status === 409) {
     // Covers both refusals snapit can give: a version it does not speak to, and already

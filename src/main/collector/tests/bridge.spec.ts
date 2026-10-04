@@ -17,6 +17,7 @@ const TOKEN = 'collector-token-for-the-test'
 const API = `http://127.0.0.1:${PORT}`
 
 let handle: CollectorHandle | null = null
+let startedWith: { title: string; url: string } | null = null
 let ended: string | null = null
 let mismatch: [string, string] | null = null
 let allowPairing = true
@@ -43,8 +44,9 @@ beforeAll(() => {
         return allowPairing
       },
       expectedExtensionVersion: '0.1.0',
-      onSessionStart: (h) => {
+      onSessionStart: (h, info) => {
         handle = h
+        startedWith = { title: info.title, url: info.url }
         return adopts
       },
       onSessionEnd: (reason) => {
@@ -90,10 +92,18 @@ describe('a session', () => {
     expect(mismatch).toEqual(['9.0.0', '0.1.0'])
   })
 
-  test('starts, and hands the app a CollectorHandle', async () => {
-    expect((await authed('/collector/start', { tabId: 7, version: '0.1.0' })).status).toBe(200)
+  test('starts, and hands the app a CollectorHandle plus the tab it is on', async () => {
+    const res = await authed('/collector/start', {
+      tabId: 7,
+      version: '0.1.0',
+      title: 'Example Domain',
+      url: 'https://example.com/'
+    })
+    expect(res.status).toBe(200)
     expect(handle).not.toBeNull()
     expect(bridgeSession()).toMatchObject({ tabId: 7 })
+    // The title is what the app matches an OS window against to record it.
+    expect(startedWith).toMatchObject({ title: 'Example Domain', url: 'https://example.com/' })
   })
 
   test('takes batches', async () => {
@@ -154,7 +164,12 @@ describe('a session', () => {
   test('a session the app will not take is dropped, not buffered', async () => {
     // Otherwise the extension keeps posting into a buffer nothing will ever collect.
     adopts = false
-    const res = await authed('/collector/start', { tabId: 99, version: '0.1.0' })
+    const res = await authed('/collector/start', {
+      tabId: 99,
+      version: '0.1.0',
+      title: 'x',
+      url: 'https://x'
+    })
     expect(res.status).toBe(409)
     expect(bridgeSession()).toBeNull()
     adopts = true
