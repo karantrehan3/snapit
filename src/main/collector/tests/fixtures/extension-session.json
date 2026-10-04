@@ -1,0 +1,774 @@
+[
+  {
+    "method": "Page.frameStartedLoading",
+    "params": {
+      "frameId": "77820B55562F069B2A0816EAF3916DED"
+    },
+    "atMs": 100
+  },
+  {
+    "method": "Network.requestWillBeSent",
+    "params": {
+      "documentURL": "https://example.com/?run=1",
+      "frameId": "77820B55562F069B2A0816EAF3916DED",
+      "hasUserGesture": false,
+      "initiator": {
+        "type": "other"
+      },
+      "loaderId": "9EF0373116035B77801B6985588FDB7D",
+      "redirectHasExtraInfo": false,
+      "request": {
+        "headers": {
+          "Upgrade-Insecure-Requests": "1",
+          "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+          "sec-ch-ua": "\"Chromium\";v=\"154\", \"Google Chrome\";v=\"154\", \"Not A(Brand\";v=\"99\"",
+          "sec-ch-ua-mobile": "?0",
+          "sec-ch-ua-platform": "\"macOS\""
+        },
+        "initialPriority": "VeryHigh",
+        "isSameSite": true,
+        "method": "GET",
+        "mixedContentType": "none",
+        "referrerPolicy": "unsafe-url",
+        "url": "https://example.com/?run=1"
+      },
+      "requestId": "9EF0373116035B77801B6985588FDB7D",
+      "timestamp": 430029.556516,
+      "type": "Document",
+      "wallTime": 1791119355.217278
+    },
+    "atMs": 100
+  },
+  {
+    "method": "Network.requestWillBeSentExtraInfo",
+    "params": {
+      "associatedCookies": [],
+      "connectTiming": {
+        "requestTime": 430029.556883
+      },
+      "headers": {
+        ":authority": "example.com",
+        ":method": "GET",
+        ":path": "/?run=1",
+        ":scheme": "https",
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "accept-language": "en-GB,en-US;q=0.9,en;q=0.8",
+        "priority": "u=0, i",
+        "sec-ch-ua": "\"Chromium\";v=\"154\", \"Google Chrome\";v=\"154\", \"Not A(Brand\";v=\"99\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"macOS\"",
+        "sec-fetch-dest": "document",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-site": "none",
+        "sec-fetch-user": "?1",
+        "upgrade-insecure-requests": "1",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36"
+      },
+      "requestId": "9EF0373116035B77801B6985588FDB7D",
+      "siteHasCookieInOtherPartition": false
+    },
+    "atMs": 101
+  },
+  {
+    "method": "Network.responseReceivedExtraInfo",
+    "params": {
+      "blockedCookies": [],
+      "cookiePartitionKey": {
+        "hasCrossSiteAncestor": false,
+        "topLevelSite": "https://example.com"
+      },
+      "cookiePartitionKeyOpaque": false,
+      "exemptedCookies": [],
+      "headers": {
+        "allow": "GET, HEAD",
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cf-cache-status": "MISS",
+        "cf-ray": "a4546b824855e067-DEL",
+        "content-encoding": "br",
+        "content-type": "text/html; charset=utf-8",
+        "date": "Sun, 04 Oct 2026 13:09:16 GMT",
+        "last-modified": "Sun, 04 Oct 2026 07:03:47 GMT",
+        "server": "cloudflare"
+      },
+      "requestId": "9EF0373116035B77801B6985588FDB7D",
+      "resourceIPAddressSpace": "Public",
+      "statusCode": 200
+    },
+    "atMs": 960
+  },
+  {
+    "method": "Network.responseReceived",
+    "params": {
+      "frameId": "77820B55562F069B2A0816EAF3916DED",
+      "hasExtraInfo": true,
+      "loaderId": "9EF0373116035B77801B6985588FDB7D",
+      "requestId": "9EF0373116035B77801B6985588FDB7D",
+      "response": {
+        "alternateProtocolUsage": "unspecifiedReason",
+        "charset": "utf-8",
+        "connectionId": 471,
+        "connectionReused": true,
+        "encodedDataLength": 88,
+        "fromDiskCache": false,
+        "fromPrefetchCache": false,
+        "fromServiceWorker": false,
+        "headers": {
+          "allow": "GET, HEAD",
+          "alt-svc": "h3=\":443\"; ma=86400",
+          "cf-cache-status": "MISS",
+          "cf-ray": "a4546b824855e067-DEL",
+          "content-encoding": "br",
+          "content-type": "text/html; charset=utf-8",
+          "date": "Sun, 04 Oct 2026 13:09:16 GMT",
+          "last-modified": "Sun, 04 Oct 2026 07:03:47 GMT",
+          "server": "cloudflare"
+        },
+        "mimeType": "text/html",
+        "protocol": "h2",
+        "remoteIPAddress": "[2606:4700:90c5:72db:f2a8:66f:ef6b:ff98]",
+        "remotePort": 443,
+        "responseTime": 1791119356076.482,
+        "securityDetails": {
+          "certificateId": 0,
+          "certificateTransparencyCompliance": "compliant",
+          "cipher": "AES_128_GCM",
+          "encryptedClientHello": false,
+          "issuer": "Cloudflare TLS Issuing ECC CA 3",
+          "keyExchange": "",
+          "keyExchangeGroup": "X25519MLKEM768",
+          "protocol": "TLS 1.3",
+          "sanList": ["example.com", "*.example.com"],
+          "serverSignatureAlgorithm": 1027,
+          "signedCertificateTimestampList": [
+            {
+              "hashAlgorithm": "SHA-256",
+              "logDescription": "DigiCert 'Sphinx2026h2'",
+              "logId": "944E4387FAECC1EF81F3192426A8186501C7D35F3802013F72677D55372E19D8",
+              "origin": "Embedded in certificate",
+              "signatureAlgorithm": "ECDSA",
+              "signatureData": "3045022100AE0946A145ACF039CAA3DC0EFBCBC7977500692E51828EFF43FF1BD77775FB8402206DCD0A312F8CB00358E562C6A478139375319348355564D007BF2F6113206B51",
+              "status": "Verified",
+              "timestamp": 1790463552866
+            },
+            {
+              "hashAlgorithm": "SHA-256",
+              "logDescription": "Cloudflare 'Nimbus2026'",
+              "logId": "CB38F715897C84A1445F5BC1DDFBC96EF29A59CD470A690585B0CB14C31458E7",
+              "origin": "Embedded in certificate",
+              "signatureAlgorithm": "ECDSA",
+              "signatureData": "304502201D9837F9593FA79204CB55D014EB183ECA4B2295BBF8BAF19CDAF7B962F7A15C022100D66B6F4E733CCDB34A8FA02B5295A68134544430E0382E11D42D96E5C48AE9F2",
+              "status": "Verified",
+              "timestamp": 1790463552894
+            },
+            {
+              "hashAlgorithm": "SHA-256",
+              "logDescription": "Google 'Argon2026h2' log",
+              "logId": "D76D7D10D1A7F577C2C7E95FD700BFF982C9335A65E1D0B3017317C0C8C56977",
+              "origin": "TLS extension",
+              "signatureAlgorithm": "ECDSA",
+              "signatureData": "3046022100C9738CF5F3C1989657D884C3FC26B36DBBCA4B90FAAFEEBB5B5DE50B2BD0063C02210088D7D19156B45F1012E36911207275BC439E202A070B24CBAA9CE0C46D8C66FE",
+              "status": "Verified",
+              "timestamp": 1790463556306
+            },
+            {
+              "hashAlgorithm": "SHA-256",
+              "logDescription": "Google 'Xenon2026h2' log",
+              "logId": "D809553B944F7AFFC816196F944F85ABB0F8FC5E8755260F15D12E72BB454B14",
+              "origin": "TLS extension",
+              "signatureAlgorithm": "ECDSA",
+              "signatureData": "3046022100BE3AC30D32A768009420C8472B7BF8F784315AD9E6A76AA38DD170730088BDFF0221008CAFDC70201C51D4ED80B6B64B29E0E5FE2DEDF0CA55359BEC5FC189020E9266",
+              "status": "Verified",
+              "timestamp": 1790463556401
+            }
+          ],
+          "subjectName": "example.com",
+          "validFrom": 1790462951,
+          "validTo": 1798239395
+        },
+        "securityState": "secure",
+        "status": 200,
+        "statusText": "",
+        "timing": {
+          "connectEnd": -1,
+          "connectStart": -1,
+          "dnsEnd": -1,
+          "dnsStart": -1,
+          "proxyEnd": -1,
+          "proxyStart": -1,
+          "pushEnd": 0,
+          "pushStart": 0,
+          "receiveHeadersEnd": 858.967,
+          "receiveHeadersStart": 858.833,
+          "requestTime": 430029.556883,
+          "sendEnd": 0.291,
+          "sendStart": 0.171,
+          "sslEnd": -1,
+          "sslStart": -1,
+          "workerFetchStart": -1,
+          "workerReady": -1,
+          "workerRespondWithSettled": -1,
+          "workerStart": -1
+        },
+        "url": "https://example.com/?run=1"
+      },
+      "timestamp": 430030.416741,
+      "type": "Document"
+    },
+    "atMs": 960
+  },
+  {
+    "method": "Page.frameNavigated",
+    "params": {
+      "frame": {
+        "adFrameStatus": {
+          "adFrameType": "none"
+        },
+        "crossOriginIsolatedContextType": "NotIsolated",
+        "domainAndRegistry": "example.com",
+        "gatedAPIFeatures": [],
+        "id": "77820B55562F069B2A0816EAF3916DED",
+        "loaderId": "9EF0373116035B77801B6985588FDB7D",
+        "mimeType": "text/html",
+        "secureContextType": "Secure",
+        "securityOrigin": "https://example.com",
+        "securityOriginDetails": {
+          "isLocalhost": false
+        },
+        "url": "https://example.com/?run=1"
+      },
+      "type": "Navigation"
+    },
+    "atMs": 964
+  },
+  {
+    "method": "Network.policyUpdated",
+    "params": {},
+    "atMs": 965
+  },
+  {
+    "method": "Network.dataReceived",
+    "params": {
+      "dataLength": 577,
+      "encodedDataLength": 0,
+      "requestId": "9EF0373116035B77801B6985588FDB7D",
+      "timestamp": 430030.420608
+    },
+    "atMs": 972
+  },
+  {
+    "method": "Network.requestWillBeSent",
+    "params": {
+      "documentURL": "https://example.com/?run=1",
+      "frameId": "77820B55562F069B2A0816EAF3916DED",
+      "hasUserGesture": false,
+      "initiator": {
+        "columnNumber": 553,
+        "lineNumber": 0,
+        "type": "parser",
+        "url": "https://example.com/?run=1"
+      },
+      "loaderId": "9EF0373116035B77801B6985588FDB7D",
+      "redirectHasExtraInfo": false,
+      "renderBlockingBehavior": "InBodyParserBlocking",
+      "request": {
+        "headers": {
+          "Referer": "https://example.com/?run=1"
+        },
+        "initialPriority": "High",
+        "isSameSite": true,
+        "method": "GET",
+        "mixedContentType": "none",
+        "referrerPolicy": "strict-origin-when-cross-origin",
+        "url": "https://example.com/s.js"
+      },
+      "requestId": "28100.5",
+      "timestamp": 430030.420701,
+      "type": "Script",
+      "wallTime": 1791119356.08147
+    },
+    "atMs": 973
+  },
+  {
+    "method": "Network.requestServedFromCache",
+    "params": {
+      "requestId": "28100.5"
+    },
+    "atMs": 973
+  },
+  {
+    "method": "Network.responseReceived",
+    "params": {
+      "frameId": "77820B55562F069B2A0816EAF3916DED",
+      "hasExtraInfo": true,
+      "loaderId": "9EF0373116035B77801B6985588FDB7D",
+      "requestId": "28100.5",
+      "response": {
+        "alternateProtocolUsage": "unspecifiedReason",
+        "charset": "utf-8",
+        "connectionId": 471,
+        "connectionReused": true,
+        "encodedDataLength": 1476,
+        "fromDiskCache": false,
+        "fromPrefetchCache": false,
+        "fromServiceWorker": false,
+        "headers": {
+          "age": "3426",
+          "allow": "GET, HEAD",
+          "alt-svc": "h3=\":443\"; ma=86400",
+          "cf-cache-status": "HIT",
+          "cf-ray": "a4546b7ee93ae067-DEL",
+          "content-encoding": "br",
+          "content-type": "text/javascript; charset=utf-8",
+          "date": "Sun, 04 Oct 2026 13:09:14 GMT",
+          "etag": "W/\"6abfd796-7ab\"",
+          "last-modified": "Fri, 02 Oct 2026 16:11:02 GMT",
+          "server": "cloudflare"
+        },
+        "mimeType": "text/javascript",
+        "protocol": "h2",
+        "remoteIPAddress": "[2606:4700:90c5:72db:f2a8:66f:ef6b:ff98]",
+        "remotePort": 443,
+        "responseTime": 1791119354691.934,
+        "securityDetails": {
+          "certificateId": 0,
+          "certificateTransparencyCompliance": "compliant",
+          "cipher": "AES_128_GCM",
+          "encryptedClientHello": false,
+          "issuer": "Cloudflare TLS Issuing ECC CA 3",
+          "keyExchange": "",
+          "keyExchangeGroup": "X25519MLKEM768",
+          "protocol": "TLS 1.3",
+          "sanList": ["example.com", "*.example.com"],
+          "serverSignatureAlgorithm": 1027,
+          "signedCertificateTimestampList": [
+            {
+              "hashAlgorithm": "SHA-256",
+              "logDescription": "DigiCert 'Sphinx2026h2'",
+              "logId": "944E4387FAECC1EF81F3192426A8186501C7D35F3802013F72677D55372E19D8",
+              "origin": "Embedded in certificate",
+              "signatureAlgorithm": "ECDSA",
+              "signatureData": "3045022100AE0946A145ACF039CAA3DC0EFBCBC7977500692E51828EFF43FF1BD77775FB8402206DCD0A312F8CB00358E562C6A478139375319348355564D007BF2F6113206B51",
+              "status": "Verified",
+              "timestamp": 1790463552866
+            },
+            {
+              "hashAlgorithm": "SHA-256",
+              "logDescription": "Cloudflare 'Nimbus2026'",
+              "logId": "CB38F715897C84A1445F5BC1DDFBC96EF29A59CD470A690585B0CB14C31458E7",
+              "origin": "Embedded in certificate",
+              "signatureAlgorithm": "ECDSA",
+              "signatureData": "304502201D9837F9593FA79204CB55D014EB183ECA4B2295BBF8BAF19CDAF7B962F7A15C022100D66B6F4E733CCDB34A8FA02B5295A68134544430E0382E11D42D96E5C48AE9F2",
+              "status": "Verified",
+              "timestamp": 1790463552894
+            },
+            {
+              "hashAlgorithm": "SHA-256",
+              "logDescription": "Google 'Argon2026h2' log",
+              "logId": "D76D7D10D1A7F577C2C7E95FD700BFF982C9335A65E1D0B3017317C0C8C56977",
+              "origin": "TLS extension",
+              "signatureAlgorithm": "ECDSA",
+              "signatureData": "3046022100C9738CF5F3C1989657D884C3FC26B36DBBCA4B90FAAFEEBB5B5DE50B2BD0063C02210088D7D19156B45F1012E36911207275BC439E202A070B24CBAA9CE0C46D8C66FE",
+              "status": "Verified",
+              "timestamp": 1790463556306
+            },
+            {
+              "hashAlgorithm": "SHA-256",
+              "logDescription": "Google 'Xenon2026h2' log",
+              "logId": "D809553B944F7AFFC816196F944F85ABB0F8FC5E8755260F15D12E72BB454B14",
+              "origin": "TLS extension",
+              "signatureAlgorithm": "ECDSA",
+              "signatureData": "3046022100BE3AC30D32A768009420C8472B7BF8F784315AD9E6A76AA38DD170730088BDFF0221008CAFDC70201C51D4ED80B6B64B29E0E5FE2DEDF0CA55359BEC5FC189020E9266",
+              "status": "Verified",
+              "timestamp": 1790463556401
+            }
+          ],
+          "subjectName": "example.com",
+          "validFrom": 1790462951,
+          "validTo": 1798239395
+        },
+        "securityState": "secure",
+        "status": 200,
+        "statusText": "",
+        "timing": {
+          "connectEnd": -1,
+          "connectStart": -1,
+          "dnsEnd": -1,
+          "dnsStart": -1,
+          "proxyEnd": -1,
+          "proxyStart": -1,
+          "pushEnd": 0,
+          "pushStart": 0,
+          "receiveHeadersEnd": 14.277,
+          "receiveHeadersStart": 14.208,
+          "requestTime": 430029.01697,
+          "sendEnd": 0.164,
+          "sendStart": 0.105,
+          "sslEnd": -1,
+          "sslStart": -1,
+          "workerFetchStart": -1,
+          "workerReady": -1,
+          "workerRespondWithSettled": -1,
+          "workerStart": -1
+        },
+        "url": "https://example.com/s.js"
+      },
+      "timestamp": 430030.420783,
+      "type": "Script"
+    },
+    "atMs": 973
+  },
+  {
+    "method": "Network.dataReceived",
+    "params": {
+      "dataLength": 1963,
+      "encodedDataLength": 0,
+      "requestId": "28100.5",
+      "timestamp": 430030.420792
+    },
+    "atMs": 973
+  },
+  {
+    "method": "Network.loadingFinished",
+    "params": {
+      "encodedDataLength": 0,
+      "requestId": "28100.5",
+      "timestamp": 430030.420798
+    },
+    "atMs": 973
+  },
+  {
+    "method": "Network.loadingFinished",
+    "params": {
+      "encodedDataLength": 440,
+      "requestId": "9EF0373116035B77801B6985588FDB7D",
+      "timestamp": 430030.416247
+    },
+    "atMs": 974
+  },
+  {
+    "method": "Page.domContentEventFired",
+    "params": {
+      "timestamp": 430030.424749
+    },
+    "atMs": 975
+  },
+  {
+    "method": "Page.loadEventFired",
+    "params": {
+      "timestamp": 430030.425188
+    },
+    "atMs": 975
+  },
+  {
+    "method": "Runtime.consoleAPICalled",
+    "params": {
+      "args": [
+        {
+          "type": "string",
+          "value": "snapit test: a console error"
+        }
+      ],
+      "executionContextId": 7,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "columnNumber": 10,
+            "functionName": "eval",
+            "lineNumber": 1,
+            "scriptId": "11",
+            "url": ""
+          },
+          {
+            "columnNumber": 15,
+            "functionName": "evaluate",
+            "lineNumber": 312,
+            "scriptId": "5",
+            "url": ""
+          },
+          {
+            "columnNumber": 43,
+            "functionName": "",
+            "lineNumber": 0,
+            "scriptId": "10",
+            "url": ""
+          }
+        ]
+      },
+      "timestamp": 1791119356102.908,
+      "type": "error"
+    },
+    "atMs": 986
+  },
+  {
+    "method": "Network.requestWillBeSent",
+    "params": {
+      "documentURL": "https://example.com/?run=1",
+      "frameId": "77820B55562F069B2A0816EAF3916DED",
+      "hasUserGesture": true,
+      "initiator": {
+        "stack": {
+          "callFrames": [
+            {
+              "columnNumber": 9,
+              "functionName": "eval",
+              "lineNumber": 2,
+              "scriptId": "11",
+              "url": ""
+            },
+            {
+              "columnNumber": 15,
+              "functionName": "evaluate",
+              "lineNumber": 312,
+              "scriptId": "5",
+              "url": ""
+            },
+            {
+              "columnNumber": 43,
+              "functionName": "",
+              "lineNumber": 0,
+              "scriptId": "10",
+              "url": ""
+            }
+          ]
+        },
+        "type": "script"
+      },
+      "loaderId": "9EF0373116035B77801B6985588FDB7D",
+      "redirectHasExtraInfo": false,
+      "request": {
+        "headers": {
+          "Referer": "https://example.com/?run=1",
+          "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+          "sec-ch-ua": "\"Chromium\";v=\"154\", \"Google Chrome\";v=\"154\", \"Not A(Brand\";v=\"99\"",
+          "sec-ch-ua-mobile": "?0",
+          "sec-ch-ua-platform": "\"macOS\""
+        },
+        "initialPriority": "High",
+        "isSameSite": true,
+        "method": "GET",
+        "mixedContentType": "none",
+        "referrerPolicy": "strict-origin-when-cross-origin",
+        "url": "https://example.com/definitely-missing-404"
+      },
+      "requestId": "28100.7",
+      "timestamp": 430030.44233,
+      "type": "Fetch",
+      "wallTime": 1791119356.103104
+    },
+    "atMs": 986
+  },
+  {
+    "method": "Network.requestWillBeSentExtraInfo",
+    "params": {
+      "associatedCookies": [],
+      "clientSecurityState": {
+        "initiatorIPAddressSpace": "Public",
+        "initiatorIsSecureContext": true,
+        "localNetworkAccessRequestPolicy": "PermissionBlock"
+      },
+      "connectTiming": {
+        "requestTime": 430030.442636
+      },
+      "headers": {
+        ":authority": "example.com",
+        ":method": "GET",
+        ":path": "/definitely-missing-404",
+        ":scheme": "https",
+        "accept": "*/*",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "accept-language": "en-GB,en-US;q=0.9,en;q=0.8",
+        "priority": "u=1, i",
+        "referer": "https://example.com/?run=1",
+        "sec-ch-ua": "\"Chromium\";v=\"154\", \"Google Chrome\";v=\"154\", \"Not A(Brand\";v=\"99\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"macOS\"",
+        "sec-fetch-dest": "empty",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "same-origin",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36"
+      },
+      "requestId": "28100.7",
+      "siteHasCookieInOtherPartition": false
+    },
+    "atMs": 986
+  },
+  {
+    "method": "Network.responseReceivedExtraInfo",
+    "params": {
+      "blockedCookies": [],
+      "cookiePartitionKey": {
+        "hasCrossSiteAncestor": false,
+        "topLevelSite": "https://example.com"
+      },
+      "cookiePartitionKeyOpaque": false,
+      "exemptedCookies": [],
+      "headers": {
+        "age": "3441",
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cf-cache-status": "HIT",
+        "cf-ray": "a4546b87dc57e067-DEL",
+        "content-encoding": "br",
+        "content-type": "text/html; charset=utf-8",
+        "date": "Sun, 04 Oct 2026 13:09:16 GMT",
+        "server": "cloudflare"
+      },
+      "requestId": "28100.7",
+      "resourceIPAddressSpace": "Public",
+      "statusCode": 404
+    },
+    "atMs": 999
+  },
+  {
+    "method": "Network.responseReceived",
+    "params": {
+      "frameId": "77820B55562F069B2A0816EAF3916DED",
+      "hasExtraInfo": true,
+      "loaderId": "9EF0373116035B77801B6985588FDB7D",
+      "requestId": "28100.7",
+      "response": {
+        "alternateProtocolUsage": "unspecifiedReason",
+        "charset": "utf-8",
+        "connectionId": 471,
+        "connectionReused": true,
+        "encodedDataLength": 39,
+        "fromDiskCache": false,
+        "fromPrefetchCache": false,
+        "fromServiceWorker": false,
+        "headers": {
+          "age": "3441",
+          "alt-svc": "h3=\":443\"; ma=86400",
+          "cf-cache-status": "HIT",
+          "cf-ray": "a4546b87dc57e067-DEL",
+          "content-encoding": "br",
+          "content-type": "text/html; charset=utf-8",
+          "date": "Sun, 04 Oct 2026 13:09:16 GMT",
+          "server": "cloudflare"
+        },
+        "mimeType": "text/html",
+        "protocol": "h2",
+        "remoteIPAddress": "[2606:4700:90c5:72db:f2a8:66f:ef6b:ff98]",
+        "remotePort": 443,
+        "responseTime": 1791119356114.816,
+        "securityDetails": {
+          "certificateId": 0,
+          "certificateTransparencyCompliance": "compliant",
+          "cipher": "AES_128_GCM",
+          "encryptedClientHello": false,
+          "issuer": "Cloudflare TLS Issuing ECC CA 3",
+          "keyExchange": "",
+          "keyExchangeGroup": "X25519MLKEM768",
+          "protocol": "TLS 1.3",
+          "sanList": ["example.com", "*.example.com"],
+          "serverSignatureAlgorithm": 1027,
+          "signedCertificateTimestampList": [
+            {
+              "hashAlgorithm": "SHA-256",
+              "logDescription": "DigiCert 'Sphinx2026h2'",
+              "logId": "944E4387FAECC1EF81F3192426A8186501C7D35F3802013F72677D55372E19D8",
+              "origin": "Embedded in certificate",
+              "signatureAlgorithm": "ECDSA",
+              "signatureData": "3045022100AE0946A145ACF039CAA3DC0EFBCBC7977500692E51828EFF43FF1BD77775FB8402206DCD0A312F8CB00358E562C6A478139375319348355564D007BF2F6113206B51",
+              "status": "Verified",
+              "timestamp": 1790463552866
+            },
+            {
+              "hashAlgorithm": "SHA-256",
+              "logDescription": "Cloudflare 'Nimbus2026'",
+              "logId": "CB38F715897C84A1445F5BC1DDFBC96EF29A59CD470A690585B0CB14C31458E7",
+              "origin": "Embedded in certificate",
+              "signatureAlgorithm": "ECDSA",
+              "signatureData": "304502201D9837F9593FA79204CB55D014EB183ECA4B2295BBF8BAF19CDAF7B962F7A15C022100D66B6F4E733CCDB34A8FA02B5295A68134544430E0382E11D42D96E5C48AE9F2",
+              "status": "Verified",
+              "timestamp": 1790463552894
+            },
+            {
+              "hashAlgorithm": "SHA-256",
+              "logDescription": "Google 'Argon2026h2' log",
+              "logId": "D76D7D10D1A7F577C2C7E95FD700BFF982C9335A65E1D0B3017317C0C8C56977",
+              "origin": "TLS extension",
+              "signatureAlgorithm": "ECDSA",
+              "signatureData": "3046022100C9738CF5F3C1989657D884C3FC26B36DBBCA4B90FAAFEEBB5B5DE50B2BD0063C02210088D7D19156B45F1012E36911207275BC439E202A070B24CBAA9CE0C46D8C66FE",
+              "status": "Verified",
+              "timestamp": 1790463556306
+            },
+            {
+              "hashAlgorithm": "SHA-256",
+              "logDescription": "Google 'Xenon2026h2' log",
+              "logId": "D809553B944F7AFFC816196F944F85ABB0F8FC5E8755260F15D12E72BB454B14",
+              "origin": "TLS extension",
+              "signatureAlgorithm": "ECDSA",
+              "signatureData": "3046022100BE3AC30D32A768009420C8472B7BF8F784315AD9E6A76AA38DD170730088BDFF0221008CAFDC70201C51D4ED80B6B64B29E0E5FE2DEDF0CA55359BEC5FC189020E9266",
+              "status": "Verified",
+              "timestamp": 1790463556401
+            }
+          ],
+          "subjectName": "example.com",
+          "validFrom": 1790462951,
+          "validTo": 1798239395
+        },
+        "securityState": "secure",
+        "status": 404,
+        "statusText": "",
+        "timing": {
+          "connectEnd": -1,
+          "connectStart": -1,
+          "dnsEnd": -1,
+          "dnsStart": -1,
+          "proxyEnd": -1,
+          "proxyStart": -1,
+          "pushEnd": 0,
+          "pushStart": 0,
+          "receiveHeadersEnd": 11.518,
+          "receiveHeadersStart": 11.423,
+          "requestTime": 430030.442636,
+          "sendEnd": 0.17,
+          "sendStart": 0.113,
+          "sslEnd": -1,
+          "sslStart": -1,
+          "workerFetchStart": -1,
+          "workerReady": -1,
+          "workerRespondWithSettled": -1,
+          "workerStart": -1
+        },
+        "url": "https://example.com/definitely-missing-404"
+      },
+      "timestamp": 430030.454676,
+      "type": "Fetch"
+    },
+    "atMs": 999
+  },
+  {
+    "method": "Log.entryAdded",
+    "params": {
+      "entry": {
+        "level": "error",
+        "networkRequestId": "28100.7",
+        "source": "network",
+        "text": "Failed to load resource: the server responded with a status of 404 ()",
+        "timestamp": 1791119356115.429,
+        "url": "https://example.com/definitely-missing-404"
+      }
+    },
+    "atMs": 999
+  },
+  {
+    "method": "Network.dataReceived",
+    "params": {
+      "dataLength": 577,
+      "encodedDataLength": 352,
+      "requestId": "28100.7",
+      "timestamp": 430030.455403
+    },
+    "atMs": 1000
+  },
+  {
+    "method": "Network.loadingFinished",
+    "params": {
+      "encodedDataLength": 391,
+      "requestId": "28100.7",
+      "timestamp": 430030.45436
+    },
+    "atMs": 1050
+  }
+]

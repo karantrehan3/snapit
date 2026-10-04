@@ -1,7 +1,7 @@
 {
   "name": "snapit",
   "version": "4.0.0",
-  "description": "Local QA tool — Lightshot-style screenshots, recording, and live session analysis",
+  "description": "Local QA tool \u2014 Lightshot-style screenshots, recording, and live session analysis",
   "main": "./out/main/index.js",
   "author": "Karan Trehan",
   "license": "MIT",
@@ -57,6 +57,7 @@
   },
   "workspaces": [
     "core",
-    "server"
+    "server",
+    "extension"
   ]
 }

@@ -1,0 +1,13 @@
+{
+  "name": "@snapit/extension",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The snapit collector as an MV3 Chrome extension: records the tab you are already signed in to.",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.270"
+  }
+}

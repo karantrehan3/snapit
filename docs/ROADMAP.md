@@ -438,11 +438,30 @@ launched profile cannot reach a session the tester is already signed in to. Whic
 capture used belongs in `meta.json`, because it changes what the trail can be trusted to
 contain.
 
+**Loaded and driven in Chrome 154, 2026-10-04.** It attaches, collects, batches to a
+loopback receiver, and the events go through `chrome-har`, `redact.ts` and `har.ts`
+untouched — a navigation, a `console.error` and a 404 all arrive where the report reads
+them. The capture is committed as `collector/tests/fixtures/extension-session.json` so the
+claim stays evidence rather than argument.
+
+**And the thing that only shows up by trying it: `--load-extension` is gone.** Chrome 137
+removed it from branded builds as an anti-malware measure, so nothing can load an unpacked
+extension from the command line any more. Three consequences, and the third is the one that
+matters:
+
+- Tooling uses the CDP `Extensions.loadUnpacked` method instead, behind
+  `--enable-unsafe-extension-debugging`. That is what the harness does.
+- Chrome for Testing and Chromium still honour the flag; branded Chrome does not.
+- **snapit cannot install or side-load the extension for anybody.** "Ship the folder inside
+  the app and point Chrome at it" is not available. The only routes are a human in
+  `chrome://extensions` with Developer mode on, the Web Store, or enterprise policy — which
+  makes the distribution question load-bearing rather than deferrable, and makes a policy
+  install worth more again, since it also suppresses the debugging banner.
+
 **Not yet built:** the app-side bridge that receives the batches, the content script for the
 action trail, response bodies (a `Network.getResponseBody` round trip per request, issued
 through `chrome.debugger.sendCommand`), pairing the extension to the app's port and token,
-and the source selector in the app. **The extension has never been loaded into a browser** —
-everything above is verified against the protocol and the documentation, not against Chrome.
+and the source selector in the app.
 
 ---
 

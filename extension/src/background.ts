@@ -213,3 +213,13 @@ chrome.runtime.onMessageExternal.addListener((message, _sender, reply) => {
 
 export const inspect = (): { tabId: number; queued: number } | null =>
   session ? { tabId: session.tabId, queued: session.queue.length } : null
+
+/**
+ * A handle on the worker, for driving it from outside.
+ *
+ * An MV3 service worker is an ES module, so nothing it exports is reachable from a CDP
+ * `evaluate` — and the toolbar button cannot be clicked from a test harness. Without this
+ * the only way to exercise the extension is by hand, which is exactly the gap that let
+ * three wrong claims about this API survive into a commit.
+ */
+;(globalThis as unknown as { snapit: unknown }).snapit = { start, stop, inspect }
