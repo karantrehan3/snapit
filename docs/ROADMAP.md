@@ -373,6 +373,56 @@ needed no change to the report because `report.html` already addresses its media
 Still no upload, no link, no service. Both shapes are files the user sends by whatever means they
 were going to use anyway, so M1.6's argument and M1.7's refusal both stand unchanged.
 
+### M1.11 — The collector as a Chrome extension
+
+**Spike built 2026-10-04; the extension is not wired up.** `Decisions to settle` #3 left an
+MV3 extension as the escape hatch "if the friction proves fatal". It has: a snapit-launched
+profile means signing in to the app under test again, in a window that is not the one the
+tester already works in — and that cost falls on the people least willing to pay it.
+
+**It is a swap, not a rewrite, because `chrome.debugger` speaks CDP.** The same `Network.*`
+and `Page.*` events arrive with the same names and params, so of the collector's 1,299
+lines roughly 800 are untouched: `har.ts`, `redact.ts` and `levels.ts` entirely, and
+`actions.ts` apart from the line that calls the injected binding — `INJECTED_SCRIPT` is
+already a content script in all but name. What goes is `chrome.ts` (binary discovery, launch
+args) and `landing.ts` (no snapit-launched window to identify), plus the attach half of
+`session.ts`.
+
+**The finding that justified spiking it before committing.** `chrome-har` creates a page
+only from `frameStartedLoading`, `frameRequestedNavigation` or `navigatedWithinDocument` —
+**not** from `frameNavigated`. Forward only the latter and every request lands in its
+`entriesWithoutPage` bucket and is dropped: a HAR with zero entries and no error anywhere.
+Both are required, for different halves. `collector/tests/relayedHar.spec.ts` pins it by
+running a real event sequence through the actual `chrome-har` and asserting the 500 and the
+redacted cookie survive.
+
+Three costs, priced:
+
+1. **The debugging infobar.** `chrome.debugger` marks every attached tab, permanently and
+   undismissably, and that banner lands inside every screen recording. Today's launched
+   Chrome shows nothing — `launchArgs` deliberately omits `--enable-automation`. The escape
+   is worse: `chrome.webRequest` has no infobar and **cannot read response bodies at all**
+   under MV3, which is the signal `a1f4044` went out of its way to capture. Take the infobar.
+2. **MV3 service-worker death**, the risk `DESIGN.md` §10 flagged. The worker is killed after
+   ~30s idle. The flush interval is the answer and is therefore load-bearing: a `fetch`
+   inside the window resets the timer, so an empty batch is a heartbeat, not waste. HTTP
+   batching also avoids the WebSocket server dependency the app does not have.
+3. **Distribution, undecided.** The spike is a plain MV3 folder so it can be loaded unpacked,
+   zipped for the Web Store, or force-installed by policy. Packaging is the last step, not
+   the first.
+
+**What it does not change.** `DESIGN.md` §3's fault line still holds: screenshots are
+OS-level and the DOM is browser-level. The extension is a better answer to the browser half,
+not a replacement for snapit — screen capture, annotation, bundling, reports and MCP are
+untouched, and a native dialog or an IDE is still capturable. The shell-plus-modules shape is
+doing exactly what it was designed for: one module is being swapped.
+
+**Not yet built:** the app-side bridge that receives the batches, the content script for the
+action trail, response bodies (a `Network.getResponseBody` round trip per request, which the
+extension can issue through `chrome.debugger.sendCommand`), and pairing the extension to the
+app's port and token. The CDP-launch collector stays as the fallback until the extension is
+installable.
+
 ---
 
 ## Phase 2 — Playwright integration tests

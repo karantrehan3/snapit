@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "snapit collector",
+  "version": "0.1.0",
+  "description": "Records console, network and actions from the tab you are already signed in to, and hands them to the snapit desktop app.",
+  "minimum_chrome_version": "116",
+  "permissions": ["debugger", "tabs", "storage"],
+  "host_permissions": ["http://127.0.0.1/*"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "action": { "default_title": "snapit — record this tab" }
+}

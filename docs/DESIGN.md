@@ -118,7 +118,13 @@ tester does not get their own already-open, already-authenticated Chrome, they g
 snapit-launched profile — persisted, so signing in to the app under test is a
 once-per-machine cost rather than once-per-session. `ROADMAP.md`'s _Decisions to settle_ #3
 records that trade and leaves the extension as the escape hatch if the friction proves
-fatal. It has not.
+fatal.
+
+**Reopened 2026-10-04.** The friction is the login: a snapit-launched profile means signing
+in to the app under test again, in a window that is not the one the tester works in, and
+that cost lands on exactly the people least willing to pay it. So the original decision in
+this table turns out to be the right one after all, and M1.3's was the expedient one. See
+`ROADMAP.md` M1.11.
 
 ### The fault line this resolves
 
