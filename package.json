@@ -1,7 +1,7 @@
 {
   "name": "snapit",
   "version": "4.0.0",
-  "description": "Local QA tool \u2014 Lightshot-style screenshots, recording, and live session analysis",
+  "description": "Local QA tool — Lightshot-style screenshots, recording, and live session analysis",
   "main": "./out/main/index.js",
   "author": "Karan Trehan",
   "license": "MIT",
@@ -22,7 +22,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:all": "npm test && npm test --workspace @snapit/core && npm test --workspace @snapit/server",
-    "typecheck:all": "npm run typecheck && npm run typecheck --workspace @snapit/core && npm run typecheck --workspace @snapit/server"
+    "typecheck:all": "npm run typecheck && npm run typecheck --workspace @snapit/core && npm run typecheck --workspace @snapit/server",
+    "test:e2e": "npm run build --workspace @snapit/extension && SNAPIT_E2E=1 vitest run src/main/collector/tests/e2eBridge.spec.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",

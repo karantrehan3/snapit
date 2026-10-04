@@ -159,7 +159,11 @@ export async function start(tabId: number): Promise<void> {
   // Revives the worker if Chrome terminates it despite the above. 30s is the floor since
   // Chrome 120, which is why it is a backstop and not the primary mechanism.
   await chrome.alarms.create(KEEPALIVE_ALARM, { periodInMinutes: 0.5 })
-  await post('/collector/start', { tabId, startedAt: session.startedAt })
+  await post('/collector/start', {
+    tabId,
+    startedAt: session.startedAt,
+    version: chrome.runtime.getManifest().version
+  })
   await chrome.action.setBadgeText({ text: 'REC' })
   await chrome.action.setBadgeBackgroundColor({ color: '#c0392b' })
 }
