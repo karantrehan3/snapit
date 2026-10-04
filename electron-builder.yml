@@ -9,6 +9,17 @@ files:
   - out/**
   - package.json
 asar: true
+# Chrome needs a real directory to load an unpacked extension from, and an asar is not
+# one — so the collector extension ships beside the bundle rather than inside it. Chrome
+# 137 removed --load-extension, so snapit cannot load it either way; what this buys is a
+# folder the app can reveal and a person can point chrome://extensions at.
+extraResources:
+  - from: extension
+    to: extension
+    filter:
+      - manifest.json
+      - EXTENSION_ID
+      - dist/**
 # Keep English only; compress installers harder (helps the win/linux targets).
 compression: maximum
 electronLanguages:

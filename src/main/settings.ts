@@ -25,6 +25,8 @@ export type Settings = {
    * ask. If this install later signs in to one, this is the record that gets promoted.
    */
   ownerId: string
+  /** Bearer token the Chrome extension presents. Generated once, never renderer-settable. */
+  collectorToken: string
   /** Port the local MCP server listens on (127.0.0.1 only). */
   mcpPort: number
   /** What the capture bar was set to last time. See capturePrefs.ts. */
@@ -48,6 +50,7 @@ function defaults(): Settings {
     bundleRecordings: true,
     mcpToken: randomBytes(24).toString('hex'),
     ownerId: `usr-${randomBytes(8).toString('hex')}`,
+    collectorToken: randomBytes(24).toString('hex'),
     mcpPort: DEFAULT_MCP_PORT,
     capture: defaultCapture(),
     hasSeenWelcome: false
@@ -71,6 +74,10 @@ function coerce(raw: unknown): Settings {
     bundleRecordings: typeof o.bundleRecordings === 'boolean' ? o.bundleRecordings : d.bundleRecordings,
     mcpToken: typeof o.mcpToken === 'string' && o.mcpToken.length > 0 ? o.mcpToken : d.mcpToken,
     ownerId: typeof o.ownerId === 'string' && o.ownerId.length > 0 ? o.ownerId : d.ownerId,
+    collectorToken:
+      typeof o.collectorToken === 'string' && o.collectorToken.length > 0
+        ? o.collectorToken
+        : d.collectorToken,
     mcpPort: typeof o.mcpPort === 'number' && Number.isInteger(o.mcpPort) ? o.mcpPort : d.mcpPort,
     capture: coerceCapture(o.capture),
     hasSeenWelcome: o.hasSeenWelcome === true

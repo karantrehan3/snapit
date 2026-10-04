@@ -1,6 +1,6 @@
 {
   "name": "snapit",
-  "version": "4.0.0",
+  "version": "5.0.0",
   "description": "Local QA tool — Lightshot-style screenshots, recording, and live session analysis",
   "main": "./out/main/index.js",
   "author": "Karan Trehan",
@@ -8,7 +8,7 @@
   "private": true,
   "scripts": {
     "dev": "electron-vite dev",
-    "build": "electron-vite build",
+    "build": "npm run build --workspace @snapit/extension && electron-vite build",
     "preview": "electron-vite preview",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",

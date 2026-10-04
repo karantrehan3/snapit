@@ -60,6 +60,7 @@ const FORWARDED = [
   'Page.loadEventFired',
   'Runtime.consoleAPICalled',
   'Runtime.exceptionThrown',
+  'Runtime.bindingCalled',
   'Log.entryAdded'
 ] as const
 
@@ -75,7 +76,19 @@ type Session = {
   startedAt: number
   queue: Relayed[]
   timer: ReturnType<typeof setInterval> | null
+  /** Request ids worth a body, and the status that decided it. */
+  wantedBodies: Map<string, number>
 }
+
+/** Mirrors `collector/har.ts`. Kept short because the app re-decides anyway. */
+const BODY_TYPES = new Set(['XHR', 'Fetch', 'Document', 'Script'])
+const isFailed = (status: number): boolean => status === 0 || status >= 400
+
+/** The event name the app reads a relayed body under. See `collector/relayed.ts`. */
+const BODY_EVENT = 'snapit.responseBody'
+
+/** Enough to identify a failure; the app clips further. */
+const MAX_BODY_CHARS = 200_000
 
 let session: Session | null = null
 
@@ -133,6 +146,54 @@ function onEvent(source: chrome.debugger.Debuggee, method: string, params?: obje
   // a judgement — anything kept is forwarded untouched.
   if (!wanted(method)) return
   session.queue.push({ method, params: params ?? {}, atMs: Date.now() - session.startedAt })
+  void noteBody(method, params as Record<string, unknown> | undefined)
+}
+
+/**
+ * Response bodies, which no CDP event carries.
+ *
+ * `Network.getResponseBody` is a separate round trip, and it only works while the response
+ * is still in the renderer's buffer — so it has to be asked for as soon as loading
+ * finishes, not at stop. That is the same finding the launched collector recorded: stopping
+ * immediately after a failing request lost every body it had not yet fetched.
+ *
+ * Only the ones worth having. The app re-decides what to keep; this is about not making
+ * hundreds of round trips for images.
+ */
+async function noteBody(method: string, params?: Record<string, unknown>): Promise<void> {
+  const current = session
+  if (!current || !params) return
+
+  if (method === 'Network.responseReceived') {
+    const response = params.response as { status?: number } | undefined
+    const type = typeof params.type === 'string' ? params.type : ''
+    const status = typeof response?.status === 'number' ? response.status : 0
+    if (BODY_TYPES.has(type) || isFailed(status)) current.wantedBodies.set(String(params.requestId), status)
+    return
+  }
+
+  if (method !== 'Network.loadingFinished') return
+  const requestId = String(params.requestId)
+  if (!current.wantedBodies.delete(requestId)) return
+
+  try {
+    const body = (await chrome.debugger.sendCommand({ tabId: current.tabId }, 'Network.getResponseBody', {
+      requestId
+    })) as { body?: string; base64Encoded?: boolean } | undefined
+    if (typeof body?.body !== 'string') return
+    current.queue.push({
+      method: BODY_EVENT,
+      params: {
+        requestId,
+        text: body.body.slice(0, MAX_BODY_CHARS),
+        base64Encoded: body.base64Encoded === true
+      },
+      atMs: Date.now() - current.startedAt
+    })
+  } catch {
+    // The buffer was evicted, or the tab navigated away. A missing body is a missing
+    // nicety; it must never interrupt the recording.
+  }
 }
 
 function onDetach(source: chrome.debugger.Debuggee, reason: string): void {
@@ -154,16 +215,40 @@ export async function start(tabId: number): Promise<void> {
   await chrome.debugger.attach({ tabId }, PROTOCOL_VERSION)
   for (const domain of DOMAINS) await chrome.debugger.sendCommand({ tabId }, domain)
 
-  session = { tabId, startedAt: Date.now(), queue: [], timer: null }
+  session = { tabId, startedAt: Date.now(), queue: [], timer: null, wantedBodies: new Map() }
   session.timer = setInterval(() => void flush(), FLUSH_MS)
   // Revives the worker if Chrome terminates it despite the above. 30s is the floor since
   // Chrome 120, which is why it is a backstop and not the primary mechanism.
   await chrome.alarms.create(KEEPALIVE_ALARM, { periodInMinutes: 0.5 })
-  await post('/collector/start', {
+  const started = await post('/collector/start', {
     tabId,
     startedAt: session.startedAt,
     version: chrome.runtime.getManifest().version
   })
+  if (started?.status === 409) {
+    await stop('version-mismatch')
+    throw new Error('This snapit expects a different version of the extension. Reload it.')
+  }
+
+  // The app hands over the script that records what the tester does, rather than the
+  // extension carrying its own copy — one definition of an action, in the place it is
+  // tested. Installed over the debugger that is already attached, exactly the way the
+  // launched collector installs it over CDP.
+  const plan = (await started?.json().catch(() => null)) as {
+    bindingName?: string
+    injectedScript?: string
+  } | null
+  if (plan?.bindingName && plan.injectedScript) {
+    await chrome.debugger.sendCommand({ tabId }, 'Runtime.addBinding', { name: plan.bindingName })
+    await chrome.debugger.sendCommand({ tabId }, 'Page.addScriptToEvaluateOnNewDocument', {
+      source: plan.injectedScript
+    })
+    // And once for the page already open, which no navigation will re-run it for.
+    await chrome.debugger.sendCommand({ tabId }, 'Runtime.evaluate', {
+      expression: plan.injectedScript,
+      returnByValue: true
+    })
+  }
   await chrome.action.setBadgeText({ text: 'REC' })
   await chrome.action.setBadgeBackgroundColor({ color: '#c0392b' })
 }

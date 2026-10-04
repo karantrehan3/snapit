@@ -105,24 +105,41 @@ describe('a session', () => {
     ).toBe(403)
   })
 
-  test('beginCapture throws away what came before the bug', async () => {
+  test('beginCapture keeps the frame lifecycle, and drops the rest', async () => {
+    const before = bridgeSession()!.events
+    expect(before).toBeGreaterThan(0)
     handle!.beginCapture()
-    expect(bridgeSession()?.events).toBe(0)
-    await authed('/collector/events', { events: [{ method: 'Page.loadEventFired', params: {}, atMs: 1 }] })
-    expect(bridgeSession()?.events).toBe(1)
+    const after = bridgeSession()!.events
+
+    // Network and Page events survive on purpose. Dropping them is the obvious move and
+    // the wrong one: chrome-har maps each request to a page using the frame lifecycle
+    // that came before it, so discarding those makes every later request unmappable.
+    // The HAR is filtered at assembly instead — see `trimHarBefore`.
+    expect(after).toBeGreaterThan(0)
+    expect(after).toBeLessThan(before)
   })
 
-  test('stop assembles a CollectedSession the rest of the app already reads', async () => {
+  test('the HAR is trimmed to the capture window, not to the event buffer', async () => {
+    // Everything in the fixture predates the `beginCapture` above, so a correct trim
+    // leaves no entries — the requests happened while getting to the bug.
+    const collected = await handle!.stop()
+    expect((collected.har as { log: { entries: unknown[] } }).log.entries).toEqual([])
+  })
+
+  test('a fresh session assembles everything the rest of the app reads', async () => {
+    await authed('/collector/start', { tabId: 8, version: '0.1.0' })
     const events = JSON.parse(
       readFileSync(join(__dirname, 'fixtures', 'extension-session.json'), 'utf-8')
     ) as RelayedEvent[]
     await authed('/collector/events', { events })
+
     const collected = await handle!.stop()
     expect(collected.startedAt).toMatch(/^\d{4}-/)
     expect(collected.console.some((c) => c.text.includes('a console error'))).toBe(true)
     expect(collected.navigations.some((n) => n.url.includes('example.com'))).toBe(true)
     expect((collected.har as { log: { entries: unknown[] } }).log.entries.length).toBeGreaterThan(0)
-    // Not built yet, and honest about it rather than absent from the type.
+    // The fixture predates the content-script handover, so it carries no bindingCalled
+    // events and therefore no actions. A session recorded now would.
     expect(collected.actions).toEqual([])
   })
 

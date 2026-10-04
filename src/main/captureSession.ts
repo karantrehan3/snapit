@@ -153,6 +153,40 @@ function summarise(collected: CollectedSession, failed: number): CollectedSummar
   }
 }
 
+/**
+ * Adopt a session the Chrome extension started.
+ *
+ * The lifecycle runs the other way round here. `startBrowserSession` launches a browser
+ * and then owns what follows; this is called because somebody pressed record in the
+ * browser they were already working in, and snapit is being told. Everything after the
+ * handle is identical, which is the whole reason `CollectorHandle` exists.
+ *
+ * There is no window to find and no recording to start: the tester's own Chrome is not a
+ * window snapit launched, so `windowSourceId` stays null and a screen recording, if they
+ * want one, is started the ordinary way and joins through `contributeRecording`.
+ *
+ * The capture begins immediately. With a launched browser there is setup to sit through —
+ * signing in, navigating — and `beginCapture` exists to throw it away. Pressing record in
+ * a tab you are already on *is* the start.
+ */
+export function adoptExtensionSession(handle: CollectorHandle): boolean {
+  if (session?.collector) return false
+
+  const { saveDir } = getSettings()
+  session = {
+    dir: bundleDir(saveDir, captureBaseName()),
+    phase: 'capturing',
+    windowSourceId: null,
+    autoRecording: false,
+    startedAt: new Date(),
+    originMs: Date.now(),
+    collector: handle,
+    recording: null
+  }
+  handle.beginCapture()
+  return true
+}
+
 export async function startBrowserSession(startUrl?: string): Promise<void> {
   if (session?.collector) throw new Error('A browser session is already running.')
 

@@ -3,6 +3,53 @@
 All notable changes to snapit are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [5.0.0] - 2026-10-04
+
+snapit can record the browser you are already signed in to. Until now it launched its own
+Chrome, which meant a fresh profile and signing in to whatever you were testing again,
+every time — the cost that lands first on the people least willing to pay it. A companion
+Chrome extension collects from the tab you are already in: your session, your cookies, your
+extensions.
+
+The major bump is the second install. snapit is now an app _and_ a folder you load into
+Chrome, and that is a different thing to hand somebody than a dmg.
+
+### Record the tab you are in
+
+- **A Chrome extension** that collects console, network, response bodies and every click
+  from the tab you choose, and hands them to the app over loopback.
+- **The recording starts in the browser.** Click snapit in Chrome's toolbar; the app is told
+  and opens its session bar. The lifecycle runs the other way round from a launched browser,
+  which is why the session bar now appears without anyone touching snapit.
+- **Nothing was reinvented to do it.** `chrome.debugger` speaks the same protocol the
+  launched collector reads, so the HAR, the redaction, the action trail and the report are
+  the same code. The app even hands the extension the script that records actions, rather
+  than the extension carrying a copy that could drift.
+- **The launched browser still works and still ships.** The extension is an upgrade, never a
+  dependency — an install that never touches `chrome://extensions` is a working snapit.
+
+### Setting it up
+
+- **A Browser section** in the window: reveal the folder, three steps, and a pairing button.
+  The install cannot be automated — Chrome 137 removed `--load-extension` from branded
+  builds, so snapit can neither side-load the extension nor tick a box for you.
+- **Pairing is a five-minute window you open**, not a standing permission. The extension's
+  id is pinned, so the app can tell our extension from anything else asking.
+- **Two things said plainly rather than discovered:** Chrome shows a debugging banner on the
+  tab while it collects and it will appear in screen recordings; and an extension loaded as
+  a folder does not update itself, so snapit refuses a session from a version it does not
+  recognise rather than quietly recording a short one.
+
+### Underneath
+
+- **`CaptureStore` and `Identity`**, so every library surface goes through an interface
+  instead of reaching for the save folder. Nothing a user can see changed. Locally the
+  folder stays the truth — there is no local database, and adding one would be a mistake:
+  people move captures in Finder and an index would be wrong within a week.
+- The repository is a workspace: `core/` for logic that two deployments share, `extension/`,
+  and the app. `server/` carries an unfinished connected-mode prototype that nothing in the
+  app imports and nothing here ships.
+
 ## [4.0.0] - 2026-09-03
 
 snapit stopped being a screenshot tool with a tray menu. It captures what an application

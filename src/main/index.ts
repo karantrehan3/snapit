@@ -23,6 +23,17 @@ import {
 import { captureDisplay, getDisplaySource, type DisplaySource } from './capture'
 import { setCaptureMarkers } from './markerStore'
 import { createSessionManager } from './session'
+import { startCollectorBridge, stopCollectorBridge } from './collector/bridge'
+import {
+  EXPECTED_EXTENSION_VERSION,
+  allowPairing,
+  closePairing,
+  extensionDir,
+  extensionId,
+  isExtensionAvailable,
+  isPairingAllowed,
+  revealExtension
+} from './extension'
 import { getSettings, setSettings, markWelcomeSeen, regenerateMcpToken, type Settings } from './settings'
 import type { CapturePrefs } from './capturePrefs'
 import { checkForUpdate, type UpdateInfo } from './updater'
@@ -36,6 +47,7 @@ import { summariseConsole, summariseFailedRequests, summariseSteps } from './mcp
 import type { ActionRecord } from './collector/actions'
 import type { ConsoleEntry } from './collector/session'
 import {
+  adoptExtensionSession,
   beginCapture,
   contributeRecording,
   isAutoRecording,
@@ -1117,6 +1129,50 @@ app.whenReady().then(() => {
     if (state.store.mode === 'connected') refreshLibrary()
   })
 
+  /**
+   * The Chrome extension's way in. Beside the MCP server and held to the same posture:
+   * loopback only, its own token, its own reasons to be revoked.
+   */
+  startCollectorBridge({
+    token: () => getSettings().collectorToken,
+    extensionId,
+    pairingAllowed: isPairingAllowed,
+    expectedExtensionVersion: EXPECTED_EXTENSION_VERSION,
+    onSessionStart: (handle, info) => {
+      // Pairing succeeded, so the window closes — it exists for one handshake.
+      closePairing()
+      if (!adoptExtensionSession(handle)) {
+        console.warn('[snapit] a session was already running; ignoring the extension.')
+        return
+      }
+      console.log(`[snapit] recording tab ${info.tabId} via the extension`)
+      buildTray()
+      // The session bar is how somebody knows snapit is collecting. Without it the only
+      // sign is a badge in a browser they may not be looking at.
+      showSessionBar()
+    },
+    onSessionEnd: (reason) => {
+      // The extension stopped, so the app stops with it — the two must not disagree about
+      // whether a session is running.
+      void stopBrowserSession()
+        .then(() => {
+          buildTray()
+          closeOverlayWindow()
+        })
+        .catch((err: unknown) => console.error('[snapit] could not finish that session:', err))
+      if (reason !== 'stopped' && reason !== 'user') console.log(`[snapit] extension detached: ${reason}`)
+    },
+    onVersionMismatch: (found, expected) => {
+      void dialog.showMessageBox({
+        type: 'warning',
+        message: 'That snapit extension is a different version',
+        detail:
+          `The extension is ${found} and this snapit expects ${expected}. An unpacked extension ` +
+          `does not update itself — open chrome://extensions and press Reload on snapit collector.`
+      })
+    }
+  })
+
   startMcpServer(app.getVersion(), {
     requestInteractiveCapture,
     // The tray reflects session state, so it has to be rebuilt when an agent is the one
@@ -1356,6 +1412,16 @@ app.whenReady().then(() => {
 
   ipcMain.on('app:open-save-folder', () => void shell.openPath(getSettings().saveDir))
   ipcMain.handle('mcp:setup-command', () => mcpSetupCommand())
+  ipcMain.handle('extension:status', () => ({
+    available: isExtensionAvailable(),
+    folder: extensionDir(),
+    id: extensionId(),
+    version: EXPECTED_EXTENSION_VERSION,
+    pairing: isPairingAllowed(),
+    recording: isBrowserSessionActive()
+  }))
+  ipcMain.on('extension:reveal', () => revealExtension())
+  ipcMain.handle('extension:allow-pairing', () => ({ until: allowPairing() }))
   ipcMain.handle('mcp:regenerate', () => regenerateMcpTokenWithConfirm())
   ipcMain.on('app:copy-text', (_event, text: unknown) => clipboard.writeText(str(text)))
   ipcMain.on('session:start', () => void beginBrowserSession())
@@ -1565,4 +1631,5 @@ app.on('window-all-closed', () => {
 app.on('will-quit', () => {
   globalShortcut.unregisterAll()
   stopMcpServer()
+  stopCollectorBridge()
 })

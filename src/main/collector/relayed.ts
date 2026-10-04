@@ -1,4 +1,6 @@
 import { isErrorLevel } from './levels'
+import { BINDING_NAME, appendAction, normalizeAction, type ActionRecord } from './actions'
+import type { ResponseBody } from './har'
 import { str } from '../untrusted'
 import type { ConsoleEntry, NavigationEntry } from './session'
 
@@ -29,9 +31,22 @@ export type HarMessage = { method: string; params: unknown }
 export type RelayedSession = {
   console: ConsoleEntry[]
   navigations: NavigationEntry[]
+  actions: ActionRecord[]
+  /** Request id → body, for the responses the extension was asked to fetch. */
+  bodies: Record<string, ResponseBody>
   /** Network and Page events only, in arrival order. */
   harMessages: HarMessage[]
 }
+
+/**
+ * The event the extension synthesises for a response body.
+ *
+ * CDP never carries bodies on an event — they are a separate `Network.getResponseBody`
+ * round trip — so the extension makes that call and relays the answer under a name no
+ * real CDP domain uses. The `snapit.` prefix is what keeps it from ever reaching
+ * `chrome-har`, which would not know what to do with it.
+ */
+export const BODY_EVENT = 'snapit.responseBody'
 
 /** A chatty page must not exhaust memory. Mirrors the old collector's cap. */
 const MAX_CONSOLE_ENTRIES = 5000
@@ -82,6 +97,8 @@ export function collectRelayed(events: readonly RelayedEvent[]): RelayedSession 
   const console: ConsoleEntry[] = []
   const navigations: NavigationEntry[] = []
   const harMessages: HarMessage[] = []
+  const bodies: Record<string, ResponseBody> = {}
+  let actions: ActionRecord[] = []
 
   const pushConsole = (entry: ConsoleEntry): void => {
     // Drop the oldest rather than the newest: the tail is what the bug is in.
@@ -125,6 +142,30 @@ export function collectRelayed(events: readonly RelayedEvent[]): RelayedSession 
         pushConsole({ atMs, level: 'uncaught', text, ...originOf(details) })
         break
       }
+      case 'Runtime.bindingCalled': {
+        // The action trail. The page calls a binding the app's own injected script
+        // installed, so the payload is arbitrary text from somebody else's application —
+        // `normalizeAction` is where that is made safe, and it is the app's copy of the
+        // rule, not a second one living in the extension.
+        if (str(params.name) !== BINDING_NAME) break
+        let parsed: unknown
+        try {
+          parsed = JSON.parse(str(params.payload))
+        } catch {
+          break
+        }
+        const action = normalizeAction(parsed, atMs)
+        if (action) actions = appendAction(actions, action)
+        break
+      }
+      case BODY_EVENT: {
+        const requestId = str(params.requestId)
+        const text = typeof params.text === 'string' ? params.text : null
+        if (requestId && text !== null) {
+          bodies[requestId] = { text, base64Encoded: params.base64Encoded === true }
+        }
+        break
+      }
       case 'Page.frameNavigated': {
         const frame = obj(params.frame)
         // Sub-frames navigate constantly; only the main frame is somewhere the tester went.
@@ -139,7 +180,7 @@ export function collectRelayed(events: readonly RelayedEvent[]): RelayedSession 
     }
   }
 
-  return { console, navigations, harMessages }
+  return { console, navigations, actions, bodies, harMessages }
 }
 
 /** Whether a relayed session saw anything worth reporting as a finding. */

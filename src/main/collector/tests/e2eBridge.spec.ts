@@ -124,16 +124,35 @@ describe.skipIf(!available)('extension → bridge, end to end', () => {
     expect(handle, 'the bridge should have been told a session began').toBeTruthy()
 
     await page.goto('https://example.com/?e2e=1', { waitUntil: 'domcontentloaded' })
+
+    // A real click, so the injected binding has something to report. This is the part
+    // that proves the app's own action recorder reaches the page through the debugger.
+    await page.click('a').catch(() => undefined)
     await page.evaluate(() => {
       console.error('e2e: a console error')
       return fetch('/e2e-missing-404').catch(() => {})
     })
-    await new Promise((r) => setTimeout(r, 4000))
+    await new Promise((r) => setTimeout(r, 4500))
     expect(bridgeSession()!.events).toBeGreaterThan(0)
 
     collected = await handle!.stop()
     expect(collected.console.some((c) => c.text.includes('a console error'))).toBe(true)
     expect(collected.navigations.some((n) => n.url.includes('example.com'))).toBe(true)
-    expect((collected.har as { log: { entries: unknown[] } }).log.entries.length).toBeGreaterThan(0)
+
+    const entries = (collected.har as { log: { entries: Array<Record<string, never>> } }).log.entries
+    expect(entries.length).toBeGreaterThan(0)
+
+    // The action trail, recorded by the app's INJECTED_SCRIPT running in the tester's own
+    // page — not a content script the extension carries a copy of.
+    expect(collected.actions.length).toBeGreaterThan(0)
+    expect(collected.actions[0]).toMatchObject({ type: 'click' })
+    expect(collected.actions[0]!.selectors.length).toBeGreaterThan(0)
+
+    // And a response body, which no CDP event carries — fetched by the extension over
+    // the debugger and reattached to the HAR by the app.
+    const withBody = entries.filter(
+      (e) => typeof (e as { response?: { content?: { text?: string } } }).response?.content?.text === 'string'
+    )
+    expect(withBody.length, 'at least one entry should carry a response body').toBeGreaterThan(0)
   }, 90_000)
 })

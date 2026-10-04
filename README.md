@@ -106,6 +106,33 @@ uploaded anywhere.
 - Capture overlays are excluded from screen capture (content-protected) so they never bleed into a
   recording.
 
+### Record the browser you are already signed in to
+
+snapit can launch its own Chrome, and that still works. But it is a fresh profile, so you
+sign in to whatever you are testing again, every time. The companion Chrome extension
+collects from the tab you are already in — your session, your cookies, your extensions.
+
+1. In snapit, open **Browser** and press **Reveal folder**.
+2. Go to `chrome://extensions`, turn on **Developer mode**, press **Load unpacked**, pick
+   that folder.
+3. Back in snapit, press **Open pairing**.
+
+Then click snapit in Chrome's toolbar on any tab. It shows **REC** while collecting.
+
+Two things worth knowing before you try it:
+
+- **Chrome shows a debugging banner** on the tab while snapit collects, because the
+  extension uses Chrome's debugger to read the network and the console. It cannot be turned
+  off for an extension you loaded yourself, and it will appear in screen recordings.
+  Deploying the extension by enterprise policy removes it; nothing else does.
+- **It does not update itself.** A folder is not an install, so updating snapit leaves the
+  old extension loaded. Press Reload on `chrome://extensions` after an update — snapit
+  refuses a session from a version it does not recognise rather than recording a short one.
+
+snapit cannot do any of this for you: Chrome 137 removed the flag that let an application
+load an unpacked extension. The extension is an upgrade, never a dependency — an install
+that never opens `chrome://extensions` is a working snapit.
+
 ## Shortcuts
 
 | Action                           | Shortcut               |

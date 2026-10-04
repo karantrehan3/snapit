@@ -1,6 +1,8 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'http'
 import { harFromMessages } from 'chrome-har'
 import { collectRelayed, type RelayedEvent } from './relayed'
+import { attachResponseBodies, trimHarBefore } from './har'
+import { BINDING_NAME, INJECTED_SCRIPT } from './actions'
 import { redactHar } from './redact'
 import { checkCollectorRequest, checkPairRequest, versionsAgree, type AuthOutcome } from './bridgeAuth'
 import type { CollectedSession, CollectorHandle } from './session'
@@ -94,14 +96,22 @@ async function readBody(req: IncomingMessage, max = 8_000_000): Promise<Record<s
 export function assembleSession(
   events: readonly RelayedEvent[],
   startedAt: Date,
-  durationMs: number
+  durationMs: number,
+  /** Wall-clock cutoff from `beginCapture`; earlier requests were getting to the bug. */
+  captureFromMs = 0
 ): CollectedSession {
-  const { console: consoleEntries, navigations, harMessages } = collectRelayed(events)
+  const { console: consoleEntries, navigations, actions, bodies, harMessages } = collectRelayed(events)
 
   let har: unknown = { log: { version: '1.2', entries: [] } }
   try {
-    har = harFromMessages(harMessages, { includeTextFromResponseBody: false })
+    const built = harFromMessages(harMessages, { includeTextFromResponseBody: false })
+    // Trimmed here rather than by dropping events, which is the mistake `trimHarBefore`
+    // documents: chrome-har maps each request to a page using the frame lifecycle events
+    // that came before it, so discarding those makes every later request unmappable and
+    // silently loses it. The stream stays whole; the built HAR is filtered.
+    har = attachResponseBodies(trimHarBefore(built as never, captureFromMs), bodies)
   } catch (err) {
+    // A malformed stream must not take the console and the trail with it.
     console.error('[snapit] could not build a HAR from the relayed events:', err)
   }
 
@@ -110,8 +120,7 @@ export function assembleSession(
     durationMs,
     console: consoleEntries,
     navigations,
-    // The action trail comes from the content script, which is not built yet.
-    actions: [],
+    actions,
     har: redactHar(har as { log?: { entries?: [] } })
   }
 }
@@ -122,14 +131,18 @@ function handleFor(current: Live): CollectorHandle {
     // There is no CDP endpoint to hand anybody: the browser is the tester's own.
     endpoint: '',
     beginCapture: () => {
-      // Same meaning as the launched collector's: everything before now was getting to
-      // the bug. Events are dropped rather than marked, so nothing downstream has to know.
-      current.events.length = 0
-      current.fromMs = Date.now() - current.startedAt.getTime()
+      // The events are kept. Clearing them is the obvious move and it is wrong — see the
+      // note in `assembleSession`. What is recorded is the wall clock to filter at.
+      current.fromMs = Date.now()
+      // Actions and console lines from before the capture are noise rather than
+      // unmappable, so those are dropped where the HAR's entries are merely filtered.
+      current.events = current.events.filter(
+        (e) => e.method.startsWith('Network.') || e.method.startsWith('Page.')
+      )
     },
     stop: async () => {
       const durationMs = Date.now() - current.startedAt.getTime()
-      const assembled = assembleSession(current.events, current.startedAt, durationMs)
+      const assembled = assembleSession(current.events, current.startedAt, durationMs, current.fromMs)
       if (live === current) live = null
       return assembled
     }
@@ -171,7 +184,9 @@ export function startCollectorBridge(hooks: BridgeHooks, port = DEFAULT_BRIDGE_P
         }
         live = { tabId, startedAt: new Date(), events: [], fromMs: 0 }
         hooks.onSessionStart(handleFor(live), { tabId, version })
-        return json(res, 200, { ok: true })
+        // The app owns the injected script and hands it over, rather than the extension
+        // carrying a copy. One source for what an action is, in the place it is tested.
+        return json(res, 200, { ok: true, bindingName: BINDING_NAME, injectedScript: INJECTED_SCRIPT })
       }
 
       if (path === '/collector/events') {

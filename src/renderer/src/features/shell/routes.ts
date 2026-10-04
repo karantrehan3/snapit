@@ -4,6 +4,7 @@ import { About } from '@renderer/features/about/About'
 import { Captures } from '@renderer/features/captures/Captures'
 import { Settings } from '@renderer/features/settings/Settings'
 import { Checks } from './Checks'
+import { BrowserExtension } from './BrowserExtension'
 import { ClaudeCode } from './ClaudeCode'
 import { Overview } from './Overview'
 
@@ -34,6 +35,7 @@ export type Route =
   | 'captures'
   | 'analytics'
   | 'checks'
+  | 'browser'
   | 'claude'
   | 'settings'
   | 'about'
@@ -102,7 +104,13 @@ export const ROUTES: Record<Route, RouteSpec> = {
   },
   analytics: { label: 'Analytics', icon: 'chart', view: Analytics },
   checks: { label: 'Checks', icon: 'check', view: Checks, soon: true, count: () => 'soon' },
-  claude: { label: 'Claude Code', icon: 'globe', view: ClaudeCode, group: 'This machine' },
+  browser: {
+    label: 'Browser',
+    icon: 'external',
+    view: BrowserExtension,
+    group: 'This machine'
+  },
+  claude: { label: 'Claude Code', icon: 'globe', view: ClaudeCode },
   settings: { label: 'Settings', icon: 'gear', view: Settings },
   about: { label: 'About', icon: 'info', view: About },
   edit: { label: 'Edit image', icon: 'pen', view: ImageEditorRoute, bare: true, unlisted: true }
@@ -114,6 +122,7 @@ export const ROUTE_ORDER: Route[] = [
   'captures',
   'analytics',
   'checks',
+  'browser',
   'claude',
   'settings',
   'about'

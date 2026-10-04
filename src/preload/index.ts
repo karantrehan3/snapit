@@ -176,6 +176,20 @@ export type IdentitySnapshot = {
   offlineReason: string | null
 }
 
+/** The Chrome collector extension, as Settings shows it. */
+export type ExtensionStatus = {
+  /** False when the folder is missing from the build — then nothing else here matters. */
+  available: boolean
+  /** Where to point chrome://extensions. Revealed rather than typed. */
+  folder: string
+  /** Pinned by manifest.key, so it is the same on every machine. */
+  id: string
+  version: string
+  /** A pairing window is open right now. */
+  pairing: boolean
+  recording: boolean
+}
+
 /** What a server wants as a credential, so the prompt can ask for the right thing. */
 export type SignInMethod = { provider: string; kind: string; detail: string }
 
@@ -380,6 +394,14 @@ const api = {
    * rather than testing which mode they are in — see `src/main/identity.ts`.
    */
   getIdentity: (): Promise<IdentitySnapshot> => ipcRenderer.invoke('identity:get'),
+  /** Chrome extension: where it is, whether it is paired, whether it is recording. */
+  extensionStatus: (): Promise<ExtensionStatus> => ipcRenderer.invoke('extension:status'),
+  revealExtension: (): void => ipcRenderer.send('extension:reveal'),
+  /**
+   * Open a short window in which the extension may collect its token. Pairing is a thing
+   * a person does once, so it is a button rather than a standing permission.
+   */
+  allowExtensionPairing: (): Promise<{ until: number }> => ipcRenderer.invoke('extension:allow-pairing'),
   /** Ask a server how it wants to be signed in to, before prompting for anything. */
   describeSignIn: (serverUrl: string): Promise<SignInMethod> =>
     ipcRenderer.invoke('auth:describe', serverUrl),
