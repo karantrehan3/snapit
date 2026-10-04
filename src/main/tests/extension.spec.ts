@@ -13,21 +13,31 @@ const existsSync = vi.fn<(p: string) => boolean>(() => false)
 const readFileSync = vi.fn(() => 'flhandipbjjgpogpdoemadcebhjlgneo\n')
 
 vi.mock('fs', () => ({ existsSync, readFileSync }))
+const showMessageBox = vi.fn(async () => ({ response: 0 }))
+
 vi.mock('electron', () => ({
   app: { getAppPath: () => '/app-path' },
-  shell: { openPath: vi.fn() }
+  shell: { openPath: vi.fn() },
+  dialog: { showMessageBox }
 }))
 
 // Electron sets this; nothing else does. The source must survive its absence, which is
 // what the last case in 'finding the folder' covers.
 ;(process as { resourcesPath?: string }).resourcesPath = '/Electron.app/Contents/Resources'
 
-const { extensionDir, extensionId, isExtensionAvailable, allowPairing, isPairingAllowed, closePairing } =
-  await import('../extension')
+const {
+  extensionDir,
+  extensionId,
+  isExtensionAvailable,
+  confirmExtensionPairing,
+  isExtensionPaired,
+  forgetPairing
+} = await import('../extension')
 
 afterEach(() => {
   vi.clearAllMocks()
-  closePairing()
+  forgetPairing()
+  showMessageBox.mockResolvedValue({ response: 0 })
 })
 
 describe('finding the folder', () => {
@@ -81,23 +91,37 @@ describe('availability', () => {
   })
 })
 
-describe('the pairing window', () => {
-  test('is shut until it is opened', () => {
-    expect(isPairingAllowed()).toBe(false)
-    allowPairing()
-    expect(isPairingAllowed()).toBe(true)
+describe('approving a connection', () => {
+  test('asks once, then remembers', async () => {
+    expect(isExtensionPaired()).toBe(false)
+    await expect(confirmExtensionPairing(null)).resolves.toBe(true)
+    expect(isExtensionPaired()).toBe(true)
+
+    // The extension re-pairs on every start; a second dialog for a question already
+    // answered is the kind of thing that gets an app uninstalled.
+    await expect(confirmExtensionPairing(null)).resolves.toBe(true)
+    expect(showMessageBox).toHaveBeenCalledTimes(1)
   })
 
-  test('shuts again, so a handshake does not leave it standing', () => {
-    allowPairing()
-    closePairing()
-    expect(isPairingAllowed()).toBe(false)
+  test('a refusal stays refused for a while, so clicking again does not reopen it', async () => {
+    showMessageBox.mockResolvedValue({ response: 1 })
+    await expect(confirmExtensionPairing(null)).resolves.toBe(false)
+    await expect(confirmExtensionPairing(null)).resolves.toBe(false)
+    expect(showMessageBox).toHaveBeenCalledTimes(1)
   })
 
-  test('expires on its own', () => {
-    const until = allowPairing()
-    vi.setSystemTime(new Date(until + 1))
-    expect(isPairingAllowed()).toBe(false)
-    vi.useRealTimers()
+  test('concurrent asks share one dialog', async () => {
+    const [a, b, c] = await Promise.all([
+      confirmExtensionPairing(null),
+      confirmExtensionPairing(null),
+      confirmExtensionPairing(null)
+    ])
+    expect([a, b, c]).toEqual([true, true, true])
+    expect(showMessageBox).toHaveBeenCalledTimes(1)
+  })
+
+  test('a dialog that fails is a no, not a crash', async () => {
+    showMessageBox.mockRejectedValue(new Error('no window'))
+    await expect(confirmExtensionPairing(null)).resolves.toBe(false)
   })
 })

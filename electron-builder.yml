@@ -20,6 +20,7 @@ extraResources:
       - manifest.json
       - EXTENSION_ID
       - dist/**
+      - icons/**
 # Keep English only; compress installers harder (helps the win/linux targets).
 compression: maximum
 electronLanguages:

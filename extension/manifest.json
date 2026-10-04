@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "snapit collector",
+  "name": "snapit",
   "version": "0.1.0",
-  "description": "Records console, network and actions from the tab you are already signed in to, and hands them to the snapit desktop app.",
+  "description": "Capture a bug from the tab you are already signed in to \u2014 console, network, and every step you took \u2014 straight into the snapit app.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1J9Hn34sLuaXsyMFNahGlIcuPitssJimcggMsSbiPWoHs1/KES5GgDZwBjXKt5V7s/WcsSHlCVNWLZlBiAVr4PVT0q6JklH18XWtAc78r61CDLGcbkcIeFv6TEmX1pMZ255MFRKtViWpK8RY+XwGSJHr7EuUELXUwnNV25Wshz7zckoPY/FkD3fED1M/UnFj/b2LP+9NTgquPU4FZu4HdlwRQHr8U8cwjeYpp93/gmu7B6XPxL0wVvpU8ka7TmpQDt3ohC+utNu1xks9+tJo7M14dFF0p+4dAwe1lbjITM2azexqn4Ez3RerkZxGVqpqAxyJciRl29FCjtcNsft1DwIDAQAB",
   "minimum_chrome_version": "116",
   "permissions": ["debugger", "tabs", "storage", "alarms"],
@@ -12,6 +12,18 @@
     "type": "module"
   },
   "action": {
-    "default_title": "snapit \u2014 record this tab"
+    "default_title": "snapit \u2014 capture this tab",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
   }
 }

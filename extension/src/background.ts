@@ -356,8 +356,10 @@ export async function pair(port = DEFAULT_BRIDGE_PORT): Promise<'paired' | strin
   }
 }
 
-/** Pair on install, and again on start, so a rotated token heals itself. */
-chrome.runtime.onInstalled.addListener(() => void pair())
+// Deliberately not paired on install: snapit asks the person to approve a connection,
+// and a dialog that appears the instant an extension is installed — for a reason they
+// have not reached yet — is one they will dismiss without reading. It pairs the first
+// time somebody actually asks to capture.
 
 export const inspect = (): { tabId: number; queued: number } | null =>
   session ? { tabId: session.tabId, queued: session.queue.length } : null

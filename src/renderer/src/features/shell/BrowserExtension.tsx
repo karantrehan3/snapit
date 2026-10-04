@@ -20,7 +20,6 @@ import { sectionHead, sectionTitle } from './styles'
  */
 export function BrowserExtension(): ReactElement {
   const [status, setStatus] = useState<ExtensionStatus | null>(null)
-  const [pairingUntil, setPairingUntil] = useState(0)
 
   const refresh = useCallback(() => void window.snapit.extensionStatus().then(setStatus), [])
 
@@ -32,15 +31,6 @@ export function BrowserExtension(): ReactElement {
     return () => clearInterval(timer)
   }, [refresh])
 
-  const openPairing = (): void => {
-    void window.snapit.allowExtensionPairing().then(({ until }) => {
-      setPairingUntil(until)
-      refresh()
-    })
-  }
-
-  const pairingOpen = status?.pairing === true || pairingUntil > Date.now()
-
   return (
     <>
       <StatStrip>
@@ -50,9 +40,9 @@ export function BrowserExtension(): ReactElement {
           note={status?.id ? status.id.slice(0, 12) + '…' : 'built with the app'}
         />
         <Stat
-          label="Pairing"
-          value={pairingOpen ? 'Open' : 'Closed'}
-          note={pairingOpen ? 'the extension may collect its token' : 'open it while you install'}
+          label="Connected"
+          value={status?.paired ? 'Yes' : 'Not yet'}
+          note={status?.paired ? 'approved on this machine' : 'snapit will ask the first time'}
         />
         <Stat
           label="Recording"
@@ -86,16 +76,11 @@ export function BrowserExtension(): ReactElement {
             <b> Load unpacked</b> and pick that folder. Chrome will not let snapit do this for you — the flag
             that allowed it was removed in Chrome 137.
           </Step>
-          <Step n={3} title="Let it pair">
-            <Button size="sm" icon="globe" onClick={openPairing} disabled={!status?.available}>
-              {pairingOpen ? 'Pairing is open' : 'Open pairing for 5 minutes'}
-            </Button>
+          <Step n={3} title="Click snapit in Chrome's toolbar">
+            On any tab. The first time, snapit asks you to approve the connection — once, here. After that it
+            just starts.
           </Step>
         </ol>
-        <p style={prose}>
-          Then click the snapit button in Chrome&rsquo;s toolbar on any tab. It shows <b>REC</b> while it is
-          collecting, and this window will say so too.
-        </p>
       </section>
 
       <Panel tone="warning" icon="alert" heading="Chrome will say it is being debugged">

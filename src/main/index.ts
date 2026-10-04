@@ -26,12 +26,11 @@ import { createSessionManager } from './session'
 import { startCollectorBridge, stopCollectorBridge } from './collector/bridge'
 import {
   EXPECTED_EXTENSION_VERSION,
-  allowPairing,
-  closePairing,
+  confirmExtensionPairing,
   extensionDir,
   extensionId,
   isExtensionAvailable,
-  isPairingAllowed,
+  isExtensionPaired,
   revealExtension
 } from './extension'
 import { getSettings, setSettings, markWelcomeSeen, regenerateMcpToken, type Settings } from './settings'
@@ -1136,14 +1135,8 @@ app.whenReady().then(() => {
   startCollectorBridge({
     token: () => getSettings().collectorToken,
     extensionId,
-    pairingAllowed: isPairingAllowed,
+    requestPairing: () => confirmExtensionPairing(windowFor('home')),
     expectedExtensionVersion: EXPECTED_EXTENSION_VERSION,
-    onPaired: () => {
-      // The window exists for one handshake, so it shuts the moment that happens rather
-      // than running its full five minutes.
-      closePairing()
-      console.log('[snapit] the Chrome extension paired')
-    },
     onSessionStart: (handle, info) => {
       if (!adoptExtensionSession(handle)) {
         // Refused rather than queued: snapit holds one session, and a second one
@@ -1421,11 +1414,11 @@ app.whenReady().then(() => {
     folder: extensionDir(),
     id: extensionId(),
     version: EXPECTED_EXTENSION_VERSION,
-    pairing: isPairingAllowed(),
+    paired: isExtensionPaired(),
     recording: isBrowserSessionActive()
   }))
   ipcMain.on('extension:reveal', () => revealExtension())
-  ipcMain.handle('extension:allow-pairing', () => ({ until: allowPairing() }))
+
   ipcMain.handle('mcp:regenerate', () => regenerateMcpTokenWithConfirm())
   ipcMain.on('app:copy-text', (_event, text: unknown) => clipboard.writeText(str(text)))
   ipcMain.on('session:start', () => void beginBrowserSession())

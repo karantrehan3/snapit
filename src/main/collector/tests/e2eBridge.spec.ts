@@ -51,8 +51,7 @@ describe.skipIf(!available)('extension → bridge, end to end', () => {
       {
         token: () => 'e2e-token',
         extensionId: () => 'flhandipbjjgpogpdoemadcebhjlgneo',
-        pairingAllowed: () => true,
-        onPaired: () => {},
+        requestPairing: async () => true,
         expectedExtensionVersion: '0.1.0',
         onSessionStart: (h) => {
           handle = h

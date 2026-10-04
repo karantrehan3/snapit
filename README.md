@@ -115,9 +115,14 @@ collects from the tab you are already in — your session, your cookies, your ex
 1. In snapit, open **Browser** and press **Reveal folder**.
 2. Go to `chrome://extensions`, turn on **Developer mode**, press **Load unpacked**, pick
    that folder.
-3. Back in snapit, press **Open pairing**.
+3. Click snapit in Chrome's toolbar on any tab. The first time, snapit asks you to approve
+   the connection.
 
-Then click snapit in Chrome's toolbar on any tab. It shows **REC** while collecting.
+It shows **REC** while collecting.
+
+**It collects, it does not record.** Console, network, response bodies and every step you
+took — but no video. For a capture with video, use the launched browser, which is
+unchanged.
 
 Two things worth knowing before you try it:
 

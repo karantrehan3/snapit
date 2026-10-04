@@ -185,8 +185,8 @@ export type ExtensionStatus = {
   /** Pinned by manifest.key, so it is the same on every machine. */
   id: string
   version: string
-  /** A pairing window is open right now. */
-  pairing: boolean
+  /** snapit has approved this extension's connection. */
+  paired: boolean
   recording: boolean
 }
 

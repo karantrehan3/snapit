@@ -4,7 +4,7 @@ import { collectRelayed, type RelayedEvent } from './relayed'
 import { attachResponseBodies, trimHarBefore } from './har'
 import { BINDING_NAME, INJECTED_SCRIPT } from './actions'
 import { redactHar } from './redact'
-import { checkCollectorRequest, checkPairRequest, versionsAgree, type AuthOutcome } from './bridgeAuth'
+import { checkCollectorRequest, isOurExtension, versionsAgree, type AuthOutcome } from './bridgeAuth'
 import type { CollectedSession, CollectorHandle } from './session'
 
 /**
@@ -42,10 +42,19 @@ export type BridgeHooks = {
   token: () => string
   /** From `extension/EXTENSION_ID`. */
   extensionId: () => string
-  /** Whether a pairing attempt may succeed right now. */
-  pairingAllowed: () => boolean
-  /** A pairing just succeeded. The window should shut. */
-  onPaired: () => void
+  /**
+   * The extension is asking to connect. Resolve true to hand it a token.
+   *
+   * Asked in the moment rather than armed in advance. The previous design had somebody
+   * press "Open pairing" in the app and *then* click in Chrome, which is two steps in two
+   * applications to answer one question, and nobody could tell what the first step was
+   * for. Now the question is asked when it is live, where a yes or no is obvious.
+   *
+   * Safe to raise a dialog from a request only because the origin check has already run:
+   * the sole thing that can reach this is something presenting snapit's own pinned
+   * extension id. The app rate-limits anyway — see `index.ts`.
+   */
+  requestPairing: () => Promise<boolean>
   /** The extension version this build of the app speaks to. */
   expectedExtensionVersion: string
   /**
@@ -168,9 +177,14 @@ export function startCollectorBridge(hooks: BridgeHooks, port = DEFAULT_BRIDGE_P
       if (req.method !== 'POST') return json(res, 405, { ok: false, error: 'POST only.' })
 
       if (path === '/collector/pair') {
-        const outcome = checkPairRequest(origin, hooks.extensionId(), hooks.pairingAllowed())
-        if (!outcome.ok) return deny(res, outcome)
-        hooks.onPaired()
+        // Origin first, always: only snapit's own extension gets as far as asking a
+        // person anything.
+        if (!isOurExtension(origin, hooks.extensionId())) {
+          return deny(res, { ok: false, status: 403, why: 'Not the snapit extension.' })
+        }
+        if (!(await hooks.requestPairing())) {
+          return deny(res, { ok: false, status: 403, why: 'snapit declined the connection.' })
+        }
         return json(res, 200, { ok: true, token: hooks.token(), expects: hooks.expectedExtensionVersion })
       }
 

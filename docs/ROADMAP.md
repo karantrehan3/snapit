@@ -488,10 +488,34 @@ What that decision costs and requires, in the order it bites:
   route with no per-machine step, and it also suppresses the debugging banner — worth
   writing down for any org-sized user, worth nothing for an individual.
 
-**Not yet built:** the app-side bridge that receives the batches, the content script for the
-action trail, response bodies (a `Network.getResponseBody` round trip per request, issued
-through `chrome.debugger.sendCommand`), pairing the extension to the app's port and token,
-and the source selector in the app.
+**Built 2026-10-04 and shipped in 5.0.0:** the bridge, the action trail, response bodies,
+pairing, and the Browser page that explains the install.
+
+### M1.12 — Video from a tab
+
+**Not built, and the gap 5.0.0 ships with.** The extension collects console, network,
+bodies and actions. It records no video, so a capture made through it is a session report
+and not a recording — which is a different product from the one the launched browser gives
+you, and the first thing somebody notices.
+
+`chrome.tabCapture` is the route, and it is more than a call:
+
+- **The recorder cannot live in the service worker.** It has no DOM, so no `MediaRecorder`.
+  MV3's answer is an offscreen document, which is a second lifecycle to own: created on
+  demand, kept alive while recording, torn down after.
+- **It captures a tab, not a screen.** A dialog outside the viewport, a second window, the
+  OS itself — none of it is there. That is a real narrowing against what snapit records
+  today, and the honest shape is to offer both rather than replace one with the other.
+- **The bytes have to reach the app.** A recording is tens of megabytes; posting it through
+  the bridge in one request is not reasonable. Chunked upload, or a file the app reads.
+- **And it needs the thing this milestone has been missing all along: a choice.** Loom and
+  Jam open a panel — what to record, which tab or screen, microphone on or off, and a
+  visible countdown. snapit's extension starts the instant the toolbar button is clicked,
+  with no options and no way to change your mind. That is the actual complaint, and the
+  panel is the fix, not the capture API.
+
+Until then the launched browser remains the only way to get a capture with video, and both
+the README and the changelog say so rather than letting somebody find out.
 
 ---
 

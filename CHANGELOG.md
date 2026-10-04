@@ -5,19 +5,26 @@ All notable changes to snapit are documented here. This project adheres to
 
 ## [5.0.0] - 2026-10-04
 
-snapit can record the browser you are already signed in to. Until now it launched its own
-Chrome, which meant a fresh profile and signing in to whatever you were testing again,
+snapit can collect from the browser you are already signed in to. Until now it launched its
+own Chrome, which meant a fresh profile and signing in to whatever you were testing again,
 every time — the cost that lands first on the people least willing to pay it. A companion
 Chrome extension collects from the tab you are already in: your session, your cookies, your
 extensions.
 
+**It collects; it does not yet record.** Console, network, response bodies and every step
+you took, but no video — a capture made through the extension is a session report, not a
+recording. Video from a tab needs `chrome.tabCapture` and a recorder in the extension, and
+that is the next milestone rather than part of this one. For a capture with video, use the
+launched browser, which is unchanged.
+
 The major bump is the second install. snapit is now an app _and_ a folder you load into
 Chrome, and that is a different thing to hand somebody than a dmg.
 
-### Record the tab you are in
+### Collect from the tab you are in
 
 - **A Chrome extension** that collects console, network, response bodies and every click
-  from the tab you choose, and hands them to the app over loopback.
+  from the tab you choose, and hands them to the app over loopback. No video yet — see
+  above.
 - **The recording starts in the browser.** Click snapit in Chrome's toolbar; the app is told
   and opens its session bar. The lifecycle runs the other way round from a launched browser,
   which is why the session bar now appears without anyone touching snapit.
@@ -30,11 +37,12 @@ Chrome, and that is a different thing to hand somebody than a dmg.
 
 ### Setting it up
 
-- **A Browser section** in the window: reveal the folder, three steps, and a pairing button.
-  The install cannot be automated — Chrome 137 removed `--load-extension` from branded
-  builds, so snapit can neither side-load the extension nor tick a box for you.
-- **Pairing is a five-minute window you open**, not a standing permission. The extension's
-  id is pinned, so the app can tell our extension from anything else asking.
+- **A Browser section** in the window: reveal the folder, and the three steps. The install
+  cannot be automated — Chrome 137 removed `--load-extension` from branded builds, so
+  snapit can neither side-load the extension nor tick a box for you.
+- **snapit asks you once**, the first time the extension tries to connect, and remembers.
+  There is nothing to arm in advance. The extension's id is pinned, so only snapit's own
+  extension can even raise that question.
 - **Two things said plainly rather than discovered:** Chrome shows a debugging banner on the
   tab while it collects and it will appear in screen recordings; and an extension loaded as
   a folder does not update itself, so snapit refuses a session from a version it does not

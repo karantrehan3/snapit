@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'fs'
 import { join } from 'path'
-import { app, shell } from 'electron'
+import { app, dialog, shell, type BrowserWindow } from 'electron'
 
 /**
  * Where the Chrome extension lives, and when it may pair.
@@ -78,19 +78,60 @@ export const isExtensionAvailable = (): boolean =>
 
 export const revealExtension = (): void => void shell.openPath(extensionDir())
 
-let pairingUntil = 0
-
 /**
- * Open a window in which the extension may collect a token.
+ * Approving a connection, asked at the moment it matters.
  *
- * Time-boxed rather than a standing permission: pairing happens once, and a port that
- * hands out a token forever is one that hands it to whatever asks next. The origin check
- * narrows who can ask; this narrows when.
+ * The first design had a five-minute window somebody opened in the app before clicking in
+ * Chrome — two steps in two applications to answer one question, and no way to tell what
+ * the first one was for. This asks when the extension actually asks, which is the only
+ * point at which a person has the context to say yes.
+ *
+ * Only snapit's own extension can get this far: the bridge checks the request's Origin
+ * against the pinned id first. The guards below are about not being a nuisance rather
+ * than about trust — one dialog at a time, and a refusal is remembered briefly so that
+ * clicking record repeatedly does not reopen it.
  */
-export const allowPairing = (): number => (pairingUntil = Date.now() + PAIRING_WINDOW_MS)
+const DECLINE_QUIET_MS = 60_000
 
-export const isPairingAllowed = (): boolean => Date.now() < pairingUntil
+let asking: Promise<boolean> | null = null
+let declinedUntil = 0
+let paired = false
 
-export const closePairing = (): void => {
-  pairingUntil = 0
+export const isExtensionPaired = (): boolean => paired
+
+export function confirmExtensionPairing(parent: BrowserWindow | null): Promise<boolean> {
+  if (paired) return Promise.resolve(true)
+  if (Date.now() < declinedUntil) return Promise.resolve(false)
+  // One dialog, however many times the extension retries while it is open.
+  if (asking) return asking
+
+  const options: Electron.MessageBoxOptions = {
+    type: 'question',
+    buttons: ['Connect', 'Not now'],
+    defaultId: 0,
+    cancelId: 1,
+    message: 'Let the snapit extension connect?',
+    detail:
+      'The snapit extension in Chrome is asking to send captures to this app. It can only ' +
+      'reach snapit on this machine, and only while you are recording a tab.'
+  }
+
+  asking = (parent ? dialog.showMessageBox(parent, options) : dialog.showMessageBox(options))
+    .then(({ response }) => {
+      paired = response === 0
+      if (!paired) declinedUntil = Date.now() + DECLINE_QUIET_MS
+      return paired
+    })
+    .catch(() => false)
+    .finally(() => {
+      asking = null
+    })
+
+  return asking
+}
+
+/** Forget the approval — used when the token is regenerated. */
+export const forgetPairing = (): void => {
+  paired = false
+  declinedUntil = 0
 }

@@ -38,9 +38,9 @@ beforeAll(() => {
     {
       token: () => TOKEN,
       extensionId: () => ID,
-      pairingAllowed: () => allowPairing,
-      onPaired: () => {
+      requestPairing: async () => {
         paired = true
+        return allowPairing
       },
       expectedExtensionVersion: '0.1.0',
       onSessionStart: (h) => {
@@ -60,12 +60,11 @@ beforeAll(() => {
 afterAll(() => stopCollectorBridge())
 
 describe('pairing', () => {
-  test('hands the token to our extension, and tells the app it happened', async () => {
+  test('hands the token over once the person approves', async () => {
     const res = await call('/collector/pair')
     expect(res.status).toBe(200)
     expect(await res.json()).toMatchObject({ ok: true, token: TOKEN, expects: '0.1.0' })
-    // The app closes its pairing window on this, rather than leaving it open for the
-    // full five minutes after the handshake it existed for.
+    // The app was asked, rather than having been armed in advance.
     expect(paired).toBe(true)
   })
 
@@ -77,7 +76,7 @@ describe('pairing', () => {
     expect(res.status).toBe(403)
   })
 
-  test('refuses while pairing is off', async () => {
+  test('refuses when the person declines', async () => {
     allowPairing = false
     expect((await call('/collector/pair')).status).toBe(403)
     allowPairing = true
